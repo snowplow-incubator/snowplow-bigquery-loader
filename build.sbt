@@ -19,6 +19,7 @@ lazy val root = project.in(file("."))
   .settings(
     libraryDependencies ++= Seq(
       Dependencies.Libraries.gcpBigtableHBase,
+      Dependencies.Libraries.analyticsSdk,
       Dependencies.Libraries.hbaseCommon,
       Dependencies.Libraries.hbaseClient,
       Dependencies.Libraries.specs2,

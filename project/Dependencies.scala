@@ -26,6 +26,7 @@ object Dependencies {
     val jodaTime             = "2.9.7"
 
     // Scala
+    val analyticsSdk         = "0.3.0"
     val specs2               = "3.7"
     val json4s               = "3.2.11"
   }
@@ -40,6 +41,7 @@ object Dependencies {
     val jodaTime              = "joda-time"                  % "joda-time"                          % V.jodaTime
 
     // Scala
+    val analyticsSdk          = "com.snowplowanalytics"      %% "snowplow-scala-analytics-sdk"      % V.analyticsSdk
     val json4s                = "org.json4s"                 %% "json4s-jackson"                    % V.json4s
     val json4sExt             = "org.json4s"                 %% "json4s-ext"                        % V.json4s
 

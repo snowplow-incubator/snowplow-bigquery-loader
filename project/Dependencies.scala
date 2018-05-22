@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 Snowplow Analytics Ltd. All rights reserved.
+ * Copyright (c) 2018 Snowplow Analytics Ltd. All rights reserved.
  *
  * This program is licensed to you under the Apache License Version 2.0,
  * and you may not use this file except in compliance with the Apache License Version 2.0.
@@ -10,42 +10,49 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-
 import sbt._
 
 object Dependencies {
-  val resolutionRepos = Seq("Akka Repository" at "http://repo.akka.io/releases/")
-
   object V {
-    // Java
-    val gcpDataflow          = "1.9.0"
-    val gcpBigtable          = "0.9.4"
-    val hbase                = "1.2.4"
-    val hadoop               = "2.7.3"
-    val typesafe             = "1.3.1"
-    val jodaTime             = "2.9.7"
-
     // Scala
-    val analyticsSdk         = "0.3.0"
-    val specs2               = "3.7"
-    val json4s               = "3.2.11"
-  }
-
-  object Libraries {
+    val scio               = "0.5.3"
+    val decline            = "0.4.0"
+    val analyticsSdk       = "0.3.0"
+    val catsEffect         = "0.10"
+    val processingManifest = "0.1.0-M4"
+    val igluClient         = "0.5.0"
+    val igluCore           = "0.2.0"
+    val circe              = "0.9.3"
+    val scalaz7            = "7.0.9"
+    val json4sJackson      = "3.2.11"
     // Java
-    val gcpBigtableHBase      = "com.google.cloud.bigtable"  % "bigtable-hbase-dataflow"            % V.gcpBigtable
-    val hbaseCommon           = "org.apache.hbase"           % "hbase-common"                       % V.hbase
-    val hadoopCommon          = "org.apache.hadoop"          % "hadoop-common"                      % V.hadoop
-    val hbaseClient           = "org.apache.hbase"           % "hbase-client"                       % V.hbase
-    val typesafe              = "com.typesafe"               % "config"                             % V.typesafe
-    val jodaTime              = "joda-time"                  % "joda-time"                          % V.jodaTime
-
-    // Scala
-    val analyticsSdk          = "com.snowplowanalytics"      %% "snowplow-scala-analytics-sdk"      % V.analyticsSdk
-    val json4s                = "org.json4s"                 %% "json4s-jackson"                    % V.json4s
-    val json4sExt             = "org.json4s"                 %% "json4s-ext"                        % V.json4s
-
+    val beam               = "2.4.0"
+    val scalaMacrosVersion = "2.1.0"
     // Scala (test only)
-    val specs2                = "org.specs2"       % "specs2_2.11"                  % V.specs2       % "test"
+    val specs2             = "4.0.4"
+    val scalaCheck         = "1.13.4"
   }
+
+  // Scala
+  val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio
+  val scioRepl           = "com.spotify"           %% "scio-repl"                    % Dependencies.V.scio
+  val analyticsSdk       = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk
+  val decline            = "com.monovore"          %% "decline"                      % V.decline
+  val catsEffect         = "org.typelevel"         %% "cats-effect"                  % V.catsEffect
+  val processingManifest = "com.snowplowanalytics" %% "snowplow-processing-manifest" % V.processingManifest
+  val igluClient         = "com.snowplowanalytics" %% "iglu-scala-client"            % V.igluClient
+  val igluCoreCirce      = "com.snowplowanalytics" %% "iglu-core-circe"              % V.igluCore
+  val circe              = "io.circe"              %% "circe-core"                   % V.circe
+  val circeJavaTime      = "io.circe"              %% "circe-java8"                  % V.circe
+  val scalaz7            = "org.scalaz"            %% "scalaz-core"                  % V.scalaz7
+  val json4sJackson      = "org.json4s"            %% "json4s-jackson"               % V.json4sJackson
+
+  // Java
+  val directRunner       = "org.apache.beam"       % "beam-runners-direct-java"      % V.beam
+  val slf4j              = "org.slf4j"             % "slf4j-simple" % "1.7.25"
+
+  // Scala (test only)
+  val specs2             = "org.specs2"            %% "specs2-core"                  % V.specs2         % "test"
+  val scalaCheck         = "org.scalacheck"        %% "scalacheck"                   % V.scalaCheck     % "test"
+  val scioTest           = "com.spotify"           %% "scio-test"                    % V.scio           % "test"
 }

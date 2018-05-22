@@ -1,34 +1,31 @@
-/**
- * Copyright (c) 2017 Snowplow Analytics Ltd. All rights reserved.
- *
- * This program is licensed to you under the Apache License Version 2.0,
- * and you may not use this file except in compliance with the Apache License Version 2.0.
- * You may obtain a copy of the Apache License Version 2.0 at
- * http://www.apache.org/licenses/LICENSE-2.0.
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the Apache License Version 2.0 is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the Apache License Version 2.0 for the specific language governing permissions and
- * limitations there under.
- */
-name := "google-cloud-dataflow-example-project"
-
 lazy val root = project.in(file("."))
-  .settings(BuildSettings.buildSettings)
+  .settings(BuildSettings.commonSettings)
   .settings(
+    BuildSettings.macroSettings ++ BuildSettings.noPublishSettings,
+    description := "Snowplow Google BigQuery Loader",
     libraryDependencies ++= Seq(
-      Dependencies.Libraries.gcpBigtableHBase,
-      Dependencies.Libraries.analyticsSdk,
-      Dependencies.Libraries.hbaseCommon,
-      Dependencies.Libraries.hbaseClient,
-      Dependencies.Libraries.specs2,
-      Dependencies.Libraries.json4s,
-      Dependencies.Libraries.json4sExt,
-      Dependencies.Libraries.typesafe,
-      Dependencies.Libraries.hadoopCommon,
-      Dependencies.Libraries.jodaTime
-    )
-  )
+      Dependencies.scioCore,
+      Dependencies.directRunner,
+      Dependencies.slf4j,
+      Dependencies.decline,
+      Dependencies.catsEffect,
+      Dependencies.analyticsSdk,
+      Dependencies.processingManifest,
+      Dependencies.igluClient,
+      Dependencies.igluCoreCirce,
+      Dependencies.circe,
+      Dependencies.circeJavaTime,
 
-shellPrompt := { _ => "gcp-dataflow-example-project> " }
+      Dependencies.specs2,
+      Dependencies.scalaCheck
+    )
+  ).enablePlugins(PackPlugin)
+
+lazy val repl = project.in(file("repl"))
+  .settings(BuildSettings.commonSettings)
+  .settings(
+    BuildSettings.macroSettings ++ BuildSettings.noPublishSettings,
+    description := "Scio REPL for bq-scio",
+    libraryDependencies ++= Seq(Dependencies.scioRepl),
+    mainClass in Compile := Some("com.spotify.scio.repl.ScioShell")
+  ).dependsOn(root)

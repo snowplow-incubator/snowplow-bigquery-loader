@@ -209,7 +209,7 @@ object Schema {
     Column("true_tstamp", DataType.Timestamp)
   )
 
-  def getSchema: TableSchema = {
+  def getAtomic: TableSchema = {
     val tableSchema = new TableSchema()
     val fields = for {
       column <- atomicColumns

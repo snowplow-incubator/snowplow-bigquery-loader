@@ -38,7 +38,6 @@ object Main {
     Config(input, tableRef)
   }
 
-
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
     val config = getConfg(args)
@@ -48,9 +47,9 @@ object Main {
      sc.pubsubTopic[String](config.input)
        .flatMap(Utils.parse)
        .saveAsBigQuery(config.tableRef,
-         Schema.getSchema,
+         Schema.getAtomic,
          WriteDisposition.WRITE_APPEND,
-         CreateDisposition.CREATE_NEVER,
+         CreateDisposition.CREATE_IF_NEEDED,
          "atomic.events")
 
     val _ = sc.close().waitUntilDone()

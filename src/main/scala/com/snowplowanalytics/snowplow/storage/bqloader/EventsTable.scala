@@ -21,6 +21,6 @@ object EventsTable {
   def create(tableRef: TableReference): Unit = {
     val options = PipelineOptionsFactory.create().as(classOf[BigQueryOptions])
     val service = new BigQueryServicesWrapper(options)
-    service.createTable(tableRef, schema.Schema.getSchema)
+    service.createTable(tableRef, schema.Schema.getAtomic)
   }
 }

@@ -35,7 +35,7 @@ object Dependencies {
 
   // Scala
   val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio
-  val scioRepl           = "com.spotify"           %% "scio-repl"                    % Dependencies.V.scio
+  val scioRepl           = "com.spotify"           %% "scio-repl"                    % V.scio
   val analyticsSdk       = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk
   val decline            = "com.monovore"          %% "decline"                      % V.decline
   val catsEffect         = "org.typelevel"         %% "cats-effect"                  % V.catsEffect

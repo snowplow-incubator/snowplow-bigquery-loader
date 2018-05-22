@@ -1,40 +1,18 @@
-# bq-scio
+# Snowplow BigQuery Loader
 
-## Raison d'être:
+DataflowRunner application loading enriched data from Google Pubsub into Bigquery.
 
-TODO: your project description
+## Usage
 
-## Features:
-
-This project comes with number of preconfigured features, including:
-
-### sbt-pack
-
-Use `sbt-pack` instead of `sbt-assembly` to:
- * reduce build time
- * enable efficient dependency caching
- * reduce job submission time
+```bash
+$ cd snowplow-bigquery-loader && sbt
+$ run --input=projects/snowplow-project/topics/snplow-enriched-good --project-id=snowplow-project --dataset-id=snowplow-dataset --table-id=events
+```
 
 To build package run:
 
-```
-sbt pack
-```
-
-### Testing
-
-This template comes with an example of a test, to run tests:
-
-```
-sbt test
-```
-
-### Scala style
-
-Find style configuration in `scalastyle-config.xml`. To enforce style run:
-
-```
-sbt scalastyle
+```bash
+$ sbt pack
 ```
 
 ### REPL
@@ -46,6 +24,3 @@ simply:
 sbt repl/run
 ```
 
----
-
-This project is based on the [scio.g8](https://github.com/spotify/scio.g8).

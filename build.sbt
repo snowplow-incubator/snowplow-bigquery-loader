@@ -8,16 +8,18 @@ lazy val root = project.in(file("."))
     BuildSettings.macroSettings ++ BuildSettings.noPublishSettings,
     libraryDependencies ++= Seq(
       Dependencies.scioCore,
-      Dependencies.directRunner,
-      Dependencies.slf4j,
       Dependencies.decline,
-      Dependencies.catsEffect,
+      Dependencies.cats,
       Dependencies.analyticsSdk,
       Dependencies.processingManifest,
       Dependencies.igluClient,
       Dependencies.igluCoreCirce,
       Dependencies.circe,
       Dependencies.circeJavaTime,
+
+      Dependencies.slf4j,
+      Dependencies.directRunner,
+      Dependencies.dataflowRunner,
 
       Dependencies.specs2,
       Dependencies.scalaCheck

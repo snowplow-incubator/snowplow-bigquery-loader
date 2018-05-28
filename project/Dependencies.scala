@@ -15,10 +15,10 @@ import sbt._
 object Dependencies {
   object V {
     // Scala
-    val scio               = "0.5.3"
+    val scio               = "0.5.4"
     val decline            = "0.4.0"
     val analyticsSdk       = "0.3.0"
-    val catsEffect         = "0.10"
+    val cats               = "1.1.0"
     val processingManifest = "0.1.0-M4"
     val igluClient         = "0.5.0"
     val igluCore           = "0.2.0"
@@ -28,6 +28,7 @@ object Dependencies {
     // Java
     val beam               = "2.4.0"
     val scalaMacrosVersion = "2.1.0"
+    val slf4j              = "1.7.25"
     // Scala (test only)
     val specs2             = "4.0.4"
     val scalaCheck         = "1.13.4"
@@ -38,7 +39,7 @@ object Dependencies {
   val scioRepl           = "com.spotify"           %% "scio-repl"                    % V.scio
   val analyticsSdk       = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk
   val decline            = "com.monovore"          %% "decline"                      % V.decline
-  val catsEffect         = "org.typelevel"         %% "cats-effect"                  % V.catsEffect
+  val cats               = "org.typelevel"         %% "cats-core"                    % V.cats
   val processingManifest = "com.snowplowanalytics" %% "snowplow-processing-manifest" % V.processingManifest
   val igluClient         = "com.snowplowanalytics" %% "iglu-scala-client"            % V.igluClient
   val igluCoreCirce      = "com.snowplowanalytics" %% "iglu-core-circe"              % V.igluCore
@@ -48,8 +49,9 @@ object Dependencies {
   val json4sJackson      = "org.json4s"            %% "json4s-jackson"               % V.json4sJackson
 
   // Java
-  val directRunner       = "org.apache.beam"       % "beam-runners-direct-java"      % V.beam
-  val slf4j              = "org.slf4j"             % "slf4j-simple" % "1.7.25"
+  val directRunner       = "org.apache.beam"       % "beam-runners-direct-java"                % V.beam
+  val dataflowRunner     = "org.apache.beam"       % "beam-runners-google-cloud-dataflow-java" % V.beam
+  val slf4j              = "org.slf4j"             % "slf4j-simple"                            % V.slf4j
 
   // Scala (test only)
   val specs2             = "org.specs2"            %% "specs2-core"                  % V.specs2         % "test"

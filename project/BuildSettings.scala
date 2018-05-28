@@ -16,7 +16,7 @@ import Keys._
 object BuildSettings {
   lazy val commonSettings = Seq(
     organization          := "com.snowplowanalytics",
-    version               := "0.1.0-SNAPSHOT",
+    version               := "0.1.0-rc1",
     scalaVersion          := "2.11.12",
     scalacOptions         ++= Seq("-target:jvm-1.8",
       "-deprecation",

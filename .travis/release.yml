@@ -37,7 +37,7 @@ packages:
         # The artifact name is composed like so:
         # {{prefix}}{{version}}{{suffix}}.zip
       - prefix : "snowplow_bigquery_loader_"
-        suffix : "zip"
+        suffix : ".zip"
         type   : "asis"
 
         # The binaries to put in the zip

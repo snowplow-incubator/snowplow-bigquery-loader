@@ -15,7 +15,7 @@ import sbt._
 object Dependencies {
   object V {
     // Scala
-    val scio               = "0.5.4"
+    val scio               = "0.5.5"
     val decline            = "0.4.0"
     val analyticsSdk       = "0.3.0"
     val cats               = "1.1.0"
@@ -27,12 +27,16 @@ object Dependencies {
     val json4sJackson      = "3.2.11"
     // Java
     val beam               = "2.4.0"
+    val googleCloud        = "1.31.0"
     val scalaMacrosVersion = "2.1.0"
     val slf4j              = "1.7.25"
     // Scala (test only)
     val specs2             = "4.0.4"
     val scalaCheck         = "1.13.4"
   }
+
+  val bigQuery           = "com.google.cloud"      %  "google-cloud-bigquery"        % V.googleCloud
+  val pubsub             = "com.google.cloud"      %  "google-cloud-pubsub"          % V.googleCloud
 
   // Scala
   val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio

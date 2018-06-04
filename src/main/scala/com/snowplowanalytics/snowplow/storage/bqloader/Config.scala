@@ -12,13 +12,27 @@
  */
 package com.snowplowanalytics.snowplow.storage.bqloader
 
-import com.spotify.scio._
+import com.google.api.services.bigquery.model.TableReference
 
-object Main {
-  def main(cmdlineArgs: Array[String]): Unit = {
-    val (sc, args) = ContextAndArgs(cmdlineArgs)
-    val config = Config.parse(args)
-    Loader.run(config, sc)
-    val _ = sc.close().waitUntilDone()
+import com.spotify.scio.Args
+
+case class Config(input: String, types: String, tableRef: TableReference)
+
+object Config {
+  def parse(args: Args): Config = {
+    val input = args("subscription")
+
+    val projectId = args("project-id")
+    val datesetId = args("dataset-id")
+    val tableId = args("table-id")
+
+    val typesTopic = args("types-topic")
+
+    val tableRef = new TableReference()
+      .setProjectId(projectId)
+      .setDatasetId(datesetId)
+      .setTableId(tableId)
+
+    Config(input, typesTopic, tableRef)
   }
 }

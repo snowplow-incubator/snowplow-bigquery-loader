@@ -12,31 +12,68 @@
  */
 package com.snowplowanalytics.snowplow.storage.bqloader
 
+import org.joda.time.Instant
+
+import cats.implicits._
+
+import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{EventWithInventory, InventoryItem}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.json.EventTransformer.transformWithInventory
+
 import com.spotify.scio.bigquery.TableRow
 
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.EventTransformer.jsonifyGoodEvent
-
 import org.json4s.JsonAST._
+import org.json4s.JsonDSL._
+import org.json4s.jackson.JsonMethods.{parse => jsonParse}
 
 object Utils {
 
-  def parse(record: String): Option[TableRow] = {
-    jsonifyGoodEvent(record.split("\t", -1)) match {
-      case Right((_, json)) => Some(toTableRow(json))
-      case Left(errors) => None
-    }
+  def toPayload(item: InventoryItem): JValue =
+    ("schema" -> item.igluUri) ~ ("type" -> item.shredProperty.name.toUpperCase)
+
+
+  case class WindowedRow(start: Instant,
+                         end: Instant,
+                         atomic: TableRow,
+                         inventory: Set[InventoryItem],
+                         original: JObject)
+
+  case class LoaderRow(collectorTstamp: Instant,
+                       atomic: TableRow,
+                       inventory: Set[InventoryItem],
+                       original: JObject)
+
+  def parse(record: String): Option[LoaderRow] = {
+    print("record! ")
+    val loaderRow: Either[List[String], LoaderRow] = for {
+      eventWithInventory <- transformWithInventory(record): Either[List[String], EventWithInventory]
+      jsonObject          = jsonParse(eventWithInventory.event).asInstanceOf[JObject]
+      rowWithTstamp      <- toTableRow(jsonObject)
+      (row, tstamp)       = rowWithTstamp
+    } yield LoaderRow(tstamp, row, eventWithInventory.inventory, jsonObject)
+
+    loaderRow.toOption
   }
 
-  def toTableRow(json: JObject): TableRow = {
-    val atomicFields = json.obj.flatMap {
-      case (key, JString(str)) => Some((key, str))
-      case (key, JInt(int)) => Some((key, int))
-      case (key, JDouble(double)) => Some((key, double))
-      case (key, JDecimal(decimal)) => Some((key, decimal))
-      case (key, JBool(bool)) => Some((key, bool))
-      case (_, JNull) => None
-      case _ => None
+  def toTableRow(json: JObject): Either[List[String], (TableRow, Instant)] = {
+    json.obj.collectFirst { case ("collector_tstamp", JString(tstamp)) => tstamp } match {
+      case Some(tstamp) =>
+        val atomicFields = json.obj.flatMap {
+          case (key, JString(str)) => Some((key, str))
+          case (key, JInt(int)) => Some((key, int))
+          case (key, JDouble(double)) => Some((key, double))
+          case (key, JDecimal(decimal)) => Some((key, decimal))
+          case (key, JBool(bool)) => Some((key, bool))
+          case (_, JNull) => None
+          case _ => None
+        }
+        for {
+          time <- Either
+            .catchNonFatal(Instant.parse(tstamp))
+            .leftMap(err => List(s"Cannot extract collect_tstamp: ${err.getMessage}"))
+        } yield (TableRow(atomicFields: _*), time)
+
+      case None =>
+        Left(List("No collector_tstamp"))
     }
-    TableRow(atomicFields: _*)
   }
 }

@@ -43,7 +43,6 @@ object Utils {
                        original: JObject)
 
   def parse(record: String): Option[LoaderRow] = {
-    print("record! ")
     val loaderRow: Either[List[String], LoaderRow] = for {
       eventWithInventory <- transformWithInventory(record): Either[List[String], EventWithInventory]
       jsonObject          = jsonParse(eventWithInventory.event).asInstanceOf[JObject]
@@ -63,6 +62,7 @@ object Utils {
           case (key, JDouble(double)) => Some((key, double))
           case (key, JDecimal(decimal)) => Some((key, decimal))
           case (key, JBool(bool)) => Some((key, bool))
+          case ("geo_location", _) => None
           case (_, JNull) => None
           case _ => None
         }

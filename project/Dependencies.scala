@@ -24,6 +24,7 @@ object Dependencies {
     val igluCore           = "0.2.0"
     val circe              = "0.9.3"
     val scalaz7            = "7.0.9"
+    val schemaDdl          = "0.7.0"
     val json4sJackson      = "3.2.11"
     // Java
     val beam               = "2.4.0"
@@ -51,6 +52,7 @@ object Dependencies {
   val circeJavaTime      = "io.circe"              %% "circe-java8"                  % V.circe
   val scalaz7            = "org.scalaz"            %% "scalaz-core"                  % V.scalaz7
   val json4sJackson      = "org.json4s"            %% "json4s-jackson"               % V.json4sJackson
+  val schemaDdl          = "com.snowplowanalytics" %% "schema-ddl"                   % V.schemaDdl
 
   // Java
   val directRunner       = "org.apache.beam"       % "beam-runners-direct-java"                % V.beam

@@ -15,26 +15,14 @@ package com.snowplowanalytics.snowplow.storage.bqmutator
 import com.google.cloud.pubsub.v1.Subscriber
 import com.google.pubsub.v1.ProjectSubscriptionName
 
-import cats.implicits._
-
-import com.monovore.decline._
-
 object Main {
-  case class Config(projectId: String, subscription: String)
-
   def main(args: Array[String]): Unit = {
-    val projectOpt = Opts.option[String]("project-id", "GCP Project Id")
-    val subscriptionOpt = Opts.option[String]("subscription", "PubSub Subscription providing alter table requests")
-
-    val command = Command("mutator", "Snowplow BigQuery Mutator") ((projectOpt, subscriptionOpt).mapN {
-      (p, s) => Config(p, s)
-    })
-
-    command.parse(args) match {
+    Config.command.parse(args) match {
       case Right(config) =>
+        val listener = new Listener(Mutator.initialize(config).fold(e => throw new RuntimeException(e), x => x))
         val subscription = ProjectSubscriptionName.of(config.projectId, config.subscription)
         val subscriber = Subscriber
-          .newBuilder(subscription, Listener)
+          .newBuilder(subscription, listener)
           .build()
 
         subscriber.startAsync().awaitTerminated()

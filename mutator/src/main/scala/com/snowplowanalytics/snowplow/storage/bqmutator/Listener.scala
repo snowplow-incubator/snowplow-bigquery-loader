@@ -24,7 +24,7 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
 
 import Common._
 
-object Listener extends MessageReceiver {
+class Listener(mutator: Mutator) extends MessageReceiver {
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
     val items = for {
       json <- parse(message.getData.toStringUtf8)
@@ -35,7 +35,7 @@ object Listener extends MessageReceiver {
       case Right(Nil) =>
         consumer.ack()
       case Right(commands) =>
-        println(commands)
+        commands.foreach(mutator.updateTable)
         consumer.ack()
       case Left(error) =>
         println(error.show)

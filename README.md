@@ -2,6 +2,18 @@
 
 DataflowRunner application loading enriched data from Google Pubsub into Bigquery.
 
+### Install
+
+1. Setup Stream Enrich
+  - `raw-good`/`raw-bad` topics 
+  - `enriched-good`/`enriched-bad` topics
+  - configs
+2. Setup Loader
+  - BigQuery table
+3. Setup Mutator
+  - `types` topic
+  - `types` subscription
+
 ## Usage
 
 ```bash

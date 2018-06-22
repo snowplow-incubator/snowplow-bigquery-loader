@@ -14,6 +14,9 @@ package com.snowplowanalytics.snowplow.storage.bqmutator
 
 import io.circe._
 
+import scalaz.{Failure, Success, ValidationNel}
+
+import cats.data.{Validated, ValidatedNel, NonEmptyList}
 import cats.instances.either._
 import cats.syntax.either._
 import cats.syntax.option._
@@ -21,6 +24,18 @@ import cats.syntax.option._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data._
 
 object Common {
+  def fromValidation[E, A](validation: ValidationNel[E, A]): Either[NonEmptyList[E], A] =
+    validation match {
+      case Success(a) => a.asRight
+      case Failure(errors) => NonEmptyList.fromListUnsafe(errors.list).asLeft
+    }
+
+  def catchNonFatalMessage[A](a: => A): ValidatedNel[String, A] =
+    Validated
+      .catchNonFatal(a)
+      .leftMap(_.getMessage)
+      .toValidatedNel
+
   implicit val shredPropertyDecoder: Decoder[ShredProperty] =
     new Decoder[ShredProperty] {
       def apply(c: HCursor): Decoder.Result[ShredProperty] = c.value.asString match {
@@ -48,4 +63,5 @@ object Common {
             DecodingFailure(s"Cannot decode InventoryItem, ${c.value} is not an object", c.history).asLeft
         }
     }
+
 }

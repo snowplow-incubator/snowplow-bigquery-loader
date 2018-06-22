@@ -47,6 +47,7 @@ lazy val mutator = project.in(file("mutator"))
       Dependencies.igluCoreCirce,
       Dependencies.circe,
       Dependencies.circeJavaTime,
+      Dependencies.schemaDdl,
 
       Dependencies.specs2,
       Dependencies.scalaCheck

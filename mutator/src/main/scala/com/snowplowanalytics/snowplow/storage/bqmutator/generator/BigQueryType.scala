@@ -1,10 +1,11 @@
 package com.snowplowanalytics.snowplow.storage.bqmutator.generator
 
-/** Primitive BigQuery types */
+import scala.collection.immutable.ListMap
+
 sealed trait BigQueryType
 
 object BigQueryType {
-case object String extends BigQueryType
+  case object String extends BigQueryType
 
   case object Boolean extends BigQueryType
 
@@ -17,6 +18,8 @@ case object String extends BigQueryType
   case object Date extends BigQueryType
 
   case object DateTime extends BigQueryType
+
+  case class Record(fields: ListMap[String, BigQueryField]) extends BigQueryType
 
 }
 

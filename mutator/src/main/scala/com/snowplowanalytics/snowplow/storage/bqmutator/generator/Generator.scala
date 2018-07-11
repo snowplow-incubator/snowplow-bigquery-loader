@@ -32,12 +32,13 @@ object Generator {
           val fields = subfields.map { case (key, schema) => (key, traverseSuggestions(schema, requiredKeys.contains(key))) }
           val sortedFields = fields.toList.sortBy { case (a, b) => (FieldMode.sort(b.mode), a) }
           val subFields = ListMap(sortedFields: _*)
-          BigQueryField.Record(FieldMode.get(required), subFields)
+          BigQueryField(BigQueryType.Record(subFields), FieldMode.get(required))
         }
       case Some(CommonProperties.Array) =>
         topSchema.items match {
           case Some(ArrayProperties.ListItems(schema)) =>
-            BigQueryField.Array(traverseSuggestions(schema, false))
+            val field = traverseSuggestions(schema, false)
+            BigQueryField(field.bigQueryType, field.mode)
           case _ =>     // TODO: check if we can find common denominator for TupleItems
             Suggestion.finalSuggestion(required)
         }

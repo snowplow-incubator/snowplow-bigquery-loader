@@ -27,14 +27,14 @@ object Native {
 
   private def getField(bigQueryField: BigQueryField): String => Field =
     bigQueryField match {
-      case BigQueryField.Primitive(t, m) =>
-        name => Field.newBuilder(name, typeTo(t)).setMode(modeTo(m)).build()
-      case BigQueryField.Record(m, fields) =>
+      case BigQueryField(r @ BigQueryType.Record(fields), m) =>
         val subFields = fields.toList.map { case (name, field) => getField(field)(name) }
         val fieldsList = FieldList.of(subFields.asJava)
-        name => Field.newBuilder(name, LegacySQLTypeName.RECORD, fieldsList).setMode(modeTo(m)).build()
-      case BigQueryField.Array(f) =>
-        name => getField(f)(name).toBuilder.setMode(modeTo(FieldMode.Repeated)).build()
+        name => Field.newBuilder(name, typeTo(r), fieldsList).setMode(modeTo(m)).build()
+      case BigQueryField(t, m @ FieldMode.Repeated) =>
+        name => getField(BigQueryField(t, m))(name)
+      case BigQueryField(t, m) =>
+        name => Field.newBuilder(name, typeTo(t)).setMode(modeTo(m)).build()
     }
 
   def modeTo(fieldMode: FieldMode): Field.Mode =
@@ -53,5 +53,6 @@ object Native {
       case BigQueryType.Float => LegacySQLTypeName.FLOAT
       case BigQueryType.Bytes => LegacySQLTypeName.BYTES
       case BigQueryType.Date => LegacySQLTypeName.DATE
+      case BigQueryType.Record(_) => LegacySQLTypeName.RECORD
     }
 }

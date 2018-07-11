@@ -12,16 +12,17 @@
  */
 package com.snowplowanalytics.snowplow.storage.bqmutator.generator
 
-import scala.collection.immutable.ListMap
+import com.snowplowanalytics.iglu.core.SchemaKey
 
+import scala.collection.immutable.ListMap
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{ArrayProperties, CommonProperties, Schema}
 
 object Generator {
 
   /** Top-level declaration */
-  case class Column(name: String, bigQueryField: BigQueryField)
+  case class Column(name: String, bigQueryField: BigQueryField, version: SchemaKey)
 
-  def traverseSuggestions(topSchema: Schema, required: Boolean): BigQueryField = {
+  def build(topSchema: Schema, required: Boolean): BigQueryField = {
     topSchema.`type` match {
       case Some(CommonProperties.Object) =>
         val subfields = topSchema.properties.map(_.value).getOrElse(Map.empty)
@@ -29,17 +30,21 @@ object Generator {
           Suggestion.finalSuggestion(required)
         } else {
           val requiredKeys = topSchema.required.toList.flatMap(_.value)
-          val fields = subfields.map { case (key, schema) => (key, traverseSuggestions(schema, requiredKeys.contains(key))) }
-          val sortedFields = fields.toList.sortBy { case (a, b) => (FieldMode.sort(b.mode), a) }
-          val subFields = ListMap(sortedFields: _*)
+          val fields = subfields.map { case (key, schema) =>
+            (key, build(schema, requiredKeys.contains(key)))
+          }
+          val subFields = ListMap(fields.toList.sortBy { case (name, field) =>
+            (FieldMode.sort(field.mode), name)
+          }: _*)
+
           BigQueryField(BigQueryType.Record(subFields), FieldMode.get(required))
         }
       case Some(CommonProperties.Array) =>
         topSchema.items match {
           case Some(ArrayProperties.ListItems(schema)) =>
-            val field = traverseSuggestions(schema, false)
-            BigQueryField(field.bigQueryType, field.mode)
-          case _ =>     // TODO: check if we can find common denominator for TupleItems
+            val field = build(schema, false)
+            BigQueryField(field.bigQueryType, FieldMode.Repeated)
+          case _ =>
             Suggestion.finalSuggestion(required)
         }
       case _ =>

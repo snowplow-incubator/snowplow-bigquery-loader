@@ -23,7 +23,7 @@ import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.Json4sToSchema._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem, fixSchema}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data
-import generator.Generator.{Column, traverseSuggestions}
+import generator.Generator.{Column, build}
 import generator.{FieldMode, Native}
 import Mutator._
 
@@ -57,13 +57,10 @@ class Mutator private(resolver: Resolver,
     }
 
     val columnName = fixSchema(inventoryItem.shredProperty, inventoryItem.igluUri)
-    val field = traverseSuggestions(schema, false).setMode(mode)
-    val column = Column(columnName, field)
+    val field = build(schema, false).setMode(mode)
+    val column = Column(columnName, field, SchemaKey.fromUri(inventoryItem.igluUri).get)
 
     Native.toField(column)
-      .toBuilder
-      .setDescription(inventoryItem.igluUri)
-      .build()
   }
 
   def addField(inventoryItem: InventoryItem): IO[Unit] = for {

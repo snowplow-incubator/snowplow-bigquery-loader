@@ -24,8 +24,12 @@ object Native {
 
   def toField(column: Column): Field =
     getField(column.bigQueryField)(column.name)
+      .toBuilder
+      .setDescription(column.version.toSchemaUri)
+      .build()
 
-  private def getField(bigQueryField: BigQueryField): String => Field =
+  /** Get unnamed `Field` (name should be provided by client code) */
+  def getField(bigQueryField: BigQueryField): String => Field =
     bigQueryField match {
       case BigQueryField(r @ BigQueryType.Record(fields), m) =>
         val subFields = fields.toList.map { case (name, field) => getField(field)(name) }

@@ -44,6 +44,6 @@ class GeneratorSpec extends Specification { def is = s2"""
       )
     )
 
-    Generator.traverseSuggestions(input, true) must beEqualTo(expected)
+    Generator.build(input, true) must beEqualTo(expected)
   }
 }

@@ -14,7 +14,7 @@ package com.snowplowanalytics.snowplow.storage.bqmutator.generator
 
 import org.json4s.JsonAST._
 
-import com.snowplowanalytics.iglu.schemaddl.jsonschema.{ CommonProperties, StringProperties}
+import com.snowplowanalytics.iglu.schemaddl.jsonschema.{ CommonProperties, StringProperties }
 
 object Suggestion {
 

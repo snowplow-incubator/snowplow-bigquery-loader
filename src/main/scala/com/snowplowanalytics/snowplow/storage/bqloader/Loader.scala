@@ -12,6 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bqloader
 
+import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, DynamicDestinations}
+
 import org.joda.time.Duration
 
 import com.spotify.scio.ScioContext
@@ -31,8 +33,6 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
 
 import com.snowplowanalytics.snowplow.storage.bqloader.Utils.LoaderRow
 
-import schema.Schema
-
 object Loader {
   /** Default windowing option */
   val windowOptions = WindowOptions(
@@ -40,15 +40,18 @@ object Loader {
     AccumulationMode.DISCARDING_FIRED_PANES,
     Duration.ZERO)
 
+//  type TableDestination = _
+//
+//  val destination: DynamicDestinations[(TableDestination, TableRow), _] = ???
+
   /** Default BigQuery output options */
   val output: BigQueryIO.Write[TableRow] =
     BigQueryIO.writeTableRows()
       .withMethod(BigQueryIO.Write.Method.FILE_LOADS)
       .withFormatFunction(SerializableFunctions.identity())
-      .withTriggeringFrequency(Duration.millis(10000))
-      .withSchema(Schema.getAtomic)
+      .withTriggeringFrequency(Duration.millis(20000))
       .withNumFileShards(10)
-      .withCreateDisposition(CreateDisposition.CREATE_IF_NEEDED)
+      .withCreateDisposition(CreateDisposition.CREATE_NEVER)
       .withWriteDisposition(WriteDisposition.WRITE_APPEND)
 
   /** Run whole pipeline */

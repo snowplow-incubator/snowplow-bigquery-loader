@@ -14,8 +14,6 @@ package com.snowplowanalytics.snowplow.storage.bqmutator
 
 import java.util.Base64
 
-import com.google.api.services.bigquery.model.TableReference
-
 import org.json4s.JsonAST.JValue
 import org.json4s.jackson.JsonMethods.parse
 
@@ -25,7 +23,7 @@ import com.monovore.decline._
 
 import Common._
 
-case class Config(projectId: String, subscription: String, resolverJson: JValue, tableReference: TableReference)
+case class Config(projectId: String, subscription: String, resolverJson: JValue, datasetId: String, tableId: String)
 
 object Config {
 
@@ -43,9 +41,6 @@ object Config {
   val command = Command("mutator", "Snowplow BigQuery Mutator") (
     (projectOpt, subscriptionOpt, resolverOpt, datasetIdOpt, tableIdOpt).mapN {
       (p, s, r, d, t) =>
-        val tableRef = new TableReference().setProjectId(p).setDatasetId(d).setTableId(t)
-        Config(p, s, r, tableRef)
+        Config(p, s, r, d, t)
     })
-
-
 }

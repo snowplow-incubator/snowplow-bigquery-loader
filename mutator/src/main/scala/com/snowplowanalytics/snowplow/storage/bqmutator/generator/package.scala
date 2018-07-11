@@ -10,22 +10,10 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bqloader
+package com.snowplowanalytics.snowplow.storage.bqmutator
 
-import org.apache.beam.sdk.io.gcp.bigquery._
-import org.apache.beam.sdk.options.PipelineOptionsFactory
+import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 
-import com.google.api.services.bigquery.model.TableReference
-
-object EventsTable {
-  def create(projectId: String, datasetId: String, tableId: String): Unit = {
-    val tableRef = new TableReference().setProjectId(projectId).setDatasetId(datasetId).setTableId(tableId)
-    create(tableRef)
-  }
-
-  def create(tableRef: TableReference): Unit = {
-    val options = PipelineOptionsFactory.create().as(classOf[BigQueryOptions])
-    val service = new BigQueryServicesWrapper(options)
-    service.createTable(tableRef, schema.Schema.getAtomic)
-  }
+package object generator {
+  type Suggestion = (Schema, Boolean) => Option[BigQueryField]
 }

@@ -39,8 +39,10 @@ lazy val mutator = project.in(file("mutator"))
       Dependencies.pubsub,
       Dependencies.bigQuery,
 
+      Dependencies.fs2,
       Dependencies.decline,
       Dependencies.cats,
+      Dependencies.catsEffect,
       Dependencies.analyticsSdk,
       Dependencies.processingManifest,
       Dependencies.igluClient,
@@ -53,6 +55,7 @@ lazy val mutator = project.in(file("mutator"))
       Dependencies.scalaCheck
     )
   ).enablePlugins(JavaAppPackaging)
+
 
 lazy val repl = project.in(file("repl"))
   .settings(BuildSettings.commonSettings)

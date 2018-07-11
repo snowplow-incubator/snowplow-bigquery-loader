@@ -12,21 +12,32 @@
  */
 package com.snowplowanalytics.snowplow.storage.bqmutator
 
-import com.google.cloud.pubsub.v1.Subscriber
-import com.google.pubsub.v1.ProjectSubscriptionName
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+
+import cats.effect.IO
+import fs2.{ Stream, Scheduler }
 
 object Main {
   def main(args: Array[String]): Unit = {
     Config.command.parse(args) match {
       case Right(config) =>
-        val listener = new Listener(Mutator.initialize(config).fold(e => throw new RuntimeException(e), x => x))
-        val subscription = ProjectSubscriptionName.of(config.projectId, config.subscription)
-        val subscriber = Subscriber
-          .newBuilder(subscription, listener)
-          .build()
+        val itemQueue = for {
+          queue        <- Listener.initQueue(1000)
+          _ <- Listener.startSubscription(config, Listener(queue))
+        } yield queue
 
-        subscriber.startAsync().awaitTerminated()
-        subscriber.awaitRunning()
+        val appStream = for {
+          m <- Stream.eval(Mutator.initialize(config)).map(_.fold(e => throw new RuntimeException(e), x => x))
+          q <- Stream.eval(itemQueue)
+          i <- q.dequeue
+          _ <- Stream.eval(IO(println(s"Dequeued: $i")))
+          _ <- Stream.eval(m.updateTable(i))
+        } yield ()
+
+        val ticks = Scheduler[IO](2).flatMap(_.awakeEvery[IO](5.seconds)).evalMap(d => IO { println(s"Duration $d") })
+        appStream.compile.drain.unsafeRunSync()
+
       case Left(error) =>
         System.err.println(error)
         System.exit(1)

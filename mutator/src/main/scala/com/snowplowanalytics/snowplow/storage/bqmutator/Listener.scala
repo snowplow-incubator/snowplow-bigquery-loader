@@ -12,21 +12,28 @@
  */
 package com.snowplowanalytics.snowplow.storage.bqmutator
 
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
+import io.circe.Error
 import io.circe.jawn.parse
-
+import cats.effect.{Async, IO}
 import cats.syntax.either._
 import cats.syntax.show._
-
-import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver}
-import com.google.pubsub.v1.PubsubMessage
-
+import cats.syntax.apply._
+import fs2.async
+import fs2.async.mutable.Queue
+import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver, Subscriber}
+import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
-
 import Common._
 
-class Listener(mutator: Mutator) extends MessageReceiver {
+
+/** Listener simply enqueues new data */
+class Listener(queue: Queue[IO, List[InventoryItem]])
+              (implicit ec: ExecutionContext) extends MessageReceiver {
+
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
-    val items = for {
+    val items: Either[Error, List[InventoryItem]] = for {
       json <- parse(message.getData.toStringUtf8)
       invetoryItems <- json.as[List[InventoryItem]]
     } yield invetoryItems
@@ -34,11 +41,37 @@ class Listener(mutator: Mutator) extends MessageReceiver {
     items match {
       case Right(Nil) =>
         consumer.ack()
-      case Right(commands) =>
-        commands.foreach(mutator.updateTable)
-        consumer.ack()
-      case Left(error) =>
-        println(error.show)
+      case Right(inventoryItems) =>
+        async.unsafeRunAsync(queue.enqueue1(inventoryItems))(notificationCallback(consumer))
+      case Left(_) =>
+        notificationCallback(consumer)(items).unsafeRunSync()
     }
+  }
+
+  private def notificationCallback(consumer: AckReplyConsumer)(either: Either[Throwable, _]): IO[Unit] =
+    either match {
+      case Right(_) => IO(consumer.ack())
+      case Left(error: Error) => IO(consumer.ack()) *> IO(println(error.show))
+      case Left(queueError) => IO(println(queueError.getMessage))
+    }
+}
+
+object Listener {
+  def initQueue(size: Int)(implicit ec: ExecutionContext): IO[Queue[IO, List[InventoryItem]]] =
+    Queue.bounded[IO, List[InventoryItem]](size)
+
+  def apply(queue: Queue[IO, List[InventoryItem]])(implicit ec: ExecutionContext): Listener =
+    new Listener(queue)
+
+  def startSubscription(config: Config, listener: Listener)(implicit ec: ExecutionContext): IO[Unit] = {
+    def process = IO {
+      Future {
+        val subscription = ProjectSubscriptionName.of(config.projectId, config.subscription)
+        val subscriber = Subscriber.newBuilder(subscription, listener).build()
+        subscriber.startAsync().awaitRunning()
+      }
+    }
+
+    IO.fromFuture(process)
   }
 }

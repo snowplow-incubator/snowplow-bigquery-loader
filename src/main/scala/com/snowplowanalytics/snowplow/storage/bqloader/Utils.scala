@@ -23,7 +23,7 @@ import com.spotify.scio.bigquery.TableRow
 
 import org.json4s.JsonAST._
 import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods.{parse => jsonParse}
+import org.json4s.jackson.JsonMethods.{parse => jsonParse, compact}
 
 object Utils {
 
@@ -57,14 +57,15 @@ object Utils {
     json.obj.collectFirst { case ("collector_tstamp", JString(tstamp)) => tstamp } match {
       case Some(tstamp) =>
         val atomicFields = json.obj.flatMap {
+          case ("geo_location", _) => None
           case (key, JString(str)) => Some((key, str))
           case (key, JInt(int)) => Some((key, int))
           case (key, JDouble(double)) => Some((key, double))
           case (key, JDecimal(decimal)) => Some((key, decimal))
           case (key, JBool(bool)) => Some((key, bool))
-          case ("geo_location", _) => None
+          case (key, o: JObject) => Some((key, compact(o)))
+          case (key, a: JArray) => Some((key, compact(a)))
           case (_, JNull) => None
-          case _ => None
         }
         for {
           time <- Either

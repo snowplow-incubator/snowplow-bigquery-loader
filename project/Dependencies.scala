@@ -14,18 +14,21 @@ import sbt._
 
 object Dependencies {
   object V {
-    // Scala
-    val scio               = "0.5.5"
-    val decline            = "0.4.0"
+    // Scala Snowplow
     val analyticsSdk       = "0.3.0"
-    val cats               = "1.1.0"
-    val processingManifest = "0.1.0-M4"
     val igluClient         = "0.5.0"
-    val igluCore           = "0.2.0"
-    val circe              = "0.9.3"
-    val scalaz7            = "7.0.9"
+    val igluCore           = "0.3.0-M1"
+    val processingManifest = "0.1.0-M4"
     val schemaDdl          = "0.7.0"
+    // Scala
+    val cats               = "1.1.0"
+    val catsEffect         = "1.0.0-RC2"
+    val circe              = "0.9.3"
+    val decline            = "0.4.0"
+    val fs2                = "0.10.4"
     val json4sJackson      = "3.2.11"
+    val scalaz7            = "7.0.9"
+    val scio               = "0.5.5"
     // Java
     val beam               = "2.4.0"
     val googleCloud        = "1.31.0"
@@ -40,27 +43,30 @@ object Dependencies {
   val pubsub             = "com.google.cloud"      %  "google-cloud-pubsub"          % V.googleCloud
 
   // Scala
-  val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio
-  val scioRepl           = "com.spotify"           %% "scio-repl"                    % V.scio
   val analyticsSdk       = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk
-  val decline            = "com.monovore"          %% "decline"                      % V.decline
-  val cats               = "org.typelevel"         %% "cats-core"                    % V.cats
-  val processingManifest = "com.snowplowanalytics" %% "snowplow-processing-manifest" % V.processingManifest
   val igluClient         = "com.snowplowanalytics" %% "iglu-scala-client"            % V.igluClient
   val igluCoreCirce      = "com.snowplowanalytics" %% "iglu-core-circe"              % V.igluCore
-  val circe              = "io.circe"              %% "circe-core"                   % V.circe
-  val circeJavaTime      = "io.circe"              %% "circe-java8"                  % V.circe
-  val scalaz7            = "org.scalaz"            %% "scalaz-core"                  % V.scalaz7
-  val json4sJackson      = "org.json4s"            %% "json4s-jackson"               % V.json4sJackson
+  val processingManifest = "com.snowplowanalytics" %% "snowplow-processing-manifest" % V.processingManifest
   val schemaDdl          = "com.snowplowanalytics" %% "schema-ddl"                   % V.schemaDdl
 
+  val cats               = "org.typelevel"         %% "cats-core"                    % V.cats
+  val catsEffect         = "org.typelevel"         %% "cats-effect"                  % V.catsEffect
+  val circe              = "io.circe"              %% "circe-core"                   % V.circe
+  val circeJavaTime      = "io.circe"              %% "circe-java8"                  % V.circe
+  val decline            = "com.monovore"          %% "decline"                      % V.decline
+  val fs2                = "co.fs2"                %% "fs2-core"                     % V.fs2
+  val json4sJackson      = "org.json4s"            %% "json4s-jackson"               % V.json4sJackson
+  val scalaz7            = "org.scalaz"            %% "scalaz-core"                  % V.scalaz7
+  val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio
+  val scioRepl           = "com.spotify"           %% "scio-repl"                    % V.scio
+
   // Java
-  val directRunner       = "org.apache.beam"       % "beam-runners-direct-java"                % V.beam
   val dataflowRunner     = "org.apache.beam"       % "beam-runners-google-cloud-dataflow-java" % V.beam
+  val directRunner       = "org.apache.beam"       % "beam-runners-direct-java"                % V.beam
   val slf4j              = "org.slf4j"             % "slf4j-simple"                            % V.slf4j
 
   // Scala (test only)
-  val specs2             = "org.specs2"            %% "specs2-core"                  % V.specs2         % "test"
   val scalaCheck         = "org.scalacheck"        %% "scalacheck"                   % V.scalaCheck     % "test"
+  val specs2             = "org.specs2"            %% "specs2-core"                  % V.specs2         % "test"
   val scioTest           = "com.spotify"           %% "scio-test"                    % V.scio           % "test"
 }

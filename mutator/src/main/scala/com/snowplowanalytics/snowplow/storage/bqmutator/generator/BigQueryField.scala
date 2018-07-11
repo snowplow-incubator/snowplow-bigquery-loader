@@ -5,6 +5,12 @@ import scala.collection.immutable.ListMap
 /** Type-safe isomorphic proxy to `Field` */
 sealed trait BigQueryField {
   def mode: FieldMode
+
+  def setMode(mode: FieldMode): BigQueryField = this match {
+    case BigQueryField.Primitive(t, _) => BigQueryField.Primitive(t, mode)
+    case BigQueryField.Record(_, fields) => BigQueryField.Record(mode, fields)
+    case array => array
+  }
 }
 
 object BigQueryField {

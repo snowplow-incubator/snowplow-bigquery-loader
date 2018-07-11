@@ -13,24 +13,18 @@
 package com.snowplowanalytics.snowplow.storage.bqmutator
 
 import cats.implicits._
-
 import cats.effect._
 import cats.effect.concurrent.MVar
-
 import org.json4s.jackson.JsonMethods.fromJsonNode
-
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, Field}
-
 import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.Json4sToSchema._
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem, fixSchema}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data
-
 import generator.Generator.{Column, traverseSuggestions}
-import generator.Native
+import generator.{FieldMode, Native}
 import Mutator._
 
 /**
@@ -57,18 +51,18 @@ class Mutator private(resolver: Resolver,
   }
 
   def getField(inventoryItem: InventoryItem, schema: Schema): Field = {
-    val columnName = fixSchema(inventoryItem.shredProperty, inventoryItem.igluUri)
-    val field = traverseSuggestions(schema, false)
-    val column = Column(columnName, field)
     val mode = inventoryItem.shredProperty match {
-      case Data.UnstructEvent => Field.Mode.NULLABLE
-      case Data.Contexts(_) => Field.Mode.REPEATED
+      case Data.UnstructEvent => FieldMode.Nullable
+      case Data.Contexts(_) => FieldMode.Repeated
     }
+
+    val columnName = fixSchema(inventoryItem.shredProperty, inventoryItem.igluUri)
+    val field = traverseSuggestions(schema, false).setMode(mode)
+    val column = Column(columnName, field)
 
     Native.toField(column)
       .toBuilder
       .setDescription(inventoryItem.igluUri)
-      .setMode(mode)
       .build()
   }
 
@@ -94,6 +88,27 @@ class Mutator private(resolver: Resolver,
 }
 
 object Mutator {
+
+  type ModelGroup = (String, String, String, Int)
+
+  /**
+    * Source of truth for mutator
+    * @param fields list of BigQuery columns in order they were added
+    * @param schemas all schemas known to mutator
+    */
+  case class MutatorState(fields: Vector[Field], schemas: Map[ModelGroup, List[SchemaKey]]) {
+    def addField(field: Field): MutatorState =
+      MutatorState(fields :+ field, schemas)
+
+    def addSchema(key: SchemaKey): MutatorState = {
+      val group = (key.vendor, key.name, key.format, key.version.getModel.get)
+      schemas.get(group) match {
+        case Some(keys) if keys.contains(key) => this
+        case Some(keys) => this.copy(schemas = schemas ++ Map(group -> (key :: keys)))
+        case None => this.copy(schemas = schemas ++ Map(group -> List(key)))
+      }
+    }
+  }
 
   case class MutatorError(message: String) extends Throwable
 

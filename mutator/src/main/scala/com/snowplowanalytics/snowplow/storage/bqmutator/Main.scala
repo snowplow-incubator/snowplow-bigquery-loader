@@ -36,7 +36,7 @@ object Main {
         } yield ()
 
         val ticks = Scheduler[IO](2).flatMap(_.awakeEvery[IO](5.seconds)).evalMap(d => IO { println(s"Duration $d") })
-        appStream.compile.drain.unsafeRunSync()
+        ticks.zip(appStream).compile.drain.unsafeRunSync()
 
       case Left(error) =>
         System.err.println(error)

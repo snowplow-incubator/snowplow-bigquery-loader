@@ -15,5 +15,5 @@ package com.snowplowanalytics.snowplow.storage.bqmutator
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 
 package object generator {
-  type Suggestion = (Schema, Boolean) => Option[BigQueryField]
+  type Suggestion = (Schema, Boolean) => Option[String => BigQueryField]
 }

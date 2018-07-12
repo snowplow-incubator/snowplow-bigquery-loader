@@ -16,45 +16,47 @@ import org.json4s.JsonAST._
 
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{ CommonProperties, StringProperties }
 
+import BigQueryField._
+
 object Suggestion {
 
   val stringSuggestion: Suggestion = (schema, required) =>
     schema.`type` match {
       case Some(CommonProperties.String) =>
-        Some(BigQueryField(BigQueryType.String, FieldMode.get(required)))
+        Some(name => BigQueryField(name, BigQueryType.String, FieldMode.get(required)))
       case Some(CommonProperties.Product(types)) if withNull(types, CommonProperties.String) =>
-        Some(BigQueryField(BigQueryType.String, FieldMode.Nullable))
+        Some(name => BigQueryField(name, BigQueryType.String, FieldMode.Nullable))
       case _ => None
     }
 
   val booleanSuggestion: Suggestion = (schema, required) =>
     schema.`type` match {
       case Some(CommonProperties.Boolean) =>
-        Some(BigQueryField(BigQueryType.Boolean, FieldMode.get(required)))
+        Some(name => BigQueryField(name, BigQueryType.Boolean, FieldMode.get(required)))
       case Some(CommonProperties.Product(types)) if withNull(types, CommonProperties.Boolean) =>
-        Some(BigQueryField(BigQueryType.Boolean, FieldMode.Nullable))
+        Some(name => BigQueryField(name, BigQueryType.Boolean, FieldMode.Nullable))
       case _ => None
     }
 
   val integerSuggestion: Suggestion = (schema, required) =>
     schema.`type` match {
       case Some(CommonProperties.Integer) =>
-        Some(BigQueryField(BigQueryType.Integer, FieldMode.get(required)))
+        Some(name => BigQueryField(name, BigQueryType.Integer, FieldMode.get(required)))
       case Some(CommonProperties.Product(types)) if withNull(types, CommonProperties.Integer) =>
-        Some(BigQueryField(BigQueryType.Integer, FieldMode.Nullable))
+        Some(name => BigQueryField(name, BigQueryType.Integer, FieldMode.Nullable))
       case _ => None
     }
 
   val floatSuggestion: Suggestion = (schema, required) =>
     schema.`type` match {
       case Some(CommonProperties.Number) =>
-        Some(BigQueryField(BigQueryType.Float, FieldMode.get(required)))
+        Some(name => BigQueryField(name, BigQueryType.Float, FieldMode.get(required)))
       case Some(CommonProperties.Product(types)) if onlyNumeric(types.toSet, true) =>
-        Some(BigQueryField(BigQueryType.Float, FieldMode.Nullable))
+        Some(name => BigQueryField(name, BigQueryType.Float, FieldMode.Nullable))
       case Some(CommonProperties.Product(types)) if onlyNumeric(types.toSet, false)  =>
-        Some(BigQueryField(BigQueryType.Float, FieldMode.get(required)))
+        Some(name => BigQueryField(name, BigQueryType.Float, FieldMode.get(required)))
       case Some(CommonProperties.Product(types)) if withNull(types, CommonProperties.Number) =>
-        Some(BigQueryField(BigQueryType.Float, FieldMode.Nullable))
+        Some(name => BigQueryField(name, BigQueryType.Float, FieldMode.Nullable))
       case _ => None
     }
 
@@ -68,30 +70,31 @@ object Suggestion {
   val datetimeSuggestion: Suggestion = (schema, required) =>
     (schema.`type`, schema.format) match {
       case (Some(CommonProperties.String), Some(StringProperties.DateFormat)) =>
-        Some(BigQueryField(BigQueryType.Date, FieldMode.get(required)))
+        Some(name => BigQueryField(name, BigQueryType.Date, FieldMode.get(required)))
       case (Some(CommonProperties.Product(types)), Some(StringProperties.DateFormat)) if withNull(types, CommonProperties.String) =>
-        Some(BigQueryField(BigQueryType.Date, FieldMode.Nullable))
+        Some(name => BigQueryField(name, BigQueryType.Date, FieldMode.Nullable))
 
       case (Some(CommonProperties.String), Some(StringProperties.DateTimeFormat)) =>
-        Some(BigQueryField(BigQueryType.DateTime, FieldMode.get(required)))
+        Some(name => BigQueryField(name, BigQueryType.DateTime, FieldMode.get(required)))
       case (Some(CommonProperties.Product(types)), Some(StringProperties.DateTimeFormat)) if withNull(types, CommonProperties.String) =>
-        Some(BigQueryField(BigQueryType.DateTime, FieldMode.Nullable))
+        Some(name => BigQueryField(name, BigQueryType.DateTime, FieldMode.Nullable))
 
       case _ => None
     }
 
-  def finalSuggestion(required: Boolean) =
-    BigQueryField(BigQueryType.String, FieldMode.get(required))
+  def finalSuggestion(required: Boolean): String => BigQueryField =
+    name => BigQueryField(name, BigQueryType.String, FieldMode.get(required))
 
   val suggestions: List[Suggestion] = List(
     datetimeSuggestion,
     booleanSuggestion,
     stringSuggestion,
     integerSuggestion,
+    floatSuggestion,
     complexEnumSuggestion
   )
 
-  private[generator] def fromEnum(enums: List[JValue], required: Boolean): BigQueryField = {
+  private[generator] def fromEnum(enums: List[JValue], required: Boolean): String => BigQueryField = {
     def isString(json: JValue) = json.isInstanceOf[JString] || json == JNull
     def isInteger(json: JValue) = json.isInstanceOf[JInt] || json == JNull
     def isNumeric(json: JValue) =
@@ -99,13 +102,13 @@ object Suggestion {
     val noNull: Boolean = !enums.contains(JNull)
 
     if (enums.forall(isString)) {
-      BigQueryField(BigQueryType.String, FieldMode.get(required && noNull))
+      name => BigQueryField(name, BigQueryType.String, FieldMode.get(required && noNull))
     } else if (enums.forall(isInteger)) {
-      BigQueryField(BigQueryType.Integer, FieldMode.get(required && noNull))
+      name => BigQueryField(name, BigQueryType.Integer, FieldMode.get(required && noNull))
     } else if (enums.forall(isNumeric)) {
-      BigQueryField(BigQueryType.Float, FieldMode.get(required && noNull))
+      name => BigQueryField(name, BigQueryType.Float, FieldMode.get(required && noNull))
     } else {
-      BigQueryField(BigQueryType.String, FieldMode.get(required && noNull))
+      name => BigQueryField(name, BigQueryType.String, FieldMode.get(required && noNull))
     }
   }
 

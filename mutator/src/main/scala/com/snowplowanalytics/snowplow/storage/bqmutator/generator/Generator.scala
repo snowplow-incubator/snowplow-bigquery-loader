@@ -14,44 +14,42 @@ package com.snowplowanalytics.snowplow.storage.bqmutator.generator
 
 import com.snowplowanalytics.iglu.core.SchemaKey
 
-import scala.collection.immutable.ListMap
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{ArrayProperties, CommonProperties, Schema}
+
+import BigQueryField._
 
 object Generator {
 
   /** Top-level declaration */
   case class Column(name: String, bigQueryField: BigQueryField, version: SchemaKey)
 
-  def build(topSchema: Schema, required: Boolean): BigQueryField = {
+  def build(name: String, topSchema: Schema, required: Boolean): BigQueryField = {
     topSchema.`type` match {
       case Some(CommonProperties.Object) =>
         val subfields = topSchema.properties.map(_.value).getOrElse(Map.empty)
         if (subfields.isEmpty) {
-          Suggestion.finalSuggestion(required)
+          Suggestion.finalSuggestion(required)(name)
         } else {
           val requiredKeys = topSchema.required.toList.flatMap(_.value)
           val fields = subfields.map { case (key, schema) =>
-            (key, build(schema, requiredKeys.contains(key)))
+            build(key, schema, requiredKeys.contains(key))
           }
-          val subFields = ListMap(fields.toList.sortBy { case (name, field) =>
-            (FieldMode.sort(field.mode), name)
-          }: _*)
-
-          BigQueryField(BigQueryType.Record(subFields), FieldMode.get(required))
+          val subFields = fields.toList.sortBy(field => (FieldMode.sort(field.mode), field.name))
+          BigQueryField(name, BigQueryType.Record(subFields), FieldMode.get(required))
         }
       case Some(CommonProperties.Array) =>
         topSchema.items match {
           case Some(ArrayProperties.ListItems(schema)) =>
-            val field = build(schema, false)
-            BigQueryField(field.bigQueryType, FieldMode.Repeated)
+            build(name, schema, false).copy(mode = FieldMode.Repeated)
           case _ =>
-            Suggestion.finalSuggestion(required)
+            Suggestion.finalSuggestion(required)(name)
         }
       case _ =>
         Suggestion.suggestions
           .find(suggestion => suggestion(topSchema, required).isDefined)
           .flatMap(_.apply(topSchema, required))
           .getOrElse(Suggestion.finalSuggestion(required))
+          .apply(name)
     }
   }
 }

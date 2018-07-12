@@ -16,29 +16,31 @@ import scala.collection.convert.decorateAsJava._
 
 import com.google.cloud.bigquery.{Field, FieldList, LegacySQLTypeName}
 
+import BigQueryField._
 import Generator._
+
 
 // This must not be backported to Schema DDL, as a single module
 // dependent on Google SDK
 object Native {
 
   def toField(column: Column): Field =
-    getField(column.bigQueryField)(column.name)
+    getField(column.bigQueryField)
       .toBuilder
       .setDescription(column.version.toSchemaUri)
       .build()
 
   /** Get unnamed `Field` (name should be provided by client code) */
-  def getField(bigQueryField: BigQueryField): String => Field =
+  def getField(bigQueryField: BigQueryField): Field =
     bigQueryField match {
-      case BigQueryField(r @ BigQueryType.Record(fields), m) =>
-        val subFields = fields.toList.map { case (name, field) => getField(field)(name) }
+      case BigQueryField(name, r @ BigQueryType.Record(fields), m) =>
+        val subFields = fields.map(getField)
         val fieldsList = FieldList.of(subFields.asJava)
-        name => Field.newBuilder(name, typeTo(r), fieldsList).setMode(modeTo(m)).build()
-      case BigQueryField(t, m @ FieldMode.Repeated) =>
-        name => getField(BigQueryField(t, m))(name)
-      case BigQueryField(t, m) =>
-        name => Field.newBuilder(name, typeTo(t)).setMode(modeTo(m)).build()
+        Field.newBuilder(name, typeTo(r), fieldsList).setMode(modeTo(m)).build()
+      case BigQueryField(name, t, m @ FieldMode.Repeated) =>
+        getField(BigQueryField(name, t, m))
+      case BigQueryField(name, t, m) =>
+        Field.newBuilder(name, typeTo(t)).setMode(modeTo(m)).build()
     }
 
   def modeTo(fieldMode: FieldMode): Field.Mode =

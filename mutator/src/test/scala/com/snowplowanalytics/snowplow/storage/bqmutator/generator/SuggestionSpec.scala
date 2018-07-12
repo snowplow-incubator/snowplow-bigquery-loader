@@ -3,6 +3,8 @@ package generator
 
 import org.specs2.Specification
 
+import BigQueryField._
+
 class SuggestionSpec extends Specification { def is = s2"""
   stringSuggestion produces nullable field even with required $e1
   stringSuggestion produces nothing for union type $e2
@@ -14,9 +16,9 @@ class SuggestionSpec extends Specification { def is = s2"""
         |{"type": ["null", "string"]}
       """.stripMargin)
 
-    val expected = BigQueryField.Primitive(BigQueryType.String, FieldMode.Nullable)
+    val expected = BigQueryField("foo", BigQueryType.String, FieldMode.Nullable)
 
-    Suggestion.stringSuggestion(input, true) must beSome(expected)
+    Suggestion.stringSuggestion(input, true).map(_.apply("foo")) must beSome(expected)
   }
 
   def e2 = {

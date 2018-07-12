@@ -13,18 +13,26 @@
 package com.snowplowanalytics.snowplow.storage.bqmutator
 
 import cats.implicits._
+
 import cats.effect._
 import cats.effect.concurrent.MVar
+
 import org.json4s.jackson.JsonMethods.fromJsonNode
+
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, Field}
+
 import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.Json4sToSchema._
+
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem, fixSchema}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data
+
 import generator.Generator.{Column, build}
-import generator.{FieldMode, Native}
+import generator.Native
+import generator.BigQueryField._
+
 import Mutator._
 
 /**
@@ -57,7 +65,7 @@ class Mutator private(resolver: Resolver,
     }
 
     val columnName = fixSchema(inventoryItem.shredProperty, inventoryItem.igluUri)
-    val field = build(schema, false).setMode(mode)
+    val field = build(columnName, schema, false).setMode(mode)
     val column = Column(columnName, field, SchemaKey.fromUri(inventoryItem.igluUri).get)
 
     Native.toField(column)
@@ -78,7 +86,7 @@ class Mutator private(resolver: Resolver,
         .fromValidation(response)
         .leftMap(errors => MutatorError(errors.toList.mkString(", ")))
         .map(fromJsonNode)
-        .flatMap(json => Schema.parse(json).liftTo[Either[MutatorError, ?]](InvalidSchema))
+        .flatMap(json => Schema.parse(json).liftTo[Either[MutatorError, ?]](invalidSchema(igluUri)))
         .fold(IO.raiseError[Schema], IO.pure)
     } yield schema
   }
@@ -91,7 +99,8 @@ object Mutator {
   /**
     * Source of truth for mutator
     * @param fields list of BigQuery columns in order they were added
-    * @param schemas all schemas known to mutator
+    * @param schemas all schemas known to mutator,
+    *                some schemas can be not represented in `fields` if mutator started with newer versions
     */
   case class MutatorState(fields: Vector[Field], schemas: Map[ModelGroup, List[SchemaKey]]) {
     def addField(field: Field): MutatorState =
@@ -109,7 +118,7 @@ object Mutator {
 
   case class MutatorError(message: String) extends Throwable
 
-  val InvalidSchema = MutatorError("Schema cannot be parsed")
+  def invalidSchema(shema: IgluUri) = MutatorError(s"Schema [$shema] cannot be parsed")
 
   def filterFields(existingFields: Vector[SchemaKey], newItems: List[InventoryItem]): List[InventoryItem] =
     newItems.filter { i =>

@@ -16,7 +16,7 @@ import cats.syntax.either._
 
 import com.spotify.scio.Args
 
-import core.Config.{ transform, decodeBase64Json, Environment }
+import core.Config.{ transform, decodeBase64Json, Environment, EnvironmentConfig }
 
 /**
   * Loader specific CLI configuration
@@ -28,7 +28,7 @@ object CommandLine {
       for {
         c <- decodeBase64Json(args("config"))
         r <- decodeBase64Json(args("resolver"))
-        e <- transform(r, c)
+        e <- transform(EnvironmentConfig(r, c))
       } yield e
 
     environment.fold(throw _, id)

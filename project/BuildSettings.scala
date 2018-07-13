@@ -16,7 +16,7 @@ import Keys._
 object BuildSettings {
   lazy val commonSettings = Seq(
     organization          := "com.snowplowanalytics",
-    version               := "0.1.0-rc3",
+    version               := "0.1.0-rc4",
     scalaVersion          := "2.11.12",
     scalacOptions         ++= Seq("-target:jvm-1.8",
       "-deprecation",
@@ -25,6 +25,7 @@ object BuildSettings {
     javacOptions          ++= Seq("-source", "1.8", "-target", "1.8"),
     Global / cancelable   := true,
 
+    addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.7")
   )
 

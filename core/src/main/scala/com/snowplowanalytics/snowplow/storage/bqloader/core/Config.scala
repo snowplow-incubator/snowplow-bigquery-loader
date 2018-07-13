@@ -50,10 +50,10 @@ case class Config(name: String,
 
 object Config {
 
-  /** Pure common configuration for Loader and Mutator */
+  /** Common pure cconfiguration for Loader and Mutator */
   case class EnvironmentConfig(resolver: JValue, config: JValue)
 
-  /** Parsed common environment */
+  /** Parsed common environment (resolver is a stateful object) */
   class Environment private[Config] (val resolver: Resolver, val config: Config)
 
   private implicit val formats: org.json4s.Formats = org.json4s.DefaultFormats
@@ -62,8 +62,7 @@ object Config {
   def transform(environmentConfig: EnvironmentConfig): Either[Throwable, Environment] = {
     for {
       resolver <- Resolver.parse(environmentConfig.resolver).fold(asThrowableLeft, _.asRight)
-      d <- validateAndIdentifySchema(environmentConfig.config, dataOnly = true)(resolver).fold(asThrowableLeft, _.asRight)
-      (_, data) = d
+      (_, data) <- validateAndIdentifySchema(environmentConfig.config, dataOnly = true)(resolver).fold(asThrowableLeft, _.asRight)
       config <- Either.catchNonFatal(data.extract[Config])
     } yield new Environment(resolver, config)
   }

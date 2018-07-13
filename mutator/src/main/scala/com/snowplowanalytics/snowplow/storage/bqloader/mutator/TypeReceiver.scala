@@ -30,13 +30,13 @@ import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
 
-import Common._
+import Codecs._
 import com.snowplowanalytics.snowplow.storage.bqloader.core.Config
 
 
-/** Listener simply enqueues new data */
-class Listener(queue: Queue[IO, List[InventoryItem]])
-              (implicit ec: ExecutionContext) extends MessageReceiver {
+/** Listens PubSub topic for shredded types and enqueues them into common type queue */
+class TypeReceiver(queue: Queue[IO, List[InventoryItem]])
+                  (implicit ec: ExecutionContext) extends MessageReceiver {
 
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
     val items: Either[Error, List[InventoryItem]] = for {
@@ -62,14 +62,14 @@ class Listener(queue: Queue[IO, List[InventoryItem]])
     }
 }
 
-object Listener {
+object TypeReceiver {
   def initQueue(size: Int)(implicit ec: ExecutionContext): IO[Queue[IO, List[InventoryItem]]] =
     Queue.bounded[IO, List[InventoryItem]](size)
 
-  def apply(queue: Queue[IO, List[InventoryItem]])(implicit ec: ExecutionContext): Listener =
-    new Listener(queue)
+  def apply(queue: Queue[IO, List[InventoryItem]])(implicit ec: ExecutionContext): TypeReceiver =
+    new TypeReceiver(queue)
 
-  def startSubscription(config: Config, listener: Listener)(implicit ec: ExecutionContext): IO[Unit] = {
+  def startSubscription(config: Config, listener: TypeReceiver)(implicit ec: ExecutionContext): IO[Unit] = {
     def process = IO {
       Future {
         val subscription = ProjectSubscriptionName.of(config.projectId, config.typesSub)

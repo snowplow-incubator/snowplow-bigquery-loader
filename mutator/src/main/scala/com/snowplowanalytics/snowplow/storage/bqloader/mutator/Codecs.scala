@@ -14,7 +14,6 @@ package com.snowplowanalytics.snowplow.storage.bqloader.mutator
 
 import io.circe._
 
-import cats.data.{Validated, ValidatedNel, NonEmptyList}
 import cats.instances.either._
 import cats.instances.list._
 import cats.syntax.either._
@@ -22,7 +21,7 @@ import cats.syntax.option._
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data._
 
-object Common {
+object Codecs {
 
   private val ContextsName = "CONTEXTS"
   private val DerivedContextsName = "DERIVED_CONTEXTS"

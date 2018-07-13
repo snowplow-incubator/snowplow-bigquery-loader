@@ -30,8 +30,8 @@ object Main {
         val appStream = for {
           environment <- c.getEnv.stream
           mutator <- Mutator.initialize(environment).map(_.fold(e => throw new RuntimeException(e), x => x)).stream
-          queue <- Listener.initQueue(1000).stream
-          _ <- Listener.startSubscription(environment.config, Listener(queue)).stream
+          queue <- TypeReceiver.initQueue(1000).stream
+          _ <- TypeReceiver.startSubscription(environment.config, TypeReceiver(queue)).stream
           items <- queue.dequeue
           _ <- Stream.eval(mutator.updateTable(items))
         } yield ()

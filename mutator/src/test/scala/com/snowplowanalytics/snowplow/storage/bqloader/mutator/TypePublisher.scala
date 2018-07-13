@@ -27,7 +27,7 @@ import fs2._
 
 import cats.effect.IO
 
-import Common._
+import Codecs._
 
 /**
   * Example publisher that submits Inventory items to specified topic.

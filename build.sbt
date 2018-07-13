@@ -1,3 +1,26 @@
+lazy val core = project.in(file("core"))
+  .settings(Seq(
+    name := "snowplow-bigquery-loader-core",
+    description := "Snowplow BigQuery Loader Common Utils"
+  ))
+  .settings(BuildSettings.commonSettings)
+  .settings(
+    BuildSettings.macroSettings ++ BuildSettings.noPublishSettings,
+    libraryDependencies ++= Seq(
+      Dependencies.decline,
+      Dependencies.cats,
+      Dependencies.analyticsSdk,
+      Dependencies.processingManifest,
+      Dependencies.igluClient,
+      Dependencies.igluCoreCirce,
+      Dependencies.circe,
+      Dependencies.circeJavaTime,
+
+      Dependencies.specs2,
+      Dependencies.scalaCheck
+    )
+  )
+
 lazy val root = project.in(file("."))
   .settings(Seq(
     name := "snowplow-bigquery-loader",
@@ -24,7 +47,9 @@ lazy val root = project.in(file("."))
       Dependencies.specs2,
       Dependencies.scalaCheck
     )
-  ).enablePlugins(JavaAppPackaging)
+  )
+  .enablePlugins(JavaAppPackaging)
+  .dependsOn(core)
 
 lazy val mutator = project.in(file("mutator"))
   .settings(Seq(
@@ -54,7 +79,9 @@ lazy val mutator = project.in(file("mutator"))
       Dependencies.specs2,
       Dependencies.scalaCheck
     )
-  ).enablePlugins(JavaAppPackaging)
+  )
+  .enablePlugins(JavaAppPackaging)
+  .dependsOn(core)
 
 
 lazy val repl = project.in(file("repl"))

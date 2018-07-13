@@ -10,33 +10,37 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bqmutator
+package com.snowplowanalytics.snowplow.storage.bqloader.mutator
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
 import cats.effect.IO
+
 import fs2.{ Stream, Scheduler }
 
 object Main {
-  def main(args: Array[String]): Unit = {
-    Config.command.parse(args) match {
-      case Right(config) =>
-        val itemQueue = for {
-          queue        <- Listener.initQueue(1000)
-          _ <- Listener.startSubscription(config, Listener(queue))
-        } yield queue
+  implicit class ToStream[A](val io: IO[A]) extends AnyVal {
+    def stream: Stream[IO, A] = Stream.eval[IO, A](io)
+  }
 
+  def main(args: Array[String]): Unit = {
+    CommandLine.parse(args) match {
+      case Right(c: CommandLine.ListenCommand) =>
         val appStream = for {
-          m <- Stream.eval(Mutator.initialize(config)).map(_.fold(e => throw new RuntimeException(e), x => x))
-          q <- Stream.eval(itemQueue)
-          i <- q.dequeue
-          _ <- Stream.eval(IO(println(s"Dequeued: $i")))
-          _ <- Stream.eval(m.updateTable(i))
+          environment <- c.getEnv.stream
+          mutator <- Mutator.initialize(environment).map(_.fold(e => throw new RuntimeException(e), x => x)).stream
+          queue <- Listener.initQueue(1000).stream
+          _ <- Listener.startSubscription(environment.config, Listener(queue)).stream
+          items <- queue.dequeue
+          _ <- Stream.eval(mutator.updateTable(items))
         } yield ()
 
-        val ticks = Scheduler[IO](2).flatMap(_.awakeEvery[IO](5.seconds)).evalMap(d => IO { println(s"Duration $d") })
+        val ticks = Scheduler[IO](2).flatMap(_.awakeEvery[IO](5.seconds))
         ticks.zip(appStream).compile.drain.unsafeRunSync()
+
+      case Right(CommandLine.CreateCommand(config)) =>
+        ???   // Port from Loader/Beam
 
       case Left(error) =>
         System.err.println(error)

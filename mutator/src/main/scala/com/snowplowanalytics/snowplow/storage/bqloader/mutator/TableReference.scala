@@ -10,7 +10,7 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bqmutator
+package com.snowplowanalytics.snowplow.storage.bqloader.mutator
 
 import scala.collection.convert.decorateAsJava._
 import scala.collection.convert.decorateAsScala._

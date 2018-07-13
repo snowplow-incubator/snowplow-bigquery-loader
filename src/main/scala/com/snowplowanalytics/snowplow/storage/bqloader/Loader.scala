@@ -12,7 +12,7 @@
  */
 package com.snowplowanalytics.snowplow.storage.bqloader
 
-import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, DynamicDestinations}
+import com.google.api.services.bigquery.model.TableReference
 
 import org.joda.time.Duration
 
@@ -30,8 +30,8 @@ import org.json4s.JsonDSL._
 import org.json4s.jackson.JsonMethods.compact
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
-
 import com.snowplowanalytics.snowplow.storage.bqloader.Utils.LoaderRow
+import com.snowplowanalytics.snowplow.storage.bqloader.core.Config.Environment
 
 object Loader {
   /** Default windowing option */
@@ -55,15 +55,20 @@ object Loader {
       .withWriteDisposition(WriteDisposition.WRITE_APPEND)
 
   /** Run whole pipeline */
-  def run(config: Config, sc: ScioContext): Unit = {
-    val events = readEnrichedSub(sc.pubsubSubscription[String](config.input))
+  def run(env: Environment, sc: ScioContext): Unit = {
+    val tableRef = new TableReference()
+      .setProjectId(env.config.projectId)
+      .setDatasetId(env.config.datasetId)
+      .setTableId(env.config.tableId)
+
+    val events = readEnrichedSub(sc.pubsubSubscription[String](env.config.input))
 
     // Should be global window with `mutateTable` invocation on every new addition
-    Loader.getTypes(events).saveAsPubsub(config.types)
+    Loader.getTypes(events).saveAsPubsub(env.config.typesTopic)
 
     events
       .map(_.atomic)
-      .saveAsCustomOutput("bigquery", Loader.output.to(config.tableRef))
+      .saveAsCustomOutput("bigquery", Loader.output.to(tableRef))
   }
 
   /** Read raw enriched TSV, parse and apply windowing */
@@ -78,5 +83,4 @@ object Loader {
       .map(_.inventory)
       .aggregate(Set.empty[InventoryItem])((acc, cur) => { acc ++ cur }, _ ++ _)
       .map(inventorySet => compact(inventorySet.map(Utils.toPayload).toList))
-
 }

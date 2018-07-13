@@ -10,29 +10,10 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bqloader
+package com.snowplowanalytics.snowplow.storage.bqloader.mutator
 
-import com.google.api.services.bigquery.model.TableReference
+import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 
-import com.spotify.scio.Args
-
-case class Config(input: String, types: String, tableRef: TableReference)
-
-object Config {
-  def parse(args: Args): Config = {
-    val input = args("subscription")
-
-    val projectId = args("project-id")
-    val datesetId = args("dataset-id")
-    val tableId = args("table-id")
-
-    val typesTopic = args("types-topic")
-
-    val tableRef = new TableReference()
-      .setProjectId(projectId)
-      .setDatasetId(datesetId)
-      .setTableId(tableId)
-
-    Config(input, typesTopic, tableRef)
-  }
+package object generator {
+  type Suggestion = (Schema, Boolean) => Option[String => BigQueryField]
 }

@@ -10,11 +10,9 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bqmutator
+package com.snowplowanalytics.snowplow.storage.bqloader.mutator
 
 import io.circe._
-
-import scalaz.{Failure, Success, ValidationNel}
 
 import cats.data.{Validated, ValidatedNel, NonEmptyList}
 import cats.instances.either._
@@ -29,18 +27,6 @@ object Common {
   private val ContextsName = "CONTEXTS"
   private val DerivedContextsName = "DERIVED_CONTEXTS"
   private val UnstructEventName = "UNSTRUCT_EVENT"
-
-  def fromValidation[E, A](validation: ValidationNel[E, A]): Either[NonEmptyList[E], A] =
-    validation match {
-      case Success(a) => a.asRight
-      case Failure(errors) => NonEmptyList.fromListUnsafe(errors.list).asLeft
-    }
-
-  def catchNonFatalMessage[A](a: => A): ValidatedNel[String, A] =
-    Validated
-      .catchNonFatal(a)
-      .leftMap(_.getMessage)
-      .toValidatedNel
 
   implicit val shredPropertyDecoder: Decoder[ShredProperty] =
     new Decoder[ShredProperty] {

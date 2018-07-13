@@ -10,10 +10,9 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bqmutator
+package com.snowplowanalytics.snowplow.storage.bqloader.mutator
 
 import cats.implicits._
-
 import cats.effect._
 import cats.effect.concurrent.MVar
 
@@ -25,7 +24,6 @@ import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.Json4sToSchema._
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem, fixSchema}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data
 
@@ -34,6 +32,9 @@ import generator.Native
 import generator.BigQueryField._
 
 import Mutator._
+
+import com.snowplowanalytics.snowplow.storage.bqloader.core.Utils
+import com.snowplowanalytics.snowplow.storage.bqloader.core.Config.Environment
 
 /**
   * Mutator is stateful worker that emits `alter table` requests.
@@ -71,18 +72,19 @@ class Mutator private(resolver: Resolver,
     Native.toField(column)
   }
 
-  def addField(inventoryItem: InventoryItem): IO[Unit] = for {
-    schema <- getSchema(inventoryItem.igluUri)
-    newField = getField(inventoryItem, schema)
-    _ <- tableReference.addField(newField)
-    stateFields <- state.take
-    _ <- state.put(stateFields :+ newField)
-  } yield ()
+  def addField(inventoryItem: InventoryItem): IO[Unit] =
+    for {
+      schema <- getSchema(inventoryItem.igluUri)
+      newField = getField(inventoryItem, schema)
+      _ <- tableReference.addField(newField)
+      stateFields <- state.take
+      _ <- state.put(stateFields :+ newField)
+    } yield ()
 
   def getSchema(igluUri: IgluUri): IO[Schema] = {
     for {
       response <- IO { resolver.lookupSchema(igluUri) }
-      schema <- Common
+      schema <- Utils
         .fromValidation(response)
         .leftMap(errors => MutatorError(errors.toList.mkString(", ")))
         .map(fromJsonNode)
@@ -131,16 +133,12 @@ object Mutator {
   def getClient: IO[BigQuery] =
     IO(BigQueryOptions.getDefaultInstance.getService)
 
-  def initialize(config: Config)(implicit F: Concurrent[IO]): IO[Either[String, Mutator]] = {
-    Common.fromValidation(Resolver.parse(config.resolverJson)) match {
-      case Right(resolver) =>
-        for {
-          client <- getClient
-          table = new TableReference.BigQueryTable(client, config.datasetId, config.tableId)
-          fields <- table.getFields
-          state <- MVar.of[IO, Vector[Field]](fields)
-        } yield new Mutator(resolver, table, state).asRight
-      case Left(errors) => IO.pure(errors.toList.mkString(", ").asLeft)
-    }
+  def initialize(env: Environment)(implicit F: Concurrent[IO]): IO[Either[String, Mutator]] = {
+    for {
+      client <- getClient
+      table = new TableReference.BigQueryTable(client, env.config.datasetId, env.config.tableId)
+      fields <- table.getFields
+      state <- MVar.of[IO, Vector[Field]](fields)
+    } yield new Mutator(env.resolver, table, state).asRight
   }
 }

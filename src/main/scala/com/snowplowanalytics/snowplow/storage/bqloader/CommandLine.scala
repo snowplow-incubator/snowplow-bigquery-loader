@@ -10,10 +10,29 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bqmutator
+package com.snowplowanalytics.snowplow.storage.bqloader
 
-import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
+import cats.syntax.either._
 
-package object generator {
-  type Suggestion = (Schema, Boolean) => Option[String => BigQueryField]
+import com.spotify.scio.Args
+
+import core.Config.{ transform, decodeBase64Json, Environment }
+
+/**
+  * Loader specific CLI configuration
+  * Unlike Mutator, required --key=value format and ignores unknown options (for Dataflow)
+  */
+object CommandLine {
+  def parse(args: Args): Environment = {
+    val environment =
+      for {
+        c <- decodeBase64Json(args("config"))
+        r <- decodeBase64Json(args("resolver"))
+        e <- transform(r, c)
+      } yield e
+
+    environment.fold(throw _, id)
+  }
+
+  private def id[A](a: A): A = a
 }

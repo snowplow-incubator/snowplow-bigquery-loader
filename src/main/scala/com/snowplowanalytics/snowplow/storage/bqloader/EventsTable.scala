@@ -19,7 +19,10 @@ import com.google.api.services.bigquery.model.TableReference
 
 object EventsTable {
   def create(projectId: String, datasetId: String, tableId: String): Unit = {
-    val tableRef = new TableReference().setProjectId(projectId).setDatasetId(datasetId).setTableId(tableId)
+    val tableRef = new TableReference()
+      .setProjectId(projectId)
+      .setDatasetId(datasetId)
+      .setTableId(tableId)
     create(tableRef)
   }
 

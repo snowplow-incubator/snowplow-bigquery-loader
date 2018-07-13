@@ -1,9 +1,8 @@
-package com.snowplowanalytics.snowplow.storage.bqmutator
-package generator
+package com.snowplowanalytics.snowplow.storage.bqloader.mutator.generator
 
 import org.specs2.Specification
-
 import BigQueryField._
+import com.snowplowanalytics.snowplow.storage.bqloader.mutator.SpecHelpers
 
 class SuggestionSpec extends Specification { def is = s2"""
   stringSuggestion produces nullable field even with required $e1

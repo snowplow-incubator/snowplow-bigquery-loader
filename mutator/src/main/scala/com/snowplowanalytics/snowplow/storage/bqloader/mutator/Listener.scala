@@ -10,22 +10,28 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bqmutator
+package com.snowplowanalytics.snowplow.storage.bqloader.mutator
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
+
 import io.circe.Error
 import io.circe.jawn.parse
-import cats.effect.{Async, IO}
+
+import cats.effect.IO
 import cats.syntax.either._
 import cats.syntax.show._
 import cats.syntax.apply._
+
 import fs2.async
 import fs2.async.mutable.Queue
+
 import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver, Subscriber}
 import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
+
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
+
 import Common._
+import com.snowplowanalytics.snowplow.storage.bqloader.core.Config
 
 
 /** Listener simply enqueues new data */
@@ -66,7 +72,7 @@ object Listener {
   def startSubscription(config: Config, listener: Listener)(implicit ec: ExecutionContext): IO[Unit] = {
     def process = IO {
       Future {
-        val subscription = ProjectSubscriptionName.of(config.projectId, config.subscription)
+        val subscription = ProjectSubscriptionName.of(config.projectId, config.typesSub)
         val subscriber = Subscriber.newBuilder(subscription, listener).build()
         subscriber.startAsync().awaitRunning()
       }

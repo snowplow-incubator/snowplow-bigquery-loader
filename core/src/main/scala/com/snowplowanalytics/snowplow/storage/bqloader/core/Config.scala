@@ -50,7 +50,7 @@ case class Config(name: String,
 
 object Config {
 
-  /** Common pure cconfiguration for Loader and Mutator */
+  /** Common pure configuration for Loader and Mutator */
   case class EnvironmentConfig(resolver: JValue, config: JValue)
 
   /** Parsed common environment (resolver is a stateful object) */

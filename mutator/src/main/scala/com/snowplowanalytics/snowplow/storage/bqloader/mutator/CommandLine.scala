@@ -27,7 +27,8 @@ object CommandLine {
 
   sealed trait MutatorCommand extends Product with Serializable {
     def env: EnvironmentConfig
-    def getEnv: IO[Environment] = IO.fromEither(transform(env))
+    def getEnv: IO[Environment] =
+      IO.fromEither(transform(env))
   }
   case class CreateCommand(env: EnvironmentConfig) extends MutatorCommand
   case class ListenCommand(env: EnvironmentConfig) extends MutatorCommand

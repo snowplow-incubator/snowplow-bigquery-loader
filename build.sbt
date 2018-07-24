@@ -10,7 +10,6 @@ lazy val core = project.in(file("core"))
       Dependencies.decline,
       Dependencies.cats,
       Dependencies.analyticsSdk,
-      Dependencies.processingManifest,
       Dependencies.igluClient,
       Dependencies.igluCoreCirce,
       Dependencies.circe,

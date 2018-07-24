@@ -15,7 +15,7 @@ package com.snowplowanalytics.snowplow.storage.bqloader.mutator
 import org.json4s.jackson.parseJson
 
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
-import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.Json4sToSchema._
+import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.implicits._
 
 object SpecHelpers {
   val jsonResolver =

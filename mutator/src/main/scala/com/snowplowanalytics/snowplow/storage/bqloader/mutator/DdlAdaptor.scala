@@ -10,47 +10,46 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bqloader.mutator.generator
-
-import scala.collection.convert.decorateAsJava._
+package com.snowplowanalytics.snowplow.storage.bqloader.mutator
 
 import com.google.cloud.bigquery.{Field, FieldList, LegacySQLTypeName}
 
-import BigQueryField._
-import Generator._
+import com.snowplowanalytics.iglu.schemaddl.bigquery.Field._
+import com.snowplowanalytics.iglu.schemaddl.bigquery.Generator._
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field => BigQueryField, _}
+
+import scala.collection.convert.decorateAsJava._
 
 
-// This must not be backported to Schema DDL, as a single module
-// dependent on Google SDK
-object Native {
+/** Transform dependency-free Schema DDL AST into Google Cloud Java definitions */
+object DdlAdaptor {
 
-  def toField(column: Column): Field =
-    getField(column.bigQueryField)
+  def fromColumn(column: Column): Field =
+    adaptField(column.bigQueryField)
       .toBuilder
       .setDescription(column.version.toSchemaUri)
       .build()
 
-  /** Get unnamed `Field` (name should be provided by client code) */
-  def getField(bigQueryField: BigQueryField): Field =
+  def adaptField(bigQueryField: BigQueryField): Field =
     bigQueryField match {
       case BigQueryField(name, r @ BigQueryType.Record(fields), m) =>
-        val subFields = fields.map(getField)
+        val subFields = fields.map(adaptField)
         val fieldsList = FieldList.of(subFields.asJava)
-        Field.newBuilder(name, typeTo(r), fieldsList).setMode(modeTo(m)).build()
+        Field.newBuilder(name, adaptType(r), fieldsList).setMode(adaptMode(m)).build()
       case BigQueryField(name, t, m @ FieldMode.Repeated) =>
-        getField(BigQueryField(name, t, m))
+        adaptField(BigQueryField(name, t, m))
       case BigQueryField(name, t, m) =>
-        Field.newBuilder(name, typeTo(t)).setMode(modeTo(m)).build()
+        Field.newBuilder(name, adaptType(t)).setMode(adaptMode(m)).build()
     }
 
-  def modeTo(fieldMode: FieldMode): Field.Mode =
+  def adaptMode(fieldMode: FieldMode): Field.Mode =
     fieldMode match {
       case FieldMode.Nullable => Field.Mode.NULLABLE
       case FieldMode.Required => Field.Mode.REQUIRED
       case FieldMode.Repeated => Field.Mode.REPEATED
     }
 
-  def typeTo(fieldType: BigQueryType): LegacySQLTypeName =
+  def adaptType(fieldType: BigQueryType): LegacySQLTypeName =
     fieldType match {
       case BigQueryType.DateTime => LegacySQLTypeName.DATETIME
       case BigQueryType.Integer => LegacySQLTypeName.INTEGER

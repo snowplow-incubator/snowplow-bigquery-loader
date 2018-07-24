@@ -23,13 +23,10 @@ import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, Field}
 import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
-import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.Json4sToSchema._
+import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.implicits._
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field => BigQueryField, Generator}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem, fixSchema}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data
-
-import generator.Generator.{Column, build}
-import generator.Native
-import generator.BigQueryField._
 
 import Mutator._
 
@@ -61,15 +58,15 @@ class Mutator private(resolver: Resolver,
 
   def getField(inventoryItem: InventoryItem, schema: Schema): Field = {
     val mode = inventoryItem.shredProperty match {
-      case Data.UnstructEvent => FieldMode.Nullable
-      case Data.Contexts(_) => FieldMode.Repeated
+      case Data.UnstructEvent => BigQueryField.FieldMode.Nullable
+      case Data.Contexts(_) => BigQueryField.FieldMode.Repeated
     }
 
     val columnName = fixSchema(inventoryItem.shredProperty, inventoryItem.igluUri)
-    val field = build(columnName, schema, false).setMode(mode)
-    val column = Column(columnName, field, SchemaKey.fromUri(inventoryItem.igluUri).get)
+    val field = Generator.build(columnName, schema, false).setMode(mode)
+    val column = Generator.Column(columnName, field, SchemaKey.fromUri(inventoryItem.igluUri).get)
 
-    Native.toField(column)
+    DdlAdaptor.fromColumn(column)
   }
 
   def addField(inventoryItem: InventoryItem): IO[Unit] =

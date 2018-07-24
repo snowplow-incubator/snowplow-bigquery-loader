@@ -1,11 +1,11 @@
-lazy val core = project.in(file("core"))
+lazy val common = project.in(file("common"))
   .settings(Seq(
-    name := "snowplow-bigquery-loader-core",
+    name := "snowplow-bigquery-common",
     description := "Snowplow BigQuery Loader Common Utils"
   ))
   .settings(BuildSettings.commonSettings)
   .settings(
-    BuildSettings.macroSettings ++ BuildSettings.noPublishSettings,
+    BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
       Dependencies.decline,
       Dependencies.cats,
@@ -23,11 +23,11 @@ lazy val core = project.in(file("core"))
 lazy val root = project.in(file("."))
   .settings(Seq(
     name := "snowplow-bigquery-loader",
-    description := "Snowplow BigQuery Loader"
+    description := "Snowplow BigQuery Loader Dataflow Job"
   ))
   .settings(BuildSettings.commonSettings)
   .settings(
-    BuildSettings.macroSettings ++ BuildSettings.noPublishSettings,
+    BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
       Dependencies.scioCore,
       Dependencies.decline,
@@ -48,17 +48,17 @@ lazy val root = project.in(file("."))
     )
   )
   .enablePlugins(JavaAppPackaging)
-  .dependsOn(core)
+  .dependsOn(common)
 
 lazy val mutator = project.in(file("mutator"))
   .settings(Seq(
     name := "snowplow-bigquery-mutator",
     description := "Snowplow BigQuery Mutator",
-    mainClass := Some("com.snowplowanalytics.snowplow.storage.bqmutator.Main")
+    mainClass := Some("com.snowplowanalytics.snowplow.storage.bigquery.mutator.Main")
   ))
   .settings(BuildSettings.commonSettings)
   .settings(
-    BuildSettings.macroSettings ++ BuildSettings.noPublishSettings,
+    BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
       Dependencies.pubsub,
       Dependencies.bigQuery,
@@ -80,15 +80,5 @@ lazy val mutator = project.in(file("mutator"))
     )
   )
   .enablePlugins(JavaAppPackaging)
-  .dependsOn(core)
-
-
-lazy val repl = project.in(file("repl"))
-  .settings(BuildSettings.commonSettings)
-  .settings(
-    BuildSettings.macroSettings ++ BuildSettings.noPublishSettings,
-    description := "Scio REPL for Snowplow BigQueryLoader",
-    libraryDependencies ++= Seq(Dependencies.scioRepl),
-    Compile / mainClass  := Some("com.spotify.scio.repl.ScioShell")
-  ).dependsOn(root)
+  .dependsOn(common)
 

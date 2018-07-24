@@ -36,10 +36,4 @@ object BuildSettings {
     libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
     addCompilerPlugin(paradiseDependency)
   )
-
-  lazy val noPublishSettings = Seq(
-    publish := {},
-    publishLocal := {},
-    publishArtifact := false
-  )
 }

@@ -25,18 +25,21 @@ object Dependencies {
     val catsEffect         = "1.0.0-RC2"
     val circe              = "0.9.3"
     val decline            = "0.4.0"
-    val fs2                = "0.10.4"
+    val fs2                = "0.10.5"
     val json4sJackson      = "3.2.11"
     val scalaz7            = "7.0.9"
     val scio               = "0.5.5"
     // Java
     val beam               = "2.4.0"
     val googleCloud        = "1.31.0"
-    val scalaMacrosVersion = "2.1.0"
     val slf4j              = "1.7.25"
     // Scala (test only)
     val specs2             = "4.0.4"
     val scalaCheck         = "1.13.4"
+    // Build
+    val scalaMacrosVersion = "2.1.0"
+    val betterMonadicFor   = "0.2.4"
+    val kindProjector      = "0.9.4"
   }
 
   val bigQuery           = "com.google.cloud"      %  "google-cloud-bigquery"        % V.googleCloud

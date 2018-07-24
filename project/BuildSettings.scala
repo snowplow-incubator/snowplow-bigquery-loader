@@ -25,15 +25,12 @@ object BuildSettings {
     javacOptions          ++= Seq("-source", "1.8", "-target", "1.8"),
     Global / cancelable   := true,
 
-    addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
-    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.7")
+    addCompilerPlugin("com.olegpy" %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % Dependencies.V.kindProjector)
   )
-
-  lazy val paradiseDependency =
-    "org.scalamacros" % "paradise" % Dependencies.V.scalaMacrosVersion cross CrossVersion.full
 
   lazy val macroSettings = Seq(
     libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-    addCompilerPlugin(paradiseDependency)
+    addCompilerPlugin("org.scalamacros" % "paradise" % Dependencies.V.scalaMacrosVersion cross CrossVersion.full)
   )
 }

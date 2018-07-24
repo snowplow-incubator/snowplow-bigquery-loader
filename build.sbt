@@ -3,9 +3,8 @@ lazy val common = project.in(file("common"))
     name := "snowplow-bigquery-common",
     description := "Snowplow BigQuery Loader Common Utils"
   ))
-  .settings(BuildSettings.commonSettings)
   .settings(
-    BuildSettings.macroSettings,
+    BuildSettings.commonSettings,
     libraryDependencies ++= Seq(
       Dependencies.decline,
       Dependencies.cats,
@@ -25,15 +24,13 @@ lazy val loader = project.in(file("loader"))
     name := "snowplow-bigquery-loader",
     description := "Snowplow BigQuery Loader Dataflow Job"
   ))
-  .settings(BuildSettings.commonSettings)
   .settings(
+    BuildSettings.commonSettings,
     BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
       Dependencies.scioCore,
-      Dependencies.decline,
       Dependencies.cats,
       Dependencies.analyticsSdk,
-      Dependencies.processingManifest,
       Dependencies.igluClient,
       Dependencies.igluCoreCirce,
       Dependencies.circe,
@@ -56,9 +53,8 @@ lazy val mutator = project.in(file("mutator"))
     description := "Snowplow BigQuery Mutator",
     mainClass := Some("com.snowplowanalytics.snowplow.storage.bigquery.mutator.Main")
   ))
-  .settings(BuildSettings.commonSettings)
   .settings(
-    BuildSettings.macroSettings,
+    BuildSettings.commonSettings,
     libraryDependencies ++= Seq(
       Dependencies.pubsub,
       Dependencies.bigQuery,
@@ -68,7 +64,6 @@ lazy val mutator = project.in(file("mutator"))
       Dependencies.cats,
       Dependencies.catsEffect,
       Dependencies.analyticsSdk,
-      Dependencies.processingManifest,
       Dependencies.igluClient,
       Dependencies.igluCoreCirce,
       Dependencies.circe,

@@ -20,7 +20,7 @@ lazy val common = project.in(file("common"))
     )
   )
 
-lazy val root = project.in(file("."))
+lazy val loader = project.in(file("loader"))
   .settings(Seq(
     name := "snowplow-bigquery-loader",
     description := "Snowplow BigQuery Loader Dataflow Job"

@@ -21,7 +21,7 @@ object Dependencies {
     val processingManifest = "0.1.0-M4"
     val schemaDdl          = "0.8.0-M1"
     // Scala
-    val cats               = "1.1.0"
+    val cats               = "1.2.0"
     val catsEffect         = "1.0.0-RC2"
     val circe              = "0.9.3"
     val decline            = "0.4.0"

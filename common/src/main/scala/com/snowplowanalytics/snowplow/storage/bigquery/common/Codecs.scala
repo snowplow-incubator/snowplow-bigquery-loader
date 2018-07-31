@@ -1,16 +1,4 @@
-/*
- * Copyright (c) 2018 Snowplow Analytics Ltd. All rights reserved.
- *
- * This program is licensed to you under the Apache License Version 2.0,
- * and you may not use this file except in compliance with the Apache License Version 2.0.
- * You may obtain a copy of the Apache License Version 2.0 at http://www.apache.org/licenses/LICENSE-2.0.
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the Apache License Version 2.0 is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
- */
-package com.snowplowanalytics.snowplow.storage.bigquery.mutator
+package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import io.circe._
 
@@ -19,9 +7,17 @@ import cats.instances.list._
 import cats.syntax.either._
 import cats.syntax.option._
 
+import org.json4s.JsonAST.{JArray, JValue}
+import org.json4s.JsonDSL._
+
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data._
 
 object Codecs {
+  def toPayload(item: InventoryItem): JValue =
+    ("schema" -> item.igluUri) ~ ("type" -> item.shredProperty.name.toUpperCase)
+
+  def toPayload(items: Set[InventoryItem]): JValue =
+    JArray(items.toList.map(toPayload))
 
   private val ContextsName = "CONTEXTS"
   private val DerivedContextsName = "DERIVED_CONTEXTS"

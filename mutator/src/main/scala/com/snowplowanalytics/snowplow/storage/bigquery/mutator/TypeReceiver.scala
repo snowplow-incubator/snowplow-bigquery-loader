@@ -24,11 +24,14 @@ import fs2.async.mutable.Queue
 import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver, Subscriber}
 import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
-import Codecs._
+
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
 
-
-/** Listens PubSub topic for shredded types and enqueues them into common type queue */
+/**
+  * PubSub consumer, listening for shredded types and
+  * enqueing them into common type queue
+  */
 class TypeReceiver(queue: Queue[IO, List[InventoryItem]])
                   (implicit ec: ExecutionContext) extends MessageReceiver {
 

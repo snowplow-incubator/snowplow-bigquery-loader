@@ -15,7 +15,7 @@ import sbt._
 object Dependencies {
   object V {
     // Scala Snowplow
-    val analyticsSdk       = "0.3.0"
+    val analyticsSdk       = "0.3.1"
     val igluClient         = "0.5.0"
     val igluCore           = "0.3.0-M1"
     val processingManifest = "0.1.0-M4"

@@ -27,13 +27,12 @@ import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 
-import org.json4s.JsonDSL._
 import org.json4s.jackson.JsonMethods.compact
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
 
-import Utils.LoaderRow
 import common.Config._
+import common.Codecs.toPayload
 
 object Loader {
   /** Default windowing option */
@@ -63,20 +62,21 @@ object Loader {
       .setDatasetId(env.config.datasetId)
       .setTableId(env.config.tableId)
 
+    // Raw enriched TSV
     val events = readEnrichedSub(sc.pubsubSubscription[String](env.config.input))
 
     // Should be global window with `mutateTable` invocation on every new addition
     Loader.getTypes(events).saveAsPubsub(env.config.typesTopic)
 
     events
-      .map(_.atomic)
+      .map(_.data)
       .saveAsCustomOutput("bigquery", Loader.output.to(tableRef))
   }
 
   /** Read raw enriched TSV, parse and apply windowing */
   def readEnrichedSub(rows: SCollection[String]): SCollection[LoaderRow] =
     rows
-      .flatMap(Utils.parse)
+      .flatMap(LoaderRow.parse)
       .withFixedWindows(Duration.millis(10000), options = windowOptions)
 
   /** Read enriched events, produce stream of payloads */
@@ -84,5 +84,5 @@ object Loader {
     events
       .map(_.inventory)
       .aggregate(Set.empty[InventoryItem])((acc, cur) => { acc ++ cur }, _ ++ _)
-      .map(inventorySet => compact(inventorySet.map(Utils.toPayload).toList))
+      .map(inventorySet => compact(toPayload(inventorySet)))
 }

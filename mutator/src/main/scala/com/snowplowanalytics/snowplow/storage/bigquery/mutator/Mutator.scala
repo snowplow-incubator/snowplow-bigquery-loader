@@ -23,12 +23,13 @@ import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.implicits._
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{Generator, Field => BigQueryField}
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem, fixSchema}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem }
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data
 import Mutator._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Utils
 
 import common.Config._
+import common.{ Schema => LoaderSchema }
 
 /**
   * Mutator is stateful worker that emits `alter table` requests.
@@ -42,8 +43,8 @@ class Mutator private(resolver: Resolver,
                       tableReference: TableReference,
                       state: MVar[IO, Vector[Field]]) {
 
-  /** Add new columns to a table */
-  def updateTable(inventoryItems: List[InventoryItem]): IO[Unit] = {
+  /** Add all new columns to a table */
+  def updateTable(inventoryItems: List[InventoryItem]): IO[Unit] =
     for {
       fields <- state.read
       // flattening means that we're simply ignoring fields without iglu URI in description
@@ -51,21 +52,8 @@ class Mutator private(resolver: Resolver,
       fieldsToAdd = filterFields(existingTypes, inventoryItems)
       _ <- fieldsToAdd.traverse_(addField)
     } yield ()
-  }
 
-  def getField(inventoryItem: InventoryItem, schema: Schema): Field = {
-    val mode = inventoryItem.shredProperty match {
-      case Data.UnstructEvent => BigQueryField.FieldMode.Nullable
-      case Data.Contexts(_) => BigQueryField.FieldMode.Repeated
-    }
-
-    val columnName = fixSchema(inventoryItem.shredProperty, inventoryItem.igluUri)
-    val field = Generator.build(columnName, schema, false).setMode(mode)
-    val column = Generator.Column(columnName, field, SchemaKey.fromUri(inventoryItem.igluUri).get)
-
-    Adapter.fromColumn(column)
-  }
-
+  /** Perform ALTER TABLE */
   def addField(inventoryItem: InventoryItem): IO[Unit] =
     for {
       schema <- getSchema(inventoryItem.igluUri)
@@ -75,9 +63,24 @@ class Mutator private(resolver: Resolver,
       _ <- state.put(stateFields :+ newField)
     } yield ()
 
-  def getSchema(igluUri: IgluUri): IO[Schema] = {
+  /** Transform Iglu Schema into valid BigQuery field */
+  def getField(inventoryItem: InventoryItem, schema: Schema): Field = {
+    val mode = inventoryItem.shredProperty match {
+      case Data.UnstructEvent => BigQueryField.FieldMode.Nullable
+      case Data.Contexts(_) => BigQueryField.FieldMode.Repeated
+    }
+
+    val columnName = LoaderSchema.getColumnName(inventoryItem)
+    val field = Generator.build(columnName, schema, false).setMode(mode)
+    val column = Generator.Column(columnName, field, SchemaKey.fromUri(inventoryItem.igluUri).get)
+
+    Adapter.fromColumn(column)
+  }
+
+  /** Receive the JSON Schema from the Iglu registry */
+  def getSchema(igluUri: IgluUri): IO[Schema] =
     for {
-      response <- IO { resolver.lookupSchema(igluUri) }
+      response <- IO(resolver.lookupSchema(igluUri))
       schema <- Utils
         .fromValidation(response)
         .leftMap(errors => MutatorError(errors.toList.mkString(", ")))
@@ -85,7 +88,6 @@ class Mutator private(resolver: Resolver,
         .flatMap(json => Schema.parse(json).liftTo[Either[MutatorError, ?]](invalidSchema(igluUri)))
         .fold(IO.raiseError[Schema], IO.pure)
     } yield schema
-  }
 }
 
 object Mutator {
@@ -114,7 +116,7 @@ object Mutator {
 
   case class MutatorError(message: String) extends Throwable
 
-  def invalidSchema(shema: IgluUri) = MutatorError(s"Schema [$shema] cannot be parsed")
+  def invalidSchema(shcema: IgluUri) = MutatorError(s"Schema [$shcema] cannot be parsed")
 
   def filterFields(existingFields: Vector[SchemaKey], newItems: List[InventoryItem]): List[InventoryItem] =
     newItems.filter { i =>

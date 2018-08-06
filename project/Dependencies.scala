@@ -15,11 +15,11 @@ import sbt._
 object Dependencies {
   object V {
     // Scala Snowplow
-    val analyticsSdk       = "0.3.1"
+    val analyticsSdk       = "0.3.2-M1"
     val igluClient         = "0.5.0"
     val igluCore           = "0.3.0-M1"
     val processingManifest = "0.1.0-M4"
-    val schemaDdl          = "0.8.0-M1"
+    val schemaDdl          = "0.8.0-M4"
     // Scala
     val cats               = "1.2.0"
     val catsEffect         = "1.0.0-RC2"
@@ -28,9 +28,9 @@ object Dependencies {
     val fs2                = "0.10.5"
     val json4sJackson      = "3.2.11"
     val scalaz7            = "7.0.9"
-    val scio               = "0.5.5"
+    val scio               = "0.5.6"
     // Java
-    val beam               = "2.4.0"
+    val beam               = "2.5.0"
     val googleCloud        = "1.31.0"
     val slf4j              = "1.7.25"
     // Scala (test only)
@@ -39,7 +39,7 @@ object Dependencies {
     // Build
     val scalaMacrosVersion = "2.1.0"
     val betterMonadicFor   = "0.2.4"
-    val kindProjector      = "0.9.4"
+    val kindProjector      = "0.9.6"
   }
 
   val bigQuery           = "com.google.cloud"      %  "google-cloud-bigquery"        % V.googleCloud
@@ -59,6 +59,7 @@ object Dependencies {
   val decline            = "com.monovore"          %% "decline"                      % V.decline
   val fs2                = "co.fs2"                %% "fs2-core"                     % V.fs2
   val json4sJackson      = "org.json4s"            %% "json4s-jackson"               % V.json4sJackson
+  val json4sExt          = "org.json4s"            %% "json4s-ext"                   % V.json4sJackson
   val scalaz7            = "org.scalaz"            %% "scalaz-core"                  % V.scalaz7
   val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio
   val scioRepl           = "com.spotify"           %% "scio-repl"                    % V.scio

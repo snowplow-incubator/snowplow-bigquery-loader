@@ -18,8 +18,7 @@ object Main {
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
     val env = CommandLine.parse(args)
-    EventsTable.create(env.config.projectId, env.config.datasetId, env.config.tableId)
-    // Loader.run(config, sc)
-    // val _ = sc.close().waitUntilDone()
+    Loader.run(env, sc)
+    val _ = sc.close().waitUntilDone()
   }
 }

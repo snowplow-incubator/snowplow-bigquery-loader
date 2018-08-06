@@ -17,19 +17,18 @@ import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent.MVar
 import org.json4s.jackson.JsonMethods.fromJsonNode
-import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, Field}
+import com.google.cloud.bigquery.Field
 import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.implicits._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{Generator, Field => BigQueryField}
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem }
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Generator, Field => BigQueryField, Mode}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data
 import Mutator._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Utils
-
+import cats.Monad
+import common.{Adapter, Utils, Schema => LoaderSchema}
 import common.Config._
-import common.{ Schema => LoaderSchema }
 
 /**
   * Mutator is stateful worker that emits `alter table` requests.
@@ -61,17 +60,18 @@ class Mutator private(resolver: Resolver,
       _ <- tableReference.addField(newField)
       stateFields <- state.take
       _ <- state.put(stateFields :+ newField)
+      _ <- IO(println(s"Added ${newField.getName}"))
     } yield ()
 
   /** Transform Iglu Schema into valid BigQuery field */
   def getField(inventoryItem: InventoryItem, schema: Schema): Field = {
     val mode = inventoryItem.shredProperty match {
-      case Data.UnstructEvent => BigQueryField.FieldMode.Nullable
-      case Data.Contexts(_) => BigQueryField.FieldMode.Repeated
+      case Data.UnstructEvent => Mode.Nullable
+      case Data.Contexts(_) => Mode.Repeated
     }
 
     val columnName = LoaderSchema.getColumnName(inventoryItem)
-    val field = Generator.build(columnName, schema, false).setMode(mode)
+    val field = Generator.build(columnName, schema, false).setMode(mode).normalized
     val column = Generator.Column(columnName, field, SchemaKey.fromUri(inventoryItem.igluUri).get)
 
     Adapter.fromColumn(column)
@@ -126,12 +126,9 @@ object Mutator {
       }
     }
 
-  def getClient: IO[BigQuery] =
-    IO(BigQueryOptions.getDefaultInstance.getService)
-
   def initialize(env: Environment)(implicit F: Concurrent[IO]): IO[Either[String, Mutator]] = {
     for {
-      client <- getClient
+      client <- TableReference.BigQueryTable.getClient
       table = new TableReference.BigQueryTable(client, env.config.datasetId, env.config.tableId)
       fields <- table.getFields
       state <- MVar.of[IO, Vector[Field]](fields)

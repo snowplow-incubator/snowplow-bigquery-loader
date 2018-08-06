@@ -17,6 +17,8 @@ import java.util.{ Base64, UUID }
 import scalaz.NonEmptyList
 
 import org.json4s._
+import org.json4s.ext.JavaTypesSerializers
+import org.json4s.jackson.Serialization
 import org.json4s.jackson.JsonMethods.parse
 
 import cats.data.ValidatedNel
@@ -36,7 +38,7 @@ import com.snowplowanalytics.iglu.client.validation.ValidatableJValue.validateAn
   * @param datasetId Google BigQuery dataset id
   * @param tableId Google BigQuery table id
   * @param typesTopic PubSub topic where Loader should **publish** new types
-  * @param typesSub PubSub subscription (associated with `typesTopic`),
+  * @param typesSubscription PubSub subscription (associated with `typesTopic`),
   *                 where Mutator pull types from
   */
 case class Config(name: String,
@@ -46,7 +48,11 @@ case class Config(name: String,
                   datasetId: String,
                   tableId: String,
                   typesTopic: String,
-                  typesSub: String)
+                  typesSubscription: String,
+                  badOutput: String) {
+  def getFullInput: String = s"projects/$projectId/subscriptions/$input"
+  def getFullTypesTopic: String = s"projects/$projectId/topics/$typesTopic"
+}
 
 object Config {
 
@@ -54,17 +60,20 @@ object Config {
   case class EnvironmentConfig(resolver: JValue, config: JValue)
 
   /** Parsed common environment (resolver is a stateful object) */
-  class Environment private[Config](val resolver: Resolver, val config: Config)
+  class Environment private[Config](val resolver: Resolver, val config: Config, val original: JValue) extends Serializable
 
-  private implicit val formats: org.json4s.Formats = org.json4s.DefaultFormats
+  private implicit val formats: org.json4s.Formats =
+    Serialization.formats(NoTypeHints) ++ JavaTypesSerializers.all
 
   /** Parse  */
   def transform(config: EnvironmentConfig): Either[Throwable, Environment] = {
     for {
       resolver <- Resolver.parse(config.resolver).fold(asThrowableLeft, _.asRight)
+      _ = println(resolver)
       (_, data) <- validateAndIdentifySchema(config.config, dataOnly = true)(resolver).fold(asThrowableLeft, _.asRight)
-      config <- Either.catchNonFatal(data.extract[Config])
-    } yield new Environment(resolver, config)
+      _ = println(data)
+      result <- Either.catchNonFatal(data.extract[Config])
+    } yield new Environment(resolver, result, config.resolver)
   }
 
   /** CLI option to parse base64-encoded resolver into JSON */
@@ -84,6 +93,8 @@ object Config {
   private def toValidated[A, R](f: A => Either[Throwable, R])(a: A): ValidatedNel[String, R] =
     f(a).leftMap(_.getMessage).toValidatedNel
 
-  private def asThrowableLeft[A](errors: NonEmptyList[A]) =
+  private def asThrowableLeft[A](errors: NonEmptyList[A]) = {
+    println(errors)
     new RuntimeException(errors.list.mkString(", ")).asLeft
+  }
 }

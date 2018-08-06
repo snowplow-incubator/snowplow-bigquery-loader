@@ -9,10 +9,16 @@ object Schema {
     SchemaKey.fromUri(inventoryItem.igluUri) match {
       case Some(SchemaKey(vendor, name, _, SchemaVer.Full(m, r, a))) =>
         val vendor_ = vendor.replaceAll("""[\.\-]""", "_").toLowerCase
-        val name_ = name.replaceAll("""[\.\-]""", "_").replaceAll("([^A-Z_])([A-Z])", "$1_$2").toLowerCase
-        val version_ = s"${m}_${r}_$a"
-        s"${inventoryItem.shredProperty.prefix}$vendor_$name_$version_"
+        val name_ = normalizeCase(name)
+        val version = s"${m}_${r}_$a"
+        s"${inventoryItem.shredProperty.prefix}${vendor_}_${name_}_$version"
       case _ =>   // TODO: https://github.com/snowplow/iglu/issues/364
         throw new RuntimeException(s"Iglu URI ${inventoryItem.igluUri} is not yet supported")
     }
+
+  def normalizeCase(string: String): String =
+    string
+      .replaceAll("""[\.\-]""", "_")
+      .replaceAll("([^A-Z_])([A-Z])", "$1_$2")
+      .toLowerCase
 }

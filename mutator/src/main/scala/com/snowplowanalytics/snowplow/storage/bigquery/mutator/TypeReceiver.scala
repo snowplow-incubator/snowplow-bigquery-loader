@@ -36,9 +36,11 @@ class TypeReceiver(queue: Queue[IO, List[InventoryItem]])
                   (implicit ec: ExecutionContext) extends MessageReceiver {
 
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
+    println(message.getData.toStringUtf8)
     val items: Either[Error, List[InventoryItem]] = for {
       json <- parse(message.getData.toStringUtf8)
       invetoryItems <- json.as[List[InventoryItem]]
+      _ = println(invetoryItems)
     } yield invetoryItems
 
     items match {
@@ -69,7 +71,7 @@ object TypeReceiver {
   def startSubscription(config: Config, listener: TypeReceiver)(implicit ec: ExecutionContext): IO[Unit] = {
     def process = IO {
       Future {
-        val subscription = ProjectSubscriptionName.of(config.projectId, config.typesSub)
+        val subscription = ProjectSubscriptionName.of(config.projectId, config.typesSubscription)
         val subscriber = Subscriber.newBuilder(subscription, listener).build()
         subscriber.startAsync().awaitRunning()
       }

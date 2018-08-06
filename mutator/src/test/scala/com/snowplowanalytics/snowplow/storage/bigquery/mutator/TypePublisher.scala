@@ -10,7 +10,8 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery.mutator
+package com.snowplowanalytics.snowplow.storage.bigquery
+package mutator
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -27,7 +28,7 @@ import fs2._
 
 import cats.effect.IO
 
-import Codecs._
+import common.Codecs._
 
 /**
   * Example publisher that submits Inventory items to specified topic.

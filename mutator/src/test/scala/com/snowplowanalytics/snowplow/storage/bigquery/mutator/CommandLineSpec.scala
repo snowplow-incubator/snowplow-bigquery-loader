@@ -14,12 +14,14 @@ package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import java.util.UUID
 
-import org.specs2.Specification
 import cats.syntax.either._
-import CommandLine._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 
-class CommandLineSpec extends Specification { def is = s2"""
+import CommandLine._
+
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.EnvironmentConfig
+
+class CommandLineSpec extends org.specs2.Specification { def is = s2"""
   parse extracts valid configuration for listen subcommand $e1
   parse extracts valid configuration for create subcommand $e2
   getEnv validates end extracts configuration $e3

@@ -71,4 +71,7 @@ object Codecs {
         Json.fromJsonObject(JsonObject.fromFoldable(items))
       }
     }
+
+  implicit val inventoryListEncoder: Encoder[List[InventoryItem]] =
+    Encoder.instance(items => Json.fromValues(items.map(inventoryEncoder.apply)))
 }

@@ -8,11 +8,15 @@ lazy val common = project.in(file("common"))
     libraryDependencies ++= Seq(
       Dependencies.decline,
       Dependencies.cats,
+      Dependencies.json4sExt,
       Dependencies.analyticsSdk,
+      Dependencies.schemaDdl,
       Dependencies.igluClient,
       Dependencies.igluCoreCirce,
       Dependencies.circe,
       Dependencies.circeJavaTime,
+
+      Dependencies.bigQuery,
 
       Dependencies.specs2,
       Dependencies.scalaCheck
@@ -31,6 +35,7 @@ lazy val loader = project.in(file("loader"))
       Dependencies.scioCore,
       Dependencies.cats,
       Dependencies.analyticsSdk,
+      Dependencies.json4sExt,
       Dependencies.igluClient,
       Dependencies.igluCoreCirce,
       Dependencies.circe,

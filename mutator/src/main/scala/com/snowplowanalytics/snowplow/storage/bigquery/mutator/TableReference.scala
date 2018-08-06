@@ -14,10 +14,9 @@ package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import scala.collection.convert.decorateAsJava._
 import scala.collection.convert.decorateAsScala._
-
 import cats.effect.IO
-
-import com.google.cloud.bigquery.{BigQuery, StandardTableDefinition, Table, Field, Schema => BqSchema }
+import com.google.cloud.bigquery.{Schema => BqSchema, _}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter
 
 /** Stateless object, responsible for making API calls to a table or mock */
 trait TableReference {
@@ -29,7 +28,10 @@ object TableReference {
   class BigQueryTable(client: BigQuery, datasetId: String, tableId: String) extends TableReference {
 
     def getTable: IO[Table] =
-      IO(client.getTable(datasetId, tableId))
+      IO(client.getTable(datasetId, tableId)).flatMap {
+        case null => IO.raiseError(new RuntimeException(s"Table $tableId does not exist. Use 'mutator create'"))
+        case table => IO.pure(table)
+      }
 
     def getFields: IO[Vector[Field]] =
       getTable.map(BigQueryTable.getFields)
@@ -47,6 +49,17 @@ object TableReference {
   }
 
   object BigQueryTable {
+    def getClient: IO[BigQuery] =
+      IO(BigQueryOptions.getDefaultInstance.getService)
+
+    def create(client: BigQuery, datasetId: String, tableId: String): IO[Table] = IO {
+      val id = TableId.of(datasetId, tableId)
+      val schema = BqSchema.of(Atomic.table.map(Adapter.adaptField).asJava)
+      val definition = StandardTableDefinition.newBuilder().setSchema(schema).build()
+      val tableInfo = TableInfo.newBuilder(id, definition).build()
+      client.create(tableInfo)
+    }
+
     private def getFields(table: Table): Vector[Field] =
       table.getDefinition[StandardTableDefinition]
         .getSchema

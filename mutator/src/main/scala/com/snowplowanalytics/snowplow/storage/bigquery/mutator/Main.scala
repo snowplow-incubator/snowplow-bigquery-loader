@@ -13,11 +13,10 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
 
 import cats.effect.IO
 
-import fs2.{ Stream, Scheduler }
+import fs2.Stream
 
 object Main {
   implicit class ToStream[A](val io: IO[A]) extends AnyVal {
@@ -28,19 +27,24 @@ object Main {
     CommandLine.parse(args) match {
       case Right(c: CommandLine.ListenCommand) =>
         val appStream = for {
-          environment <- c.getEnv.stream
-          mutator <- Mutator.initialize(environment).map(_.fold(e => throw new RuntimeException(e), x => x)).stream
-          queue <- TypeReceiver.initQueue(1000).stream
-          _ <- TypeReceiver.startSubscription(environment.config, TypeReceiver(queue)).stream
-          items <- queue.dequeue
-          _ <- Stream.eval(mutator.updateTable(items))
+          env     <- c.getEnv.stream
+          mutator <- Mutator.initialize(env).map(_.fold(e => throw new RuntimeException(e), x => x)).stream
+          queue   <- TypeReceiver.initQueue(1000).stream
+          _       <- TypeReceiver.startSubscription(env.config, TypeReceiver(queue)).stream
+          _       <- IO(println(s"Mutator is listening ${env.config.typesSubscription}")).stream
+          items   <- queue.dequeue
+          _       <- mutator.updateTable(items).stream
         } yield ()
 
-        val ticks = Scheduler[IO](2).flatMap(_.awakeEvery[IO](5.seconds))
-        ticks.zip(appStream).compile.drain.unsafeRunSync()
+        appStream.compile.drain.unsafeRunSync()
 
-      case Right(CommandLine.CreateCommand(config)) =>
-        ???   // Port from Loader/Beam
+      case Right(c: CommandLine.CreateCommand) =>
+        val app = for {
+          env    <- c.getEnv
+          client <- TableReference.BigQueryTable.getClient
+          _      <- TableReference.BigQueryTable.create(client, env.config.datasetId, env.config.tableId)
+        } yield ()
+        app.unsafeRunSync()
 
       case Left(error) =>
         System.err.println(error)

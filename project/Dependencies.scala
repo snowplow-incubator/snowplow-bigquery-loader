@@ -17,9 +17,9 @@ object Dependencies {
     // Scala Snowplow
     val analyticsSdk       = "0.3.2-M1"
     val igluClient         = "0.5.0"
-    val igluCore           = "0.3.0-M1"
+    val igluCore           = "0.3.0-M3"
     val processingManifest = "0.1.0-M4"
-    val schemaDdl          = "0.8.0-M1"
+    val schemaDdl          = "0.8.0-M3"
     // Scala
     val cats               = "1.2.0"
     val catsEffect         = "1.0.0-RC2"
@@ -34,12 +34,12 @@ object Dependencies {
     val googleCloud        = "1.31.0"
     val slf4j              = "1.7.25"
     // Scala (test only)
-    val specs2             = "4.0.4"
+    val specs2             = "4.3.2"
     val scalaCheck         = "1.14.0"
     // Build
     val scalaMacrosVersion = "2.1.0"
     val betterMonadicFor   = "0.2.4"
-    val kindProjector      = "0.9.6"
+    val kindProjector      = "0.9.7"
   }
 
   val bigQuery           = "com.google.cloud"      %  "google-cloud-bigquery"        % V.googleCloud
@@ -51,6 +51,10 @@ object Dependencies {
   val igluCoreCirce      = "com.snowplowanalytics" %% "iglu-core-circe"              % V.igluCore
   val processingManifest = "com.snowplowanalytics" %% "snowplow-processing-manifest" % V.processingManifest
   val schemaDdl          = "com.snowplowanalytics" %% "schema-ddl"                   % V.schemaDdl
+
+  // Bin-compat fix
+  val catsKernel         = "org.typelevel"         %% "cats-kernel"                  % V.cats
+  val algebra            = "org.typelevel"         %% "algebra"                      % "1.0.0"
 
   val cats               = "org.typelevel"         %% "cats-core"                    % V.cats
   val catsEffect         = "org.typelevel"         %% "cats-effect"                  % V.catsEffect

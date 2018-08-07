@@ -23,6 +23,7 @@ object BuildSettings {
       "-feature",
       "-unchecked"),
     javacOptions          ++= Seq("-source", "1.8", "-target", "1.8"),
+    resolvers             += "Snowplow Bintray" at "https://snowplow.bintray.com/snowplow-maven/",
     Global / cancelable   := true,
 
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % Dependencies.V.betterMonadicFor),

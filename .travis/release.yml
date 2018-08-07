@@ -37,6 +37,16 @@ packages:
     artifacts:
         # The artifact name is composed like so:
         # {{prefix}}{{version}}{{suffix}}.zip
+      - prefix : "snowplow_bigquery_loader_"
+        suffix : ".zip"
+        type   : "asis"
+
+        # The binaries to put in the zip
+        binary_paths:
+          - loader/target/universal/snowplow-bigquery-loader-<%= ENV['TRAVIS_TAG'] %>.zip
+
+        # The artifact name is composed like so:
+        # {{prefix}}{{version}}{{suffix}}.zip
       - prefix : "snowplow_bigquery_mutator_"
         suffix : ".zip"
         type   : "asis"
@@ -44,13 +54,3 @@ packages:
         # The binaries to put in the zip
         binary_paths:
           - mutator/target/universal/snowplow-bigquery-mutator-<%= ENV['TRAVIS_TAG'] %>.zip
-
-        # The artifact name is composed like so:
-        # {{prefix}}{{version}}{{suffix}}.zip
-      - prefix : "snowplow_bigquery_loader_"
-        suffix : ".zip"
-        type   : "asis"
-
-        # The binaries to put in the zip
-        binary_paths:
-          - target/universal/snowplow-bigquery-loader-<%= ENV['TRAVIS_TAG'] %>.zip

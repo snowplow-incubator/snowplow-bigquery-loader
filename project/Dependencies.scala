@@ -19,7 +19,7 @@ object Dependencies {
     val igluClient         = "0.5.0"
     val igluCore           = "0.3.0-M1"
     val processingManifest = "0.1.0-M4"
-    val schemaDdl          = "0.8.0-M4"
+    val schemaDdl          = "0.8.0-M1"
     // Scala
     val cats               = "1.2.0"
     val catsEffect         = "1.0.0-RC2"
@@ -35,7 +35,7 @@ object Dependencies {
     val slf4j              = "1.7.25"
     // Scala (test only)
     val specs2             = "4.0.4"
-    val scalaCheck         = "1.13.4"
+    val scalaCheck         = "1.14.0"
     // Build
     val scalaMacrosVersion = "2.1.0"
     val betterMonadicFor   = "0.2.4"

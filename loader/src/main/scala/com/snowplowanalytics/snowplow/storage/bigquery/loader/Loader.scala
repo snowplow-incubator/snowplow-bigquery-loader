@@ -16,35 +16,35 @@ package loader
 
 import java.nio.channels.Channels
 
+import com.google.api.services.bigquery.model
 import com.google.api.services.bigquery.model.TableReference
-
-import org.joda.time.{Duration, Instant}
+import org.joda.time.Duration
 import org.joda.time.format.DateTimeFormatterBuilder
-
 import org.json4s.JValue
 import org.json4s.jackson.JsonMethods.compact
-
 import com.spotify.scio.ScioContext
 import com.spotify.scio.bigquery.TableRow
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
-
-import org.apache.beam.sdk.transforms.SerializableFunctions
+import org.apache.beam.sdk.transforms.{PTransform, SerializableFunctions}
 import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.io.FileSystems
-import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO
+import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, WriteResult}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.util.MimeTypes
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
-
 import common.Config._
 import common.Codecs.toPayload
+import org.apache.beam.sdk.values.PCollection
 
 object Loader {
 
   val OutputWindow: Duration =
-    Duration.millis(20000)
+    Duration.millis(300000)
+
+  /** Bad rows are grouped in memory, hence smaller window */
+  val BadOutputWindow: Duration =
+    Duration.millis(30000)
 
   private val DateFormatter = new DateTimeFormatterBuilder()
     .appendYear(4, 4)
@@ -79,7 +79,7 @@ object Loader {
     BigQueryIO.writeTableRows()
       .withMethod(BigQueryIO.Write.Method.FILE_LOADS)
       .withFormatFunction(SerializableFunctions.identity())
-      .withNumFileShards(1000)
+      .withNumFileShards(50)
       .withTriggeringFrequency(OutputWindow)
       .withCreateDisposition(CreateDisposition.CREATE_NEVER)
       .withWriteDisposition(WriteDisposition.WRITE_APPEND)
@@ -106,24 +106,25 @@ object Loader {
     val badOutputPath = env.config.badOutput
 
     sideOutputs(typesOutput)
-      .withFixedWindows(Duration.millis(1000), options = windowOptions)
+      .withFixedWindows(Duration.millis(2000), options = windowOptions)
       .aggregate(Set.empty[InventoryItem])((acc, cur) => { acc ++ cur }, _ ++ _)
       .map(types => compact(toPayload(types)))
       .saveAsPubsub(env.config.getFullTypesTopic)
 
     sideOutputs(badOutput)
       .map(_.compact)
-      .timestampBy { _ => Instant.now() }
-      .withFixedWindows(OutputWindow, options = windowOptions)
+      .withFixedWindows(BadOutputWindow, options = windowOptions)
       .withWindow[IntervalWindow]
       .swap
       .groupByKey
       .map(saveBadOutput(badOutputPath))
 
+    val sink: PTransform[PCollection[TableRow], WriteResult] = Loader.output.to(tableRef)
+
     mainOutput
-      .withFixedWindows(OutputWindow, options = windowOptions)
       .map(_.data)
-      .saveAsCustomOutput("bigquery", Loader.output.to(tableRef))
+      .withFixedWindows(OutputWindow, options = windowOptions)
+      .saveAsCustomOutput("bigquery", sink)
   }
 
   /** Read raw enriched TSV, parse and apply windowing */

@@ -49,7 +49,8 @@ class CommandLineSpec extends org.specs2.Specification { def is = s2"""
       "atomic",
       "events",
       "types-topic",
-      "types-sub")
+      "types-sub",
+      "gs://some-bucket/")
 
     val result = CommandLine
       .parse(Seq("create", "--resolver", SpecHelpers.base64Resolver, "--config", SpecHelpers.base64Config))

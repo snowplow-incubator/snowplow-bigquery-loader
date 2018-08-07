@@ -67,7 +67,7 @@ object LoaderRow {
         val atomicFields: List[ValidatedNel[String, List[(String, Any)]]] = json.obj.map {
           case ("geo_location", _)      => Nil.validNel
           case (_, JNull)               => Nil.validNel
-          case (key, JNothing)          => Nil.validNel
+          case (_, JNothing)            => Nil.validNel
           case (key, JString(str))      => List((key, str)).validNel
           case (key, JInt(int))         => List((key, int)).validNel
           case (key, JDouble(double))   => List((key, double)).validNel

@@ -13,6 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package mutator
 
+import java.time.Instant
 import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent.MVar
@@ -60,7 +61,7 @@ class Mutator private(resolver: Resolver,
       _ <- tableReference.addField(newField)
       stateFields <- state.take
       _ <- state.put(stateFields :+ newField)
-      _ <- IO(println(s"Added ${newField.getName}"))
+      _ <- IO(println(s"Mutator: ${Instant.now()}: added ${newField.getName}"))
     } yield ()
 
   /** Transform Iglu Schema into valid BigQuery field */

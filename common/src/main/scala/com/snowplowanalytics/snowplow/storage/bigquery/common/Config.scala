@@ -49,9 +49,13 @@ case class Config(name: String,
                   tableId: String,
                   typesTopic: String,
                   typesSubscription: String,
-                  badOutput: String) {
+                  badRows: String,
+                  failedInserts: String) {
   def getFullInput: String = s"projects/$projectId/subscriptions/$input"
   def getFullTypesTopic: String = s"projects/$projectId/topics/$typesTopic"
+
+  def getFullBadRowsTopic: String = s"projects/$projectId/topics/$badRows"
+  def getFullFailedInsertsTopic: String = s"projects/$projectId/topics/$failedInserts"
 }
 
 object Config {

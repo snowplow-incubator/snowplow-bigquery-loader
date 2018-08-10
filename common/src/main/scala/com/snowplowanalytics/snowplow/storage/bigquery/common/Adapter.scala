@@ -12,7 +12,7 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
-import scala.collection.convert.decorateAsJava._
+import scala.collection.JavaConverters._
 
 import com.google.api.services.bigquery.model.TableRow
 import com.google.cloud.bigquery.{Field, FieldList, LegacySQLTypeName}

@@ -35,11 +35,19 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
 class TypeReceiver(queue: Queue[IO, List[InventoryItem]])
                   (implicit ec: ExecutionContext) extends MessageReceiver {
 
+  var i = 0
+
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
     val items: Either[Error, List[InventoryItem]] = for {
       json <- parse(message.getData.toStringUtf8)
       invetoryItems <- json.as[List[InventoryItem]]
     } yield invetoryItems
+
+    i = i + 1
+    println(s"Mutator ${java.time.Instant.now()}: received ${i}th ${items.toOption.getOrElse(List.empty).map(_.igluUri) match {
+      case Nil => "empty message"
+      case list => list.mkString(", ")
+    }}")
 
     items match {
       case Right(Nil) =>

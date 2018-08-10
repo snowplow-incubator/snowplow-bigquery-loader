@@ -14,16 +14,12 @@ package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-import cats.effect.IO
+import cats.implicits._
 
-import fs2.Stream
+import cats.effect.{ExitCode, IO, IOApp}
 
-object Main {
-  implicit class ToStream[A](val io: IO[A]) extends AnyVal {
-    def stream: Stream[IO, A] = Stream.eval[IO, A](io)
-  }
-
-  def main(args: Array[String]): Unit = {
+object Main extends IOApp {
+  def run(args: List[String]): IO[ExitCode] = {
     CommandLine.parse(args) match {
       case Right(c: CommandLine.ListenCommand) =>
         val appStream = for {
@@ -36,19 +32,18 @@ object Main {
           _       <- mutator.updateTable(items).stream
         } yield ()
 
-        appStream.compile.drain.unsafeRunSync()
+        appStream.compile.drain.as(ExitCode.Success)
 
       case Right(c: CommandLine.CreateCommand) =>
-        val app = for {
+        for {
           env    <- c.getEnv
           client <- TableReference.BigQueryTable.getClient
           _      <- TableReference.BigQueryTable.create(client, env.config.datasetId, env.config.tableId)
-        } yield ()
-        app.unsafeRunSync()
+        } yield ExitCode.Success
 
-      case Left(error) =>
-        System.err.println(error)
-        System.exit(1)
+      case Left(help) =>
+        IO(System.err.println(help.toString)).as(ExitCode.Error)
+
     }
   }
 }

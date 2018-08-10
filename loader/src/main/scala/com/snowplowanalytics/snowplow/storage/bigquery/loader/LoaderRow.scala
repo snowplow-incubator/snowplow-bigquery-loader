@@ -42,15 +42,7 @@ case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[In
 
 object LoaderRow {
 
-  case class BadRow(original: String, errors: NonEmptyList[String]) {
-    def compact: String =
-      Json.fromFields(List(
-        ("original", Json.fromString(original)),
-        ("errors", Json.fromValues(errors.toList.map(Json.fromString)))
-      )).noSpaces
-  }
-
-  def parse(resolver: JValue)(record: String): Either[BadRow, LoaderRow] = {
+  def parse(resolver: JValue)(record: String): Either[BadRow.InvalidRow, LoaderRow] = {
     val loaderRow: EitherNel[String, LoaderRow] = for {
       (inventory, event) <- getValidatedJsonEvent(record.split("\t", -1), false)
         .leftMap(e => NonEmptyList.fromListUnsafe(e)): EitherNel[String, (Set[InventoryItem], JObject)]
@@ -58,7 +50,7 @@ object LoaderRow {
       (row, tstamp)       = rowWithTstamp
     } yield LoaderRow(tstamp, row, inventory)
 
-    loaderRow.leftMap(errors => BadRow(record, errors))
+    loaderRow.leftMap(errors => BadRow.InvalidRow(record, errors))
   }
 
   def toTableRow(resolver: Resolver)(json: JObject): EitherNel[String, (TableRow, Instant)] = {
@@ -125,12 +117,11 @@ object LoaderRow {
       contexts
         .toList
         .traverse[ValidatedNel[String, ?], Row](getRow)
-        .map(_.map(row => (columnName, Adapter.adaptRow(row))))
+        .map(rows => (columnName, Adapter.adaptRow(Row.Repeated(rows))))
     }
     grouped
       .toList
-      .sequence[ValidatedNel[String, ?], List[(String, Any)]]
-      .map(_.flatten)
+      .sequence[ValidatedNel[String, ?], (String, AnyRef)]
   }
 
   /**

@@ -14,30 +14,26 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
-import java.nio.channels.Channels
-
-import com.google.api.services.bigquery.model
 import com.google.api.services.bigquery.model.TableReference
 import org.joda.time.Duration
-import org.joda.time.format.DateTimeFormatterBuilder
 import org.json4s.JValue
 import org.json4s.jackson.JsonMethods.compact
 import com.spotify.scio.ScioContext
-import com.spotify.scio.bigquery.TableRow
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
-import org.apache.beam.sdk.transforms.{PTransform, SerializableFunctions}
 import org.apache.beam.sdk.transforms.windowing._
-import org.apache.beam.sdk.io.FileSystems
-import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, WriteResult}
+import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
-import org.apache.beam.sdk.util.MimeTypes
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
 import common.Config._
 import common.Codecs.toPayload
+import org.apache.beam.sdk.transforms.{PTransform, ParDo}
 import org.apache.beam.sdk.values.PCollection
+import org.slf4j.LoggerFactory
 
 object Loader {
+
+  private val logger = LoggerFactory.getLogger(this.getClass)
 
   val OutputWindow: Duration =
     Duration.millis(300000)
@@ -46,43 +42,50 @@ object Loader {
   val BadOutputWindow: Duration =
     Duration.millis(30000)
 
-  private val DateFormatter = new DateTimeFormatterBuilder()
-    .appendYear(4, 4)
-    .appendLiteral('-')
-    .appendMonthOfYear(2)
-    .appendLiteral('-')
-    .appendDayOfMonth(2)
-    .toFormatter
-
-  private val TimeFormatter = new DateTimeFormatterBuilder()
-    .appendHourOfDay(2)
-    .appendLiteral('-')
-    .appendMinuteOfHour(2)
-    .appendLiteral('-')
-    .appendSecondOfMinute(2)
-    .toFormatter
-
   /** Default windowing option */
   val windowOptions = WindowOptions(
     Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane()),
     AccumulationMode.DISCARDING_FIRED_PANES,
     Duration.ZERO)
 
+
+
+  // In each window I accumulate values
+  // Fire all accumulated values with interval
+
+  // This results in too many identical messages for consumer
+
+  // Accumulate in global window
+
+  // Ultimate goal is to fire the new element as soon as it appears
+
+  // we can use our stateful function that fire only new
+  // but then fires every N time
+
+
   val typesOutput: SideOutput[Set[InventoryItem]] =
     SideOutput[Set[InventoryItem]]()
 
-  val badOutput: SideOutput[LoaderRow.BadRow] =
-    SideOutput[LoaderRow.BadRow]()
+  val badOutput: SideOutput[BadRow.InvalidRow] =
+    SideOutput[BadRow.InvalidRow]()
 
   /** Default BigQuery output options */
-  val output: BigQueryIO.Write[TableRow] =
-    BigQueryIO.writeTableRows()
-      .withMethod(BigQueryIO.Write.Method.FILE_LOADS)
-      .withFormatFunction(SerializableFunctions.identity())
-      .withNumFileShards(50)
-      .withTriggeringFrequency(OutputWindow)
-      .withCreateDisposition(CreateDisposition.CREATE_NEVER)
-      .withWriteDisposition(WriteDisposition.WRITE_APPEND)
+  def getOutput(stream: Boolean): BigQueryIO.Write[LoaderRow] = {
+    val common =
+      BigQueryIO.write()
+        .withFormatFunction(SerializeLoaderRow)
+        .withCreateDisposition(CreateDisposition.CREATE_NEVER)
+        .withWriteDisposition(WriteDisposition.WRITE_APPEND)
+    if (stream)
+      common
+        .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
+        .withFailedInsertRetryPolicy(InsertRetryPolicy.neverRetry())
+    else
+      common
+        .withMethod(BigQueryIO.Write.Method.FILE_LOADS)
+        .withNumFileShards(50)
+        .withTriggeringFrequency(OutputWindow)
+  }
 
   /** Run whole pipeline */
   def run(env: Environment, sc: ScioContext): Unit = {
@@ -97,50 +100,42 @@ object Loader {
     val (mainOutput, sideOutputs) = rows.withSideOutputs(typesOutput, badOutput).flatMap {
       case (Right(row), ctx) =>
         ctx.output(typesOutput, row.inventory)
+        logger.warn(s"Good row $row")
         Some(row)
       case (Left(row), ctx) =>
+        logger.warn(s"Bad row $row")
         ctx.output(badOutput, row)
         None
     }
 
-    val badOutputPath = env.config.badOutput
+    sideOutputs(typesOutput)
+      .withGlobalWindow()
 
     sideOutputs(typesOutput)
-      .withFixedWindows(Duration.millis(2000), options = windowOptions)
+      .withGlobalWindow()
+      .applyTransform[Set[InventoryItem]](ParDo.of(new TypesUpdater))
       .aggregate(Set.empty[InventoryItem])((acc, cur) => { acc ++ cur }, _ ++ _)
       .map(types => compact(toPayload(types)))
       .saveAsPubsub(env.config.getFullTypesTopic)
 
+    // Sink bad rows
     sideOutputs(badOutput)
       .map(_.compact)
-      .withFixedWindows(BadOutputWindow, options = windowOptions)
-      .withWindow[IntervalWindow]
-      .swap
-      .groupByKey
-      .map(saveBadOutput(badOutputPath))
+      .saveAsPubsub(env.config.getFullBadRowsTopic)
 
-    val sink: PTransform[PCollection[TableRow], WriteResult] = Loader.output.to(tableRef)
-
-    mainOutput
-      .map(_.data)
+    // Unwrap LoaderRow collection to get failed inserts
+    val mainOutputInternal = mainOutput
       .withFixedWindows(OutputWindow, options = windowOptions)
-      .saveAsCustomOutput("bigquery", sink)
+      .internal
+
+    // Sink good rows and forward failed inserts to PubSub
+    sc.wrap(getOutput(true).to(tableRef).expand(mainOutputInternal).getFailedInserts)
+      .saveAsPubsub(env.config.getFullFailedInsertsTopic)
   }
 
   /** Read raw enriched TSV, parse and apply windowing */
-  def readEnrichedSub(resolver: JValue, rows: SCollection[String]): SCollection[Either[LoaderRow.BadRow, LoaderRow]] =
+  def readEnrichedSub(resolver: JValue, rows: SCollection[String]): SCollection[Either[BadRow.InvalidRow, LoaderRow]] =
     rows
       .map(LoaderRow.parse(resolver))
       .withFixedWindows(Duration.millis(10000), options = windowOptions)
-
-  def saveBadOutput(bucket: String)(windowedData: (IntervalWindow, Iterable[String])): Unit = {
-    val (window, badRows) = windowedData
-    val trimmedBucket = if (bucket.endsWith("/")) bucket.dropRight(1) else bucket
-    val start = window.start()
-    val outputShard = s"$trimmedBucket/${DateFormatter.print(start)}_${TimeFormatter.print(start)}-${TimeFormatter.print(window.end())}"
-    val resourceId = FileSystems.matchNewResource(outputShard, false)
-    val out = Channels.newOutputStream(FileSystems.create(resourceId, MimeTypes.TEXT))
-    badRows.foreach { row => out.write(s"$row\n".getBytes) }
-    out.close()
-  }
 }

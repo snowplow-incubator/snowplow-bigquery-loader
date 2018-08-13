@@ -26,6 +26,7 @@ import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
 import common.Config._
 import common.Codecs.toPayload
+import org.apache.beam.sdk.coders.StringUtf8Coder
 import org.apache.beam.sdk.transforms.{PTransform, ParDo}
 import org.apache.beam.sdk.values.PCollection
 import org.slf4j.LoggerFactory
@@ -51,7 +52,7 @@ object Loader {
   val typesOutput: SideOutput[Set[InventoryItem]] =
     SideOutput[Set[InventoryItem]]()
 
-  val badOutput: SideOutput[BadRow.InvalidRow] =
+  val badRowsOutput: SideOutput[BadRow.InvalidRow] =
     SideOutput[BadRow.InvalidRow]()
 
   /** Default BigQuery output options */
@@ -82,29 +83,26 @@ object Loader {
     // Raw enriched TSV
     val rows = readEnrichedSub(env.original, sc.pubsubSubscription[String](env.config.getFullInput))
 
-    val (mainOutput, sideOutputs) = rows.withSideOutputs(typesOutput, badOutput).flatMap {
+    val (mainOutput, sideOutputs) = rows.withSideOutputs(typesOutput, badRowsOutput).flatMap {
       case (Right(row), ctx) =>
         ctx.output(typesOutput, row.inventory)
         logger.warn(s"Good row $row")
         Some(row)
       case (Left(row), ctx) =>
         logger.warn(s"Bad row $row")
-        ctx.output(badOutput, row)
+        ctx.output(badRowsOutput, row)
         None
     }
 
     sideOutputs(typesOutput)
       .withGlobalWindow()
-
-    sideOutputs(typesOutput)
-      .withGlobalWindow()
-      .applyTransform[Set[InventoryItem]](ParDo.of(new TypesUpdater))
-      .aggregate(Set.empty[InventoryItem])((acc, cur) => { acc ++ cur }, _ ++ _)
-      .map(types => compact(toPayload(types)))
+      .applyTransform(TypeAggregator.transformation)
+//      .aggregate(Set.empty[InventoryItem])((acc, cur) => { acc ++ cur }, _ ++ _)
+//      .map(types => compact(toPayload(types)))
       .saveAsPubsub(env.config.getFullTypesTopic)
 
     // Sink bad rows
-    sideOutputs(badOutput)
+    sideOutputs(badRowsOutput)
       .map(_.compact)
       .saveAsPubsub(env.config.getFullBadRowsTopic)
 

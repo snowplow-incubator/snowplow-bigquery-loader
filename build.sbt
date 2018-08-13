@@ -16,9 +16,6 @@ lazy val common = project.in(file("common"))
       Dependencies.circe,
       Dependencies.circeJavaTime,
 
-      Dependencies.catsKernel,
-      Dependencies.algebra,
-
       Dependencies.bigQuery,
 
       Dependencies.specs2,

@@ -52,10 +52,6 @@ object Dependencies {
   val processingManifest = "com.snowplowanalytics" %% "snowplow-processing-manifest" % V.processingManifest
   val schemaDdl          = "com.snowplowanalytics" %% "schema-ddl"                   % V.schemaDdl
 
-  // Bin-compat fix
-  val catsKernel         = "org.typelevel"         %% "cats-kernel"                  % V.cats
-  val algebra            = "org.typelevel"         %% "algebra"                      % "1.0.0"
-
   val cats               = "org.typelevel"         %% "cats-core"                    % V.cats
   val catsEffect         = "org.typelevel"         %% "cats-effect"                  % V.catsEffect
   val circe              = "io.circe"              %% "circe-core"                   % V.circe

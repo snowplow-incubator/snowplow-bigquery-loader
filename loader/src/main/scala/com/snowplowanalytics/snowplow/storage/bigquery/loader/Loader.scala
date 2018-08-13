@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2018 Snowplow Analytics Ltd. All rights reserved.
  *
@@ -47,20 +46,6 @@ object Loader {
     Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane()),
     AccumulationMode.DISCARDING_FIRED_PANES,
     Duration.ZERO)
-
-
-
-  // In each window I accumulate values
-  // Fire all accumulated values with interval
-
-  // This results in too many identical messages for consumer
-
-  // Accumulate in global window
-
-  // Ultimate goal is to fire the new element as soon as it appears
-
-  // we can use our stateful function that fire only new
-  // but then fires every N time
 
 
   val typesOutput: SideOutput[Set[InventoryItem]] =

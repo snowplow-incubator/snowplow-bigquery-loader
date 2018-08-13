@@ -43,7 +43,6 @@ object Main extends IOApp {
 
       case Left(help) =>
         IO(System.err.println(help.toString)).as(ExitCode.Error)
-
     }
   }
 }

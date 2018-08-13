@@ -13,25 +13,20 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
-import com.esotericsoftware.kryo.Kryo
 import com.google.api.services.bigquery.model.TableReference
 import org.joda.time.Duration
 import org.json4s.JValue
 import org.json4s.jackson.JsonMethods.compact
 import com.spotify.scio.ScioContext
-import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
+import com.spotify.scio.values.{SCollection, SideOutput, SideOutputCollections, WindowOptions}
 import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{ InventoryItem, Contexts, UnstructEvent }
-import com.spotify.scio.coders.KryoRegistrar
-import com.twitter.chill.{AllScalaRegistrar, IKryoRegistrar}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
 import common.Config._
 import common.Codecs.toPayload
-import org.apache.beam.sdk.coders.StringUtf8Coder
-import org.apache.beam.sdk.transforms.{PTransform, ParDo}
-import org.apache.beam.sdk.values.PCollection
+import org.apache.beam.sdk.transforms.Combine
 import org.slf4j.LoggerFactory
 
 object Loader {
@@ -51,8 +46,13 @@ object Loader {
     AccumulationMode.DISCARDING_FIRED_PANES,
     Duration.ZERO)
 
-
+  // Main output
   val typesOutput: SideOutput[Set[InventoryItem]] =
+    SideOutput[Set[InventoryItem]]()
+
+  val globalTypesOutput: SideOutput[Set[InventoryItem]] =
+    SideOutput[Set[InventoryItem]]()
+  val localTypesOutput: SideOutput[Set[InventoryItem]] =
     SideOutput[Set[InventoryItem]]()
 
   val badRowsOutput: SideOutput[BadRow.InvalidRow] =
@@ -83,10 +83,6 @@ object Loader {
       .setDatasetId(env.config.datasetId)
       .setTableId(env.config.tableId)
 
-    sc.pipeline
-      .getCoderRegistry
-      .registerCoderForClass(TypeAggregator.Types.getClass, TypeAggregator.coder)
-
     // Raw enriched TSV
     val rows = readEnrichedSub(env.original, sc.pubsubSubscription[String](env.config.getFullInput))
 
@@ -101,13 +97,7 @@ object Loader {
         None
     }
 
-    sideOutputs(typesOutput)
-      .withGlobalWindow()
-      .map(TypeAggregator.Types.apply)
-      .applyTransform(ParDo.of(new TypeAggregator))
-//      .aggregate(Set.empty[InventoryItem])((acc, cur) => { acc ++ cur }, _ ++ _)
-//      .map(types => compact(toPayload(types)))
-      .saveAsPubsub(env.config.getFullTypesTopic)
+    splitTypes(env.config.getFullTypesTopic)(sideOutputs)
 
     // Sink bad rows
     sideOutputs(badRowsOutput)
@@ -116,7 +106,6 @@ object Loader {
 
     // Unwrap LoaderRow collection to get failed inserts
     val mainOutputInternal = mainOutput
-      .withFixedWindows(OutputWindow, options = windowOptions)
       .internal
 
     // Sink good rows and forward failed inserts to PubSub
@@ -126,7 +115,36 @@ object Loader {
 
   /** Read raw enriched TSV, parse and apply windowing */
   def readEnrichedSub(resolver: JValue, rows: SCollection[String]): SCollection[Either[BadRow.InvalidRow, LoaderRow]] =
-    rows
-      .map(LoaderRow.parse(resolver))
-      .withFixedWindows(Duration.millis(10000), options = windowOptions)
+    rows.map(LoaderRow.parse(resolver))
+      .withFixedWindows(Duration.millis(5000), options = windowOptions)
+
+  /**
+    * Save all observed types in global window and fire only when new types arrives
+    * Doesn't work :(
+    */
+  def splitTypes(typesTopic: String)(sideOutputs: SideOutputCollections) = {
+    val (local, secondSideOutput) = sideOutputs(typesOutput)
+      .withSideOutputs(globalTypesOutput)
+      .flatMap { case (types, ctx) =>
+        ctx.output(globalTypesOutput, types)
+        Some(types)
+      }
+
+    val globalTypesView = secondSideOutput(globalTypesOutput)
+      .withFixedWindows(Duration.millis(60000), options = windowOptions)
+      .aggregate(Set.empty[InventoryItem])(_ ++ _, _ ++ _)
+      .asIterableSideInput
+
+    local
+      .withSideInputs(globalTypesView)
+      .flatMap { case (types, context) =>
+        val global = context(globalTypesView).flatten.toSet
+        val newElements = types -- global
+        if (newElements.isEmpty) None else Some(newElements)
+      }
+      .toSCollection
+      .filter(_.nonEmpty)
+      .map { types => compact(toPayload(types)) }
+      .saveAsPubsub(typesTopic)
+  }
 }

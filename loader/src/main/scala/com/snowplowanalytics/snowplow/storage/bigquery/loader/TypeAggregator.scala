@@ -13,24 +13,24 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
+import java.util
+
 import org.json4s.jackson.JsonMethods.compact
-
-import org.joda.time.Duration
-
-import org.apache.beam.sdk.state.{TimeDomain, Timer, TimerSpecs, ValueState, StateSpecs}
+import org.joda.time.{Duration, Instant}
+import org.apache.beam.sdk.state._
 import org.apache.beam.sdk.transforms.{DoFn, ParDo}
 import org.apache.beam.sdk.transforms.DoFn.{OnTimer, ProcessElement, StateId, TimerId}
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
-
 import common.Codecs.toPayload
+import org.apache.beam.sdk.coders._
+import TypeAggregator._
+import org.apache.beam.sdk.values.KV
 
 /**
   * Aggregate function designed to reduce `types`-topic load
   *
   */
-class TypeAggregator extends DoFn[Set[InventoryItem], String] {
-  import TypeAggregator._
+class TypeAggregator extends DoFn[Types, String] {
 
   // Should it be static
   /** Send all buffered types after period */
@@ -40,11 +40,11 @@ class TypeAggregator extends DoFn[Set[InventoryItem], String] {
   private final val ExpirySpec = TimerSpecs.timer(TimeDomain.PROCESSING_TIME)
 
   @StateId("buffer")
-  private final val BufferState = StateSpecs.value[Set[InventoryItem]]()
+  private final val BufferState = StateSpecs.value[Types]()
 
   @ProcessElement
   def process(context: ProcessContext,
-              @StateId("buffer") state: ValueState[Set[InventoryItem]],
+              @StateId("buffer") state: ValueState[Types],
               @TimerId("expiry") expiryTimer: Timer): Unit = {
 
     val current = context.element()
@@ -56,23 +56,45 @@ class TypeAggregator extends DoFn[Set[InventoryItem], String] {
         expiryTimer.offset(FlushPeriod).setRelative()
       }
       state.write(accumulator ++ newElements)
-      context.output(encode(newElements))
+      context.output(encode(newElements.inventory))
     }
   }
 
   @OnTimer("expiry")
   def onExpiry(context: OnTimerContext,
-               @StateId("buffer") bufferState: ValueState[Set[InventoryItem]]): Unit = {
+               @StateId("buffer") bufferState: ValueState[Types]): Unit = {
     if (bufferState.read().nonEmpty) {
-      context.output(encode(bufferState.read()))
+      context.output(encode(bufferState.read().inventory))
       bufferState.clear()
     }
   }
 }
 
 object TypeAggregator {
-  val transformation = ParDo.of(new TypeAggregator)
+  case class Types(inventory: Set[InventoryItem]) {
+    def nonEmpty = inventory.nonEmpty
+    def isEmpty = inventory.isEmpty
+    def --(other: Types): Types = Types(inventory -- other.inventory)
+    def ++(other: Types): Types = Types(inventory ++ other.inventory)
+  }
 
   def encode(types: Set[InventoryItem]): String =
     compact(toPayload(types))
+
+  class TypesCoder extends Coder[Types] {
+    def encode(value: Types, outStream: java.io.OutputStream): Unit =
+      outStream.write(TypeAggregator.encode(value.inventory).getBytes)
+
+    def decode(inStream: java.io.InputStream): Types =
+      throw new RuntimeException("suka blyat")
+
+    override def verifyDeterministic(): Unit =
+      throw new RuntimeException("gnida")
+
+    override def getCoderArguments: util.List[_ <: Coder[_]] =
+      new util.LinkedList()
+  }
+
+  val coder = new TypesCoder
+  val kvcoder: Coder[KV[Instant, Types]] = KvCoder.of(InstantCoder.of(), coder)
 }

@@ -13,6 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
+import com.esotericsoftware.kryo.Kryo
 import com.google.api.services.bigquery.model.TableReference
 import org.joda.time.Duration
 import org.json4s.JValue
@@ -23,7 +24,9 @@ import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
+import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{ InventoryItem, Contexts, UnstructEvent }
+import com.spotify.scio.coders.KryoRegistrar
+import com.twitter.chill.{AllScalaRegistrar, IKryoRegistrar}
 import common.Config._
 import common.Codecs.toPayload
 import org.apache.beam.sdk.coders.StringUtf8Coder
@@ -80,6 +83,10 @@ object Loader {
       .setDatasetId(env.config.datasetId)
       .setTableId(env.config.tableId)
 
+    sc.pipeline
+      .getCoderRegistry
+      .registerCoderForClass(TypeAggregator.Types.getClass, TypeAggregator.coder)
+
     // Raw enriched TSV
     val rows = readEnrichedSub(env.original, sc.pubsubSubscription[String](env.config.getFullInput))
 
@@ -96,7 +103,8 @@ object Loader {
 
     sideOutputs(typesOutput)
       .withGlobalWindow()
-      .applyTransform(TypeAggregator.transformation)
+      .map(TypeAggregator.Types.apply)
+      .applyTransform(ParDo.of(new TypeAggregator))
 //      .aggregate(Set.empty[InventoryItem])((acc, cur) => { acc ++ cur }, _ ++ _)
 //      .map(types => compact(toPayload(types)))
       .saveAsPubsub(env.config.getFullTypesTopic)

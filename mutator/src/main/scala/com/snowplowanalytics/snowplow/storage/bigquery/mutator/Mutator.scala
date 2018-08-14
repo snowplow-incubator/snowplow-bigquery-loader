@@ -46,18 +46,20 @@ import Mutator._
   */
 class Mutator private(resolver: Resolver,
                       tableReference: TableReference,
-                      state: MVar[IO, MutatorState]) {
+                      state: MVar[IO, MutatorState],
+                      verbose: Boolean) {
 
   /** Add all new columns to a table */
   def updateTable(inventoryItems: List[InventoryItem]): IO[Unit] =
     for {
+      _                       <- if (verbose) log(s"Received ${inventoryItems.map(x => s"${x.shredProperty} ${x.igluUri}").mkString(", ")}") else IO.unit
       MutatorState(fields, _) <- state.read
       existingColumns          = fields.map(_.getName)
       fieldsToAdd              = filterFields(existingColumns, inventoryItems)
       _                       <- fieldsToAdd.traverse_(addField)
       latestState             <- state.read
       _                       <- state.put(latestState.increment)
-      _                       <- if (latestState.received % 1000 == 0) log(latestState) else IO.unit
+      _                       <- if (latestState.received % 100 == 0) log(latestState) else IO.unit
     } yield ()
 
   /** Perform ALTER TABLE */
@@ -129,13 +131,13 @@ object Mutator {
   def filterFields(existingColumns: Vector[String], newItems: List[InventoryItem]): List[InventoryItem] =
     newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
 
-  def initialize(env: Environment)(implicit F: Concurrent[IO]): IO[Either[String, Mutator]] = {
+  def initialize(env: Environment, verbose: Boolean)(implicit F: Concurrent[IO]): IO[Either[String, Mutator]] = {
     for {
       client <- TableReference.BigQueryTable.getClient
       table   = new TableReference.BigQueryTable(client, env.config.datasetId, env.config.tableId)
       fields <- table.getFields
       state  <- MVar.of(MutatorState(fields, 0))
-    } yield new Mutator(env.resolver, table, state).asRight
+    } yield new Mutator(env.resolver, table, state, verbose).asRight
   }
 
   private def invalidSchema(schema: IgluUri) =

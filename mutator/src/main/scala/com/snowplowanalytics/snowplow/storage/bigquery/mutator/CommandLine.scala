@@ -15,9 +15,10 @@ package mutator
 
 import cats.implicits._
 import cats.effect.IO
-
 import com.monovore.decline._
-
+import com.snowplowanalytics.iglu.core.SchemaKey
+import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.ShredProperty
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs
 import common.Config._
 
 /** Mutator-specific CLI configuration */
@@ -26,16 +27,31 @@ object CommandLine {
   private val options = (resolverOpt, configOpt)
     .mapN { (resolver, config) => EnvironmentConfig(resolver, config) }
 
+  val schema: Opts[SchemaKey] = Opts.option[String]("schema", "Iglu URI to add to the table").mapValidated { schema =>
+    SchemaKey.fromUri(schema) match {
+      case Some(schemaKey) => schemaKey.validNel
+      case None => s"$schema is not a valid Iglu URI".invalidNel
+    }
+  }
+
+  val property: Opts[ShredProperty] = Opts.option[String]("shred-property", s"Snowplow shred property (${Codecs.ValidProperties})").mapValidated {
+    prop => Codecs.decodeShredProperty(prop).toValidatedNel
+  }
+
+  val verbose = Opts.flag("verbose", "Provide debug output").orFalse
+
   sealed trait MutatorCommand extends Product with Serializable {
     def config: EnvironmentConfig
     def getEnv: IO[Environment] =
       IO.fromEither(transform(config))
   }
   case class CreateCommand(config: EnvironmentConfig) extends MutatorCommand
-  case class ListenCommand(config: EnvironmentConfig) extends MutatorCommand
+  case class ListenCommand(config: EnvironmentConfig, verbose: Boolean) extends MutatorCommand
+  case class AddColumnCommand(config: EnvironmentConfig, schema: SchemaKey, property: ShredProperty) extends MutatorCommand
 
   val createCmd = Opts.subcommand("create", "Create empty table and exit")(options.map(CreateCommand.apply))
-  val listenCmd = Opts.subcommand("listen", "Run mutator and listen for new types")(options.map(ListenCommand.apply))
+  val listenCmd = Opts.subcommand("listen", "Run mutator and listen for new types")((options, verbose).mapN(ListenCommand.apply))
+  val addColumn = Opts.subcommand("add-column", "Add column to the BigQuery table")((options, schema, property).mapN(AddColumnCommand.apply))
 
   val command = Command("mutator", "Snowplow BigQuery Mutator")(createCmd.orElse(listenCmd))
 

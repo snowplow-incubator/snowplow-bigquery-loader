@@ -23,15 +23,22 @@ object Codecs {
   private val DerivedContextsName = "DERIVED_CONTEXTS"
   private val UnstructEventName = "UNSTRUCT_EVENT"
 
+  val ValidProperties = List(ContextsName, DerivedContextsName, UnstructEventName).mkString(", ")
+
+  def decodeShredProperty(string: String): Either[String, ShredProperty] = string match {
+    case ContextsName => Contexts(CustomContexts).asRight
+    case DerivedContextsName => Contexts(DerivedContexts).asRight
+    case UnstructEventName => UnstructEvent.asRight
+    case other => Left(s"[$other] is not a valid shred property; valid are: $ValidProperties")
+  }
+
   implicit val shredPropertyDecoder: Decoder[ShredProperty] =
     new Decoder[ShredProperty] {
-      def apply(c: HCursor): Decoder.Result[ShredProperty] = c.value.asString match {
-        case Some(ContextsName) => Contexts(CustomContexts).asRight
-        case Some(DerivedContextsName) => Contexts(DerivedContexts).asRight
-        case Some(UnstructEventName) => UnstructEvent.asRight
-        case Some(other) => DecodingFailure(s"[$other] is not valid shred property", c.history).asLeft
-        case None => DecodingFailure("Not a string", c.history).asLeft
-      }
+      def apply(c: HCursor): Decoder.Result[ShredProperty] =
+        c.value
+          .asString
+          .map(string => decodeShredProperty(string).leftMap(message => DecodingFailure(message, c.history)))
+          .getOrElse(DecodingFailure("Not a string", c.history).asLeft)
     }
 
   implicit val shredPropertyEncoder: Encoder[ShredProperty] =

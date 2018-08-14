@@ -15,8 +15,9 @@ package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 import scala.concurrent.ExecutionContext.Implicits.global
 
 import cats.implicits._
-
 import cats.effect.{ExitCode, IO, IOApp}
+
+import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
 
 object Main extends IOApp {
   def run(args: List[String]): IO[ExitCode] = {
@@ -24,9 +25,9 @@ object Main extends IOApp {
       case Right(c: CommandLine.ListenCommand) =>
         val appStream = for {
           env     <- c.getEnv.stream
-          mutator <- Mutator.initialize(env).map(_.fold(e => throw new RuntimeException(e), identity)).stream
+          mutator <- Mutator.initialize(env, c.verbose).map(_.fold(e => throw new RuntimeException(e), identity)).stream
           queue   <- TypeReceiver.initQueue(1000).stream
-          _       <- TypeReceiver.startSubscription(env.config, TypeReceiver(queue)).stream
+          _       <- TypeReceiver.startSubscription(env.config, TypeReceiver(queue, c.verbose)).stream
           _       <- IO(println(s"Mutator is listening ${env.config.typesSubscription}")).stream
           items   <- queue.dequeue
           _       <- mutator.updateTable(items).stream
@@ -39,6 +40,13 @@ object Main extends IOApp {
           env    <- c.getEnv
           client <- TableReference.BigQueryTable.getClient
           _      <- TableReference.BigQueryTable.create(client, env.config.datasetId, env.config.tableId)
+        } yield ExitCode.Success
+
+      case Right(c: CommandLine.AddColumnCommand) =>
+        for {
+          env     <- c.getEnv
+          mutator <- Mutator.initialize(env, true).map(_.fold(e => throw new RuntimeException(e), identity))
+          _       <- mutator.addField(InventoryItem(c.property, c.schema.toSchemaUri))
         } yield ExitCode.Success
 
       case Left(help) =>

@@ -32,7 +32,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
   * PubSub consumer, listening for shredded types and
   * enqueing them into common type queue
   */
-class TypeReceiver(queue: Queue[IO, List[InventoryItem]])
+class TypeReceiver(queue: Queue[IO, List[InventoryItem]], verbose: Boolean)
                   (implicit ec: ExecutionContext) extends MessageReceiver {
 
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
@@ -40,6 +40,8 @@ class TypeReceiver(queue: Queue[IO, List[InventoryItem]])
       json <- parse(message.getData.toStringUtf8)
       invetoryItems <- json.as[List[InventoryItem]]
     } yield invetoryItems
+
+    if (verbose) { log(message.getData.toStringUtf8) }
 
     items match {
       case Right(Nil) =>
@@ -50,6 +52,9 @@ class TypeReceiver(queue: Queue[IO, List[InventoryItem]])
         notificationCallback(consumer)(items).unsafeRunSync()
     }
   }
+
+  private def log(message: String): Unit =
+    println(s"TypeReceiver ${java.time.Instant.now()}: $message")
 
   private def notificationCallback(consumer: AckReplyConsumer)(either: Either[Throwable, _]): IO[Unit] =
     either match {
@@ -66,8 +71,8 @@ object TypeReceiver {
   def initQueue(size: Int)(implicit ec: ExecutionContext): IO[Queue[IO, List[InventoryItem]]] =
     Queue.circularBuffer[IO, List[InventoryItem]](size)
 
-  def apply(queue: Queue[IO, List[InventoryItem]])(implicit ec: ExecutionContext): TypeReceiver =
-    new TypeReceiver(queue)
+  def apply(queue: Queue[IO, List[InventoryItem]], verbose: Boolean)(implicit ec: ExecutionContext): TypeReceiver =
+    new TypeReceiver(queue, verbose)
 
   def startSubscription(config: Config, listener: TypeReceiver)(implicit ec: ExecutionContext): IO[Unit] = {
     def process = IO {

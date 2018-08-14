@@ -29,7 +29,7 @@ class CommandLineSpec extends org.specs2.Specification { def is = s2"""
 
 
   def e1 = {
-    val expected = ListenCommand(EnvironmentConfig(SpecHelpers.jsonResolver, SpecHelpers.jsonConfig))
+    val expected = ListenCommand(EnvironmentConfig(SpecHelpers.jsonResolver, SpecHelpers.jsonConfig), false)
     val result = CommandLine.parse(Seq("listen", "--resolver", SpecHelpers.base64Resolver, "--config", SpecHelpers.base64Config))
     result must beRight(expected)
   }

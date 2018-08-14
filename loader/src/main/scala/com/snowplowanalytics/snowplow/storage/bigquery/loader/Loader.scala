@@ -48,9 +48,9 @@ object Loader {
   val ObservedTypesOutput: SideOutput[Set[InventoryItem]] =
     SideOutput[Set[InventoryItem]]()
 
-  /** Emit observed types every minute */
+  /** Emit observed types every 10 minutes / workers */
   val TypesWindow: Duration =
-    Duration.standardSeconds(60)
+    Duration.millis(600 * 1000)
 
   /** Side output for rows failed transformation */
   val BadRowsOutput: SideOutput[BadRow] =
@@ -78,6 +78,9 @@ object Loader {
     sideOutputs(ObservedTypesOutput)
       .withFixedWindows(TypesWindow, options = OutputWindowOptions)
       .aggregate(Set.empty[InventoryItem])(_ ++ _, _ ++ _)
+      .withWindow[IntervalWindow]
+      .groupBy(_._2)
+      .map { case (_, v) => v.flatMap(_._1).toSet }
       .filter(_.nonEmpty)
       .map { types => compact(toPayload(types)) }
       .saveAsPubsub(env.config.getFullTypesTopic)

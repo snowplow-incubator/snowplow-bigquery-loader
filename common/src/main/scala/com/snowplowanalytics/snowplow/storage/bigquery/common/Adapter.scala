@@ -49,8 +49,6 @@ object Adapter {
         Field.newBuilder(name, adaptType(record), fieldsList)
           .setMode(adaptMode(mode))
           .build()
-      case DdlField(name, fieldType, mode @ Mode.Repeated) =>
-        adaptField(DdlField(name, fieldType, mode))
       case DdlField(name, fieldType, mode) =>
         Field.newBuilder(name, adaptType(fieldType))
           .setMode(adaptMode(mode))

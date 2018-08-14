@@ -83,7 +83,6 @@ class Mutator private(resolver: Resolver,
     val columnName = LoaderSchema.getColumnName(inventoryItem)
     val field = Generator.build(columnName, schema, false).setMode(mode).normalized
     val column = Generator.Column(columnName, field, SchemaKey.fromUri(inventoryItem.igluUri).get)
-
     Adapter.fromColumn(column)
   }
 

@@ -37,7 +37,7 @@ object Loader {
 
   /** Neither loading API work with global windows */
   val OutputWindow: Duration =
-    Duration.millis(5000)
+    Duration.millis(10000)
 
   val OutputWindowOptions = WindowOptions(
     Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane()),
@@ -50,7 +50,7 @@ object Loader {
 
   /** Emit observed types every 10 minutes / workers */
   val TypesWindow: Duration =
-    Duration.millis(600 * 1000)
+    Duration.millis(60000)
 
   /** Side output for rows failed transformation */
   val BadRowsOutput: SideOutput[BadRow] =

@@ -41,11 +41,6 @@ class TypeReceiver(queue: Queue[IO, List[InventoryItem]])
       invetoryItems <- json.as[List[InventoryItem]]
     } yield invetoryItems
 
-    println(s"Mutator ${java.time.Instant.now()}: received ${items.toOption.getOrElse(List.empty).map(_.igluUri) match {
-      case Nil => "empty message"
-      case list => list.mkString(", ")
-    }}")
-
     items match {
       case Right(Nil) =>
         consumer.ack()
@@ -58,15 +53,18 @@ class TypeReceiver(queue: Queue[IO, List[InventoryItem]])
 
   private def notificationCallback(consumer: AckReplyConsumer)(either: Either[Throwable, _]): IO[Unit] =
     either match {
-      case Right(_) => IO(consumer.ack())
-      case Left(error: Error) => IO(consumer.ack()) *> IO(println(error.show))
-      case Left(queueError) => IO(println(queueError.getMessage))
+      case Right(_) =>
+        IO(consumer.ack())
+      case Left(error: Error) =>
+        IO(consumer.ack()) *> IO(System.err.println(error.show))
+      case Left(queueError) =>
+        IO(consumer.ack()) *> IO(System.err.println(queueError.getMessage))
     }
 }
 
 object TypeReceiver {
   def initQueue(size: Int)(implicit ec: ExecutionContext): IO[Queue[IO, List[InventoryItem]]] =
-    Queue.bounded[IO, List[InventoryItem]](size)
+    Queue.circularBuffer[IO, List[InventoryItem]](size)
 
   def apply(queue: Queue[IO, List[InventoryItem]])(implicit ec: ExecutionContext): TypeReceiver =
     new TypeReceiver(queue)

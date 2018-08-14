@@ -46,26 +46,29 @@ import Mutator._
   */
 class Mutator private(resolver: Resolver,
                       tableReference: TableReference,
-                      state: MVar[IO, Vector[Field]]) {
+                      state: MVar[IO, MutatorState]) {
 
   /** Add all new columns to a table */
   def updateTable(inventoryItems: List[InventoryItem]): IO[Unit] =
     for {
-      fields          <- state.read
-      existingColumns  = fields.map(_.getName)
-      fieldsToAdd      = filterFields(existingColumns, inventoryItems)
-      _               <- fieldsToAdd.traverse_(addField)
+      MutatorState(fields, _) <- state.read
+      existingColumns          = fields.map(_.getName)
+      fieldsToAdd              = filterFields(existingColumns, inventoryItems)
+      _                       <- fieldsToAdd.traverse_(addField)
+      latestState             <- state.read
+      _                       <- state.put(latestState.increment)
+      _                       <- if (latestState.received % 1000 == 0) log(latestState) else IO.unit
     } yield ()
 
   /** Perform ALTER TABLE */
   def addField(inventoryItem: InventoryItem): IO[Unit] =
     for {
-      schema      <- getSchema(inventoryItem.igluUri)
-      newField     = getField(inventoryItem, schema)
-      _           <- tableReference.addField(newField)
-      stateFields <- state.take
-      _           <- state.put(stateFields :+ newField)
-      _           <- IO(println(s"Mutator ${Instant.now()}: added ${newField.getName}"))
+      schema <- getSchema(inventoryItem.igluUri)
+      field   = getField(inventoryItem, schema)
+      _      <- tableReference.addField(field)
+      st     <- state.take
+      _      <- state.put(st.add(field))
+      _      <- log(s"added ${field.getName}")
     } yield ()
 
   /** Transform Iglu Schema into valid BigQuery field */
@@ -93,11 +96,35 @@ class Mutator private(resolver: Resolver,
         .flatMap(json => Schema.parse(json).liftTo[Either[MutatorError, ?]](invalidSchema(igluUri)))
         .fold(IO.raiseError[Schema], IO.pure)
     } yield schema
+
+  private def log(message: String): IO[Unit] =
+    IO(println(s"Mutator ${Instant.now()}: $message"))
+
+  private def log(mutatorState: MutatorState): IO[Unit] = {
+    if (mutatorState.received == Long.MaxValue - 2) {
+      log(s"received ${mutatorState.received} records, resetting counted; known fields are ${mutatorState.fields.map(_.getName).mkString(", ")}")
+    } else {
+      log(s"received ${mutatorState.received} records; known fields are ${mutatorState.fields.map(_.getName).mkString(", ")}")
+    }
+  }
 }
 
 object Mutator {
 
   case class MutatorError(message: String) extends Throwable
+
+  case class MutatorState(fields: Vector[Field], received: Long) {
+    def increment: MutatorState = {
+      if (received == Long.MaxValue - 1) {
+        MutatorState(fields, 0)
+      } else {
+        MutatorState(fields, received + 1)
+      }
+    }
+
+    def add(field: Field): MutatorState =
+      MutatorState(fields :+ field, received)
+  }
 
   def filterFields(existingColumns: Vector[String], newItems: List[InventoryItem]): List[InventoryItem] =
     newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
@@ -107,7 +134,7 @@ object Mutator {
       client <- TableReference.BigQueryTable.getClient
       table   = new TableReference.BigQueryTable(client, env.config.datasetId, env.config.tableId)
       fields <- table.getFields
-      state  <- MVar.of[IO, Vector[Field]](fields)
+      state  <- MVar.of(MutatorState(fields, 0))
     } yield new Mutator(env.resolver, table, state).asRight
   }
 

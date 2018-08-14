@@ -14,27 +14,20 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
 import org.joda.time.Instant
-
 import cats.data.{EitherNel, NonEmptyList, Validated, ValidatedNel}
 import cats.implicits._
-
 import io.circe.Json
-
 import org.json4s.JsonAST._
 import org.json4s.jackson.JsonMethods.{compact, fromJsonNode}
-
 import com.spotify.scio.bigquery.TableRow
-
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.iglu.core.circe.implicits._
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{Schema => DdlSchema}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.implicits._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{Generator, Row}
-
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError, Generator, Row}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{Contexts, CustomContexts, InventoryItem, UnstructEvent}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.EventTransformer.getValidatedJsonEvent
-
 import common.{Adapter, Schema, Utils => CommonUtils}
 
 /** Row ready to be passed into Loader stream and Mutator topic */
@@ -42,18 +35,29 @@ case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[In
 
 object LoaderRow {
 
-  def parse(resolver: JValue)(record: String): Either[BadRow.InvalidRow, LoaderRow] = {
+  /**
+    * Parse enriched TSV into a loader row, ready to be loaded into bigquery
+    * If Loader is able to figure out that row cannot be loaded into BQ -
+    * it will return return BadRow with detailed error that later can be analyzed
+    * If premature check has passed, but row cannot be loaded it will be forwarded
+    * to "failed inserts" topic, without additional information
+    * @param resolver serializable Resolver's config to get it from singleton store
+    * @param record enriched TSV line
+    * @return either bad with error messages or entity ready to be loaded
+    */
+  def parse(resolver: JValue)(record: String): Either[BadRow, LoaderRow] = {
     val loaderRow: EitherNel[String, LoaderRow] = for {
       (inventory, event) <- getValidatedJsonEvent(record.split("\t", -1), false)
         .leftMap(e => NonEmptyList.fromListUnsafe(e)): EitherNel[String, (Set[InventoryItem], JObject)]
-      rowWithTstamp      <- toTableRow(singleton.ResolverSingleton.get(resolver))(event)
+      rowWithTstamp      <- fromJson(singleton.ResolverSingleton.get(resolver))(event)
       (row, tstamp)       = rowWithTstamp
     } yield LoaderRow(tstamp, row, inventory)
 
-    loaderRow.leftMap(errors => BadRow.InvalidRow(record, errors))
+    loaderRow.leftMap(errors => BadRow(record, errors))
   }
 
-  def toTableRow(resolver: Resolver)(json: JObject): EitherNel[String, (TableRow, Instant)] = {
+  /** Parse JSON object provided by Snowplow Analytics SDK */
+  def fromJson(resolver: Resolver)(json: JObject): EitherNel[String, (TableRow, Instant)] = {
     val validated = json.obj.collectFirst { case ("collector_tstamp", JString(tstamp)) => tstamp } match {
       case Some(tstamp) =>
         val atomicFields: List[ValidatedNel[String, List[(String, Any)]]] = json.obj.map {
@@ -138,6 +142,28 @@ object LoaderRow {
       .leftMap(stringifyNel)
       .andThen(schema => DdlSchema.parse(schema).toValidNel(s"Cannot parse JSON Schema [$schemaKey]"))
       .map(schema => Generator.build("", schema, false))
-      .andThen(Row.cast(_)(data).leftMap(stringifyNel))
+      .andThen(Row.cast(_)(data).leftMap(stringifyCastErrors))
   }
+
+  def stringifyCastErrors(nel: NonEmptyList[CastError]): NonEmptyList[String] =
+    nel.map {
+      case CastError.WrongType(value, expected) =>
+        Json.fromFields(List(
+          ("message", Json.fromString("Unexpected type of value")),
+          ("value", value),
+          ("expectedType", Json.fromString(expected.toString))
+        )).noSpaces
+      case CastError.NotAnArray(value, expected) =>
+        Json.fromFields(List(
+          ("message", Json.fromString("Value should be in array")),
+          ("value", value),
+          ("expectedType", Json.fromString(expected.toString))
+        )).noSpaces
+      case CastError.MissingInValue(key, value) =>
+        Json.fromFields(List(
+          ("message", Json.fromString("Key is missing in value")),
+          ("value", value),
+          ("missingKey", Json.fromString(key))
+        )).noSpaces
+    }
 }

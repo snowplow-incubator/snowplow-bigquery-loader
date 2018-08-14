@@ -34,7 +34,7 @@ object Dependencies {
     val googleCloud        = "1.31.0"
     val slf4j              = "1.7.25"
     // Scala (test only)
-    val specs2             = "4.3.2"
+    val specs2             = "4.3.3"
     val scalaCheck         = "1.14.0"
     // Build
     val scalaMacrosVersion = "2.1.0"

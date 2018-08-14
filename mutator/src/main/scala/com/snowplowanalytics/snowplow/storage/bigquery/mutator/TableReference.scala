@@ -14,17 +14,24 @@ package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import scala.collection.convert.decorateAsJava._
 import scala.collection.convert.decorateAsScala._
+
 import cats.effect.IO
+
 import com.google.cloud.bigquery.{Schema => BqSchema, _}
+
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter
 
 /** Stateless object, responsible for making API calls to a table or mock */
 trait TableReference {
+  /** Get all fields the table has */
   def getFields: IO[Vector[Field]]
+  /** Add new field */
   def addField(field: Field): IO[Unit]
 }
 
 object TableReference {
+
+  /** Real-world BigQuery implementation */
   class BigQueryTable(client: BigQuery, datasetId: String, tableId: String) extends TableReference {
 
     def getTable: IO[Table] =

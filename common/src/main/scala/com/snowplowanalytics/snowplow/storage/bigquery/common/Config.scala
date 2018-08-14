@@ -19,7 +19,7 @@ import scalaz.NonEmptyList
 import org.json4s._
 import org.json4s.ext.JavaTypesSerializers
 import org.json4s.jackson.Serialization
-import org.json4s.jackson.JsonMethods.parse
+import org.json4s.jackson.JsonMethods.{ parse, compact }
 
 import cats.data.ValidatedNel
 import cats.implicits._
@@ -37,6 +37,7 @@ import com.snowplowanalytics.iglu.client.validation.ValidatableJValue.validateAn
   * @param projectId Google Cloud project id
   * @param datasetId Google BigQuery dataset id
   * @param tableId Google BigQuery table id
+  * @param load BigQuery loading API
   * @param typesTopic PubSub topic where Loader should **publish** new types
   * @param typesSubscription PubSub subscription (associated with `typesTopic`),
   *                 where Mutator pull types from
@@ -47,6 +48,7 @@ case class Config(name: String,
                   projectId: String,
                   datasetId: String,
                   tableId: String,
+                  load: Config.LoadMode,
                   typesTopic: String,
                   typesSubscription: String,
                   badRows: String,
@@ -64,18 +66,50 @@ object Config {
   case class EnvironmentConfig(resolver: JValue, config: JValue)
 
   /** Parsed common environment (resolver is a stateful object) */
-  class Environment private[Config](val resolver: Resolver, val config: Config, val original: JValue) extends Serializable
+  class Environment private[Config](val resolver: Resolver, val config: Config, val resolverJson: JValue) extends Serializable
+
+  sealed trait LoadMode
+  object LoadMode {
+    case class StreamingInserts(retry: Boolean) extends LoadMode
+    case class FileLoads(frequency: Int) extends LoadMode
+
+    implicit val serializer = new CustomSerializer[LoadMode]((_: Formats) =>
+      (
+        {
+          case JObject(fields) =>
+            val jsonObject = fields.toMap
+            jsonObject.get("mode") match {
+              case Some(JString("STREAMING_INSERTS")) => jsonObject.get("retry") match {
+                case Some(JBool(retry)) => StreamingInserts(retry)
+                case Some(other) => throw new MappingException(s"Cannot convert object to StreamingInserts; retry property ${compact(other)} is not supported")
+                case None => throw new MappingException(s"Cannot convert object to StreamingInserts; retry property is missing")
+              }
+              case Some(JString("FILE_LOADS")) => jsonObject.get("frequency") match {
+                case Some(JInt(frequency)) => FileLoads(frequency.toInt)
+                case Some(other) => throw new MappingException(s"Cannot convert object to FileLoads; frequency property ${compact(other)} is not supported")
+                case None => throw new MappingException(s"Cannot convert object to FileLoads; frequency property is missing")
+              }
+              case None => throw new MappingException("Cannot convert object to LoadMode; required mode property is missing")
+              case Some(other) => throw new MappingException(s"Cannot convert object to LoadMode; mode can be STREAMING_INSERTS or FILE_LOADS, ${compact(other)} given")
+            }
+          case other => throw new MappingException(s"Cannot convert $other to Loadode")
+        },
+        {
+          case StreamingInserts(retry) => JObject(List(("mode", JString("STREAMING_INSERTS")), ("retry", JBool(retry))))
+          case FileLoads(frequency) =>  JObject(List(("mode", JString("FILE_LOADS")), ("frequency", JInt(frequency))))
+        }
+      )
+    )
+  }
 
   private implicit val formats: org.json4s.Formats =
-    Serialization.formats(NoTypeHints) ++ JavaTypesSerializers.all
+    Serialization.formats(NoTypeHints) ++ JavaTypesSerializers.all + LoadMode.serializer
 
   /** Parse  */
   def transform(config: EnvironmentConfig): Either[Throwable, Environment] = {
     for {
       resolver <- Resolver.parse(config.resolver).fold(asThrowableLeft, _.asRight)
-      _ = println(resolver)
       (_, data) <- validateAndIdentifySchema(config.config, dataOnly = true)(resolver).fold(asThrowableLeft, _.asRight)
-      _ = println(data)
       result <- Either.catchNonFatal(data.extract[Config])
     } yield new Environment(resolver, result, config.resolver)
   }
@@ -97,8 +131,6 @@ object Config {
   private def toValidated[A, R](f: A => Either[Throwable, R])(a: A): ValidatedNel[String, R] =
     f(a).leftMap(_.getMessage).toValidatedNel
 
-  private def asThrowableLeft[A](errors: NonEmptyList[A]) = {
-    println(errors)
+  private def asThrowableLeft[A](errors: NonEmptyList[A]) =
     new RuntimeException(errors.list.mkString(", ")).asLeft
-  }
 }

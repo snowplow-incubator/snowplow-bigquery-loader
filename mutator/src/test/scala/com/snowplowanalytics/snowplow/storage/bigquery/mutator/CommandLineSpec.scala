@@ -48,9 +48,11 @@ class CommandLineSpec extends org.specs2.Specification { def is = s2"""
       "snowplow-data",
       "atomic",
       "events",
+      Config.LoadMode.StreamingInserts(false),
       "types-topic",
       "types-sub",
-      "gs://some-bucket/")
+      "bad-rows-topic",
+      "failed-inserts-topic")
 
     val result = CommandLine
       .parse(Seq("create", "--resolver", SpecHelpers.base64Resolver, "--config", SpecHelpers.base64Config))

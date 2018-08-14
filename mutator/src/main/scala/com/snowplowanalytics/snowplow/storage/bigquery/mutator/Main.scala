@@ -24,7 +24,7 @@ object Main extends IOApp {
       case Right(c: CommandLine.ListenCommand) =>
         val appStream = for {
           env     <- c.getEnv.stream
-          mutator <- Mutator.initialize(env).map(_.fold(e => throw new RuntimeException(e), x => x)).stream
+          mutator <- Mutator.initialize(env).map(_.fold(e => throw new RuntimeException(e), identity)).stream
           queue   <- TypeReceiver.initQueue(1000).stream
           _       <- TypeReceiver.startSubscription(env.config, TypeReceiver(queue)).stream
           _       <- IO(println(s"Mutator is listening ${env.config.typesSubscription}")).stream

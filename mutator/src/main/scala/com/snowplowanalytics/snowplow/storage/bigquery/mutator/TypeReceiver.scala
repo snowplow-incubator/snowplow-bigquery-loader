@@ -69,7 +69,7 @@ class TypeReceiver(queue: Queue[IO, List[InventoryItem]], verbose: Boolean)
 
 object TypeReceiver {
   def initQueue(size: Int)(implicit ec: ExecutionContext): IO[Queue[IO, List[InventoryItem]]] =
-    Queue.circularBuffer[IO, List[InventoryItem]](size)
+    Queue.bounded[IO, List[InventoryItem]](size)
 
   def apply(queue: Queue[IO, List[InventoryItem]], verbose: Boolean)(implicit ec: ExecutionContext): TypeReceiver =
     new TypeReceiver(queue, verbose)

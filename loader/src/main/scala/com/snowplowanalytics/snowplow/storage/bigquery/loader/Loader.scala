@@ -76,7 +76,7 @@ object Loader {
 
     // Emit all types observed in 1 minute
     sideOutputs(ObservedTypesOutput)
-      .withFixedWindows(TypesWindow)
+      .withFixedWindows(TypesWindow, options = OutputWindowOptions)
       .aggregate(Set.empty[InventoryItem])(_ ++ _, _ ++ _)
       .filter(_.nonEmpty)
       .map { types => compact(toPayload(types)) }

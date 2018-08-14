@@ -57,7 +57,7 @@ class Mutator private(resolver: Resolver,
       existingColumns          = fields.map(_.getName)
       fieldsToAdd              = filterFields(existingColumns, inventoryItems)
       _                       <- fieldsToAdd.traverse_(addField)
-      latestState             <- state.read
+      latestState             <- state.take
       _                       <- state.put(latestState.increment)
       _                       <- if (latestState.received % 100 == 0) log(latestState) else IO.unit
     } yield ()

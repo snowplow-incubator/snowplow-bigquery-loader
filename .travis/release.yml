@@ -30,7 +30,7 @@ packages:
     build_version : <%= FUNC['sbt_version(.)'] %>
     
     build_commands:
-      - 'sbt universal:packageBin'
+      - 'sbt "project loader" universal:packageBin'
       - 'sbt "project mutator" universal:packageBin'
 
     # Required: Artifact

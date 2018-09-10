@@ -1,3 +1,6 @@
+lazy val root = project.in(file("."))
+  .settings(BuildSettings.commonSettings)
+
 lazy val common = project.in(file("common"))
   .settings(Seq(
     name := "snowplow-bigquery-common",

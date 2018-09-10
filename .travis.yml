@@ -1,4 +1,6 @@
 language: scala
+services:
+- docker
 scala:
 - 2.11.12
 jdk:

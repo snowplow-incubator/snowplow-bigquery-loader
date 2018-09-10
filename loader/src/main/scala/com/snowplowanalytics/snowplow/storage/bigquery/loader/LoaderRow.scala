@@ -14,20 +14,26 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
 import org.joda.time.Instant
+
 import cats.data.{EitherNel, NonEmptyList, Validated, ValidatedNel}
 import cats.implicits._
+
 import io.circe.Json
+
 import org.json4s.JsonAST._
 import org.json4s.jackson.JsonMethods.{compact, fromJsonNode}
+
 import com.spotify.scio.bigquery.TableRow
+
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.iglu.core.circe.implicits._
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{Schema => DdlSchema}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.implicits._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError, Generator, Row}
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{Contexts, CustomContexts, InventoryItem, UnstructEvent}
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError, Row, Field}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.EventTransformer.getValidatedJsonEvent
+
 import common.{Adapter, Schema, Utils => CommonUtils}
 
 /** Row ready to be passed into Loader stream and Mutator topic */
@@ -96,8 +102,8 @@ object LoaderRow {
     */
   def parseSelfDescribingJson(resolver: Resolver)(payload: JObject): ValidatedNel[String, List[(String, Any)]] = {
     CommonUtils.toCirce(payload).toData.toList.traverse[ValidatedNel[String, ?], List[(String, Any)]] {
-      case SelfDescribingData(SchemaKey("com.snowplowanalytics.snowplow", "contexts", _, SchemaVer.Full(1, _, _)), contextsPayload) =>
-        val contexts = contextsPayload.asArray.getOrElse(Vector.empty).flatMap(_.toData.toVector)
+      case SelfDescribingData(SchemaKey("com.snowplowanalytics.snowplow", "contexts", _, SchemaVer.Full(1,_,_)), payload) =>
+        val contexts = payload.asArray.getOrElse(Vector.empty).flatMap(_.toData.toVector)
         groupContexts(resolver, contexts)
       case SelfDescribingData(SchemaKey("com.snowplowanalytics.snowplow", "unstruct_event", _, SchemaVer.Full(1, _, _)), uePayload) =>
         uePayload.toData match {
@@ -141,7 +147,7 @@ object LoaderRow {
       .map(fromJsonNode))
       .leftMap(stringifyNel)
       .andThen(schema => DdlSchema.parse(schema).toValidNel(s"Cannot parse JSON Schema [$schemaKey]"))
-      .map(schema => Generator.build("", schema, false))
+      .map(schema => Field.build("", schema, false))
       .andThen(Row.cast(_)(data).leftMap(stringifyCastErrors))
   }
 

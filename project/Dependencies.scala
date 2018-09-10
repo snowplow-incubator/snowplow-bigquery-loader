@@ -15,16 +15,16 @@ import sbt._
 object Dependencies {
   object V {
     // Scala Snowplow
-    val analyticsSdk       = "0.3.2-M1"
+    val analyticsSdk       = "0.3.2"
     val igluClient         = "0.5.0"
-    val igluCore           = "0.3.0-M3"
-    val processingManifest = "0.1.0-M4"
-    val schemaDdl          = "0.8.0-M4"
+    val igluCore           = "0.3.0"
+    val processingManifest = "0.1.0"
+    val schemaDdl          = "0.8.0"
     // Scala
-    val cats               = "1.2.0"
+    val cats               = "1.3.0"
     val catsEffect         = "1.0.0-RC2"
     val circe              = "0.9.3"
-    val decline            = "0.4.0"
+    val decline            = "0.5.0"
     val fs2                = "0.10.5"
     val json4sJackson      = "3.2.11"
     val scalaz7            = "7.0.9"
@@ -56,6 +56,7 @@ object Dependencies {
   val catsEffect         = "org.typelevel"         %% "cats-effect"                  % V.catsEffect
   val circe              = "io.circe"              %% "circe-core"                   % V.circe
   val circeJavaTime      = "io.circe"              %% "circe-java8"                  % V.circe
+  val circeParser        = "io.circe"              %% "circe-parser"                 % V.circe
   val decline            = "com.monovore"          %% "decline"                      % V.decline
   val fs2                = "co.fs2"                %% "fs2-core"                     % V.fs2
   val json4sJackson      = "org.json4s"            %% "json4s-jackson"               % V.json4sJackson

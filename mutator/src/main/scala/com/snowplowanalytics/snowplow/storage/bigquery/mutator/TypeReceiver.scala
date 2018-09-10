@@ -13,14 +13,18 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import scala.concurrent.{ExecutionContext, Future}
+
 import io.circe.Error
 import io.circe.jawn.parse
+
 import cats.effect.IO
 import cats.syntax.either._
 import cats.syntax.show._
 import cats.syntax.apply._
+
 import fs2.async
 import fs2.async.mutable.Queue
+
 import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver, Subscriber}
 import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem

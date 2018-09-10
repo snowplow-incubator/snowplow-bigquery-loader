@@ -75,14 +75,7 @@ object Loader {
       }
 
     // Emit all types observed in 1 minute
-    sideOutputs(ObservedTypesOutput)
-      .withFixedWindows(TypesWindow, options = OutputWindowOptions)
-      .aggregate(Set.empty[InventoryItem])(_ ++ _, _ ++ _)
-      .withWindow[IntervalWindow]
-      .groupBy(_._2)
-      .map { case (_, v) => v.flatMap(_._1).toSet }
-      .filter(_.nonEmpty)
-      .map { types => compact(toPayload(types)) }
+    aggregateTypes(sideOutputs(ObservedTypesOutput))
       .saveAsPubsub(env.config.getFullTypesTopic)
 
     // Sink bad rows
@@ -126,4 +119,16 @@ object Loader {
           .withTriggeringFrequency(Duration.standardSeconds(frequency))
     }
   }
+
+  /** Group types into smaller chunks */
+  def aggregateTypes(types: SCollection[Set[InventoryItem]]): SCollection[String] =
+    types
+      .withFixedWindows(TypesWindow, options = OutputWindowOptions)
+      .aggregate(Set.empty[InventoryItem])(_ ++ _, _ ++ _)
+      .withWindow[IntervalWindow]
+      .swap
+      .groupByKey
+      .map { case (_, groupedSets) => groupedSets.toSet.flatten }
+      .filter(_.nonEmpty)
+      .map { types => compact(toPayload(types)) }
 }

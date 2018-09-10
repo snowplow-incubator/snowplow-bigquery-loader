@@ -17,18 +17,11 @@ import scala.collection.JavaConverters._
 import com.google.api.services.bigquery.model.TableRow
 import com.google.cloud.bigquery.{Field, FieldList, LegacySQLTypeName}
 
-import com.snowplowanalytics.iglu.schemaddl.bigquery.Generator._
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field => DdlField, _}
 
 
 /** Transform dependency-free schema-ddl AST into Google Cloud Java definitions */
 object Adapter {
-
-  def fromColumn(column: Column): Field =
-    adaptField(column.bigQueryField)
-      .toBuilder
-      .setDescription(column.version.toSchemaUri)
-      .build()
 
   def adaptRow(row: Row): AnyRef = row match {
     case Row.Null => null

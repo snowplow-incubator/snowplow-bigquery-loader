@@ -13,6 +13,9 @@
 import sbt._
 import Keys._
 
+import com.typesafe.sbt.packager.Keys.{ maintainer, daemonUser}
+import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
+
 object BuildSettings {
   lazy val commonSettings = Seq(
     organization          := "com.snowplowanalytics",
@@ -33,5 +36,13 @@ object BuildSettings {
   lazy val macroSettings = Seq(
     libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
     addCompilerPlugin("org.scalamacros" % "paradise" % Dependencies.V.scalaMacrosVersion cross CrossVersion.full)
+  )
+
+  val dockerSettings = Seq(
+    dockerRepository := Some("snowplow-docker-registry.bintray.io"),
+    dockerUsername := Some("snowplow"),
+    dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.1.0",
+    maintainer in Docker := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
+    daemonUser in Docker := "snowplow"
   )
 }

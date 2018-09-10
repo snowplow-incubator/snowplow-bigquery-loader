@@ -22,12 +22,11 @@ import cats.effect.concurrent.MVar
 import org.json4s.jackson.JsonMethods.fromJsonNode
 
 import com.google.cloud.bigquery.Field
-import com.snowplowanalytics.iglu.core.SchemaKey
-import com.snowplowanalytics.iglu.client.Resolver
 
+import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.implicits._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{Generator, Mode}
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field => DdlField}
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data
@@ -81,9 +80,8 @@ class Mutator private(resolver: Resolver,
     }
 
     val columnName = LoaderSchema.getColumnName(inventoryItem)
-    val field = Generator.build(columnName, schema, false).setMode(mode).normalized
-    val column = Generator.Column(columnName, field, SchemaKey.fromUri(inventoryItem.igluUri).get)
-    Adapter.fromColumn(column)
+    val field = DdlField.build(columnName, schema, false).setMode(mode).normalized
+    Adapter.adaptField(field)
   }
 
   /** Receive the JSON Schema from the Iglu registry */

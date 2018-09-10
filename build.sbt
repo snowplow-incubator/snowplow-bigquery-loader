@@ -15,6 +15,7 @@ lazy val common = project.in(file("common"))
       Dependencies.igluCoreCirce,
       Dependencies.circe,
       Dependencies.circeJavaTime,
+      Dependencies.circeParser,
 
       Dependencies.bigQuery,
 
@@ -33,13 +34,6 @@ lazy val loader = project.in(file("loader"))
     BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
       Dependencies.scioCore,
-      Dependencies.cats,
-      Dependencies.analyticsSdk,
-      Dependencies.json4sExt,
-      Dependencies.igluClient,
-      Dependencies.igluCoreCirce,
-      Dependencies.circe,
-      Dependencies.circeJavaTime,
 
       Dependencies.slf4j,
       Dependencies.directRunner,
@@ -55,25 +49,19 @@ lazy val loader = project.in(file("loader"))
 lazy val mutator = project.in(file("mutator"))
   .settings(Seq(
     name := "snowplow-bigquery-mutator",
-    description := "Snowplow BigQuery Mutator",
+    description := "Snowplow BigQuery Table Mutator",
     mainClass := Some("com.snowplowanalytics.snowplow.storage.bigquery.mutator.Main")
   ))
+  .settings(BuildSettings.dockerSettings)
   .settings(
+    maintainer in Docker := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
     BuildSettings.commonSettings,
     libraryDependencies ++= Seq(
       Dependencies.pubsub,
       Dependencies.bigQuery,
 
       Dependencies.fs2,
-      Dependencies.decline,
-      Dependencies.cats,
       Dependencies.catsEffect,
-      Dependencies.analyticsSdk,
-      Dependencies.igluClient,
-      Dependencies.igluCoreCirce,
-      Dependencies.circe,
-      Dependencies.circeJavaTime,
-      Dependencies.schemaDdl,
 
       Dependencies.specs2,
       Dependencies.scalaCheck

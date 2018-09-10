@@ -42,7 +42,7 @@ class LoaderRowSpec extends org.specs2.Specification { def is = s2"""
         |}
       """.stripMargin).asInstanceOf[JObject]
     val result = LoaderRow.parseSelfDescribingJson(SpecHelpers.resolver)(contextsProperty)
-    println(result.toOption.get.mkString("\n"))
+
     ok
   }
 }

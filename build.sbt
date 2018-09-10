@@ -29,6 +29,7 @@ lazy val loader = project.in(file("loader"))
     name := "snowplow-bigquery-loader",
     description := "Snowplow BigQuery Loader Dataflow Job"
   ))
+  .settings(BuildSettings.dockerSettings)
   .settings(
     BuildSettings.commonSettings,
     BuildSettings.macroSettings,

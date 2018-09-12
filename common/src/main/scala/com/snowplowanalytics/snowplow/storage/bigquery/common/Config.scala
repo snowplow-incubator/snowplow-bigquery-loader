@@ -105,7 +105,6 @@ object Config {
   private implicit val formats: org.json4s.Formats =
     Serialization.formats(NoTypeHints) ++ JavaTypesSerializers.all + LoadMode.serializer
 
-  /** Parse  */
   def transform(config: EnvironmentConfig): Either[Throwable, Environment] = {
     for {
       resolver <- Resolver.parse(config.resolver).fold(asThrowableLeft, _.asRight)

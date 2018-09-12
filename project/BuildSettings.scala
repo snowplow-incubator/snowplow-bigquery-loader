@@ -12,14 +12,15 @@
  */
 import sbt._
 import Keys._
-
-import com.typesafe.sbt.packager.Keys.{ maintainer, daemonUser}
+import com.typesafe.sbt.packager.Keys.{daemonUser, maintainer}
 import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
+import com.typesafe.sbt.packager.docker.ExecCmd
+import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
 
 object BuildSettings {
   lazy val commonSettings = Seq(
     organization          := "com.snowplowanalytics",
-    version               := "0.1.0-rc13",
+    version               := "0.1.0-rc14",
     scalaVersion          := "2.11.12",
     scalacOptions         ++= Seq("-target:jvm-1.8",
       "-deprecation",
@@ -38,11 +39,17 @@ object BuildSettings {
     addCompilerPlugin("org.scalamacros" % "paradise" % Dependencies.V.scalaMacrosVersion cross CrossVersion.full)
   )
 
-  val dockerSettings = Seq(
+  lazy val dockerSettings = Seq(
+    // Use single entrypoint script for all apps
+    Universal / sourceDirectory := new java.io.File((baseDirectory in LocalRootProject).value, "docker"),
     dockerRepository := Some("snowplow-docker-registry.bintray.io"),
     dockerUsername := Some("snowplow"),
     dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.1.0",
-    maintainer in Docker := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
-    daemonUser in Docker := "snowplow"
+    Docker / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
+    Docker / daemonUser := "root",  // Will be gosu'ed by docker-entrypoint.sh
+    dockerEnvVars := Map("SNOWPLOW_BIGQUERY_APP" -> name.value),
+    dockerCommands += ExecCmd("RUN", "cp", "/opt/docker/bin/docker-entrypoint.sh", "/usr/local/bin/"),
+    dockerEntrypoint := Seq("docker-entrypoint.sh"),
+    dockerCmd := Seq("--help")
   )
 }

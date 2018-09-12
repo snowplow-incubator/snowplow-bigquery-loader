@@ -74,3 +74,25 @@ lazy val mutator = project.in(file("mutator"))
   .enablePlugins(JavaAppPackaging)
   .dependsOn(common)
 
+lazy val forwarder = project.in(file("forwarder"))
+  .settings(Seq(
+    name := "snowplow-bigquery-forwarder",
+    description := "Snowplow BigQuery Loader Dataflow Job"
+  ))
+  .settings(BuildSettings.dockerSettings)
+  .settings(
+    BuildSettings.commonSettings,
+    BuildSettings.macroSettings,
+    libraryDependencies ++= Seq(
+      Dependencies.scioCore,
+
+      Dependencies.slf4j,
+      Dependencies.directRunner,
+      Dependencies.dataflowRunner,
+
+      Dependencies.specs2,
+      Dependencies.scalaCheck
+    )
+  )
+  .enablePlugins(JavaAppPackaging)
+  .dependsOn(common)

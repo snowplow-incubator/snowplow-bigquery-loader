@@ -76,10 +76,12 @@ object Loader {
 
     // Emit all types observed in 1 minute
     aggregateTypes(sideOutputs(ObservedTypesOutput))
-      .saveAsPubsub(env.config.getFullTypesTopic)
+      .withName("typesSink")
+      .saveAsPubsub(env.config.getFullTypesTopic)   // TODO: check if idAttribute can deduplicate them
 
     // Sink bad rows
     sideOutputs(BadRowsOutput)
+      .withName("badRowsSink")
       .map(_.compact)
       .saveAsPubsub(env.config.getFullBadRowsTopic)
 

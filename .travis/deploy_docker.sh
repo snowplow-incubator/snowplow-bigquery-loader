@@ -14,8 +14,10 @@ project_version=$(sbt version -Dsbt.log.noformat=true | perl -ne 'print "$1\n" i
 if [[ "${tag}" = *"${project_version}" ]]; then
     sbt "project loader" docker:publishLocal
     sbt "project mutator" docker:publishLocal
+    sbt "project forwarder" docker:publishLocal
     docker push "${docker_repo}/snowplow/snowplow-bigquery-mutator:${tag}"
     docker push "${docker_repo}/snowplow/snowplow-bigquery-loader:${tag}"
+    docker push "${docker_repo}/snowplow/snowplow-bigquery-forwarder:${tag}"
 else
     echo "Tag version '${tag}' doesn't match version in scala project ('${project_version}'). Aborting!"
     exit 1

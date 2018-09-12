@@ -15,13 +15,28 @@ package forwarder
 
 import com.google.api.services.bigquery.model.TableReference
 import org.joda.time.Duration
-import com.spotify.scio.ScioContext
-import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
-import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
+
 import com.spotify.scio.bigquery.TableRow
+import com.spotify.scio.values.WindowOptions
+import com.spotify.scio.ScioContext
+
 import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.CommandLine.ForwarderEnvironment
 
+import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
+import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
+import org.apache.beam.sdk.transforms.windowing.{AfterProcessingTime, Repeatedly}
+import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
+
 object Forwarder {
+
+  val OutputWindow: Duration =
+    Duration.millis(10000)
+
+  val OutputWindowOptions = WindowOptions(
+    Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane()),
+    AccumulationMode.DISCARDING_FIRED_PANES,
+    Duration.ZERO)
+
   def run(env: ForwarderEnvironment, sc: ScioContext): Unit = {
     val tableRef = new TableReference()
       .setProjectId(env.common.config.projectId)
@@ -29,14 +44,15 @@ object Forwarder {
       .setTableId(env.common.config.tableId)
 
     val output: BigQueryIO.Write[TableRow] =
-      BigQueryIO.write()
+      BigQueryIO.writeTableRows()
         .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
         .withFailedInsertRetryPolicy(InsertRetryPolicy.alwaysRetry())
         .withCreateDisposition(CreateDisposition.CREATE_NEVER)
         .withWriteDisposition(WriteDisposition.WRITE_APPEND)
         .to(tableRef)
 
-    sc.pubsubSubscription[TableRow](env.getFullFailedInsertsSub).
-      saveAsCustomOutput(env.common.config.tableId, output)
+    sc.pubsubSubscription[TableRow](env.getFullFailedInsertsSub)
+      .withFixedWindows(OutputWindow, options = OutputWindowOptions)
+      .saveAsCustomOutput(env.common.config.tableId, output)
   }
 }

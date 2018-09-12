@@ -28,9 +28,9 @@ object Dependencies {
     val fs2                = "0.10.5"
     val json4sJackson      = "3.2.11"
     val scalaz7            = "7.0.9"
-    val scio               = "0.5.6"
+    val scio               = "0.6.1"
     // Java
-    val beam               = "2.5.0"
+    val beam               = "2.6.0"
     val googleCloud        = "1.31.0"
     val slf4j              = "1.7.25"
     // Scala (test only)

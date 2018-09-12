@@ -14,16 +14,11 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package forwarder
 
 import com.google.api.services.bigquery.model.TableReference
-
 import org.joda.time.Duration
-
 import com.spotify.scio.ScioContext
-
-import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO
+import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
-
 import com.spotify.scio.bigquery.TableRow
-
 import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.CommandLine.ForwarderEnvironment
 
 object Forwarder {
@@ -34,12 +29,11 @@ object Forwarder {
       .setTableId(env.common.config.tableId)
 
     val output: BigQueryIO.Write[TableRow] =
-      BigQueryIO.writeTableRows()
+      BigQueryIO.write()
+        .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
+        .withFailedInsertRetryPolicy(InsertRetryPolicy.alwaysRetry())
         .withCreateDisposition(CreateDisposition.CREATE_NEVER)
         .withWriteDisposition(WriteDisposition.WRITE_APPEND)
-        .withMethod(BigQueryIO.Write.Method.FILE_LOADS)
-        .withNumFileShards(50)
-        .withTriggeringFrequency(Duration.standardSeconds(300))
         .to(tableRef)
 
     sc.pubsubSubscription[TableRow](env.getFullFailedInsertsSub).

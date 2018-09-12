@@ -20,7 +20,7 @@ import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
 object BuildSettings {
   lazy val commonSettings = Seq(
     organization          := "com.snowplowanalytics",
-    version               := "0.1.0-rc16",
+    version               := "0.1.0-rc17",
     scalaVersion          := "2.11.12",
     scalacOptions         ++= Seq("-target:jvm-1.8",
       "-deprecation",

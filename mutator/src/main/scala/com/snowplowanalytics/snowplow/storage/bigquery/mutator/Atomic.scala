@@ -93,9 +93,9 @@ object Atomic {
     // Ecommerce
     Field("tr_orderid", DataType.String, Mode.Nullable),
     Field("tr_affiliation", DataType.String, Mode.Nullable),
-    Field("tr_total", DataType.Float, Mode.Nullable),
-    Field("tr_tax", DataType.Float, Mode.Nullable),
-    Field("tr_shipping", DataType.Float, Mode.Nullable),
+    Field("tr_total", DataType.Numeric, Mode.Nullable),
+    Field("tr_tax", DataType.Numeric, Mode.Nullable),
+    Field("tr_shipping", DataType.Numeric, Mode.Nullable),
     Field("tr_city", DataType.String, Mode.Nullable),
     Field("tr_state", DataType.String, Mode.Nullable),
     Field("tr_country", DataType.String, Mode.Nullable),
@@ -103,7 +103,7 @@ object Atomic {
     Field("ti_sku", DataType.String, Mode.Nullable),
     Field("ti_name", DataType.String, Mode.Nullable),
     Field("ti_category", DataType.String, Mode.Nullable),
-    Field("ti_price", DataType.Float, Mode.Nullable),
+    Field("ti_price", DataType.Numeric, Mode.Nullable),
     Field("ti_quantity", DataType.Integer, Mode.Nullable),
 
     // Page ping
@@ -155,11 +155,11 @@ object Atomic {
 
     // Currency
     Field("tr_currency", DataType.String, Mode.Nullable),
-    Field("tr_total_base", DataType.Float, Mode.Nullable),
-    Field("tr_tax_base", DataType.Float, Mode.Nullable),
-    Field("tr_shipping_base", DataType.Float, Mode.Nullable),
+    Field("tr_total_base", DataType.Numeric, Mode.Nullable),
+    Field("tr_tax_base", DataType.Numeric, Mode.Nullable),
+    Field("tr_shipping_base", DataType.Numeric, Mode.Nullable),
     Field("ti_currency", DataType.String, Mode.Nullable),
-    Field("ti_price_base", DataType.Float, Mode.Nullable),
+    Field("ti_price_base", DataType.Numeric, Mode.Nullable),
     Field("base_currency", DataType.String, Mode.Nullable),
 
     // Geolocation

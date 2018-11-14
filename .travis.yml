@@ -22,6 +22,11 @@ deploy:
     script: ./.travis/deploy_docker.sh $TRAVIS_TAG
     on:
       tags: true
+  - provider: script
+    skip_cleanup: true
+    script: "./.travis/deploy_template.sh $TRAVIS_TAG"
+    on:
+      tags: true
 env:
   global:
   - secure: FpFfqcuDuxasw+P+fj62m/NRFWj9Dov74R/6KjdVVn4YdL1PTsqLc6sqttbcJsbobWX9B70LwKKhlYxyL1fWTx6zUe2owXAxtR0Bw2y0WNT6D4XKtfmJYWcVOSGjKJciURaTS9Hi4vypMp06buul+BguuerxW430I6Oo3xMNZF6MDgEJoS6NPL+rzg4l8aqgq+v9PF56ABcyvpHvLwKURz2FvyVE0rj3IJdetZsme/zRkqy+TXA8kGgX2ABgQxohI3kMgJ0sRxhDPN49Ziqjovwmxdg/DkXQJRRzbY5auI/sL0eOhU0ECEDzpfrQEoDBvfuapPEfd3CGfxgH/puXIs8cOQ4gH4NovUQVwdPkpSq/wCEM1j+w4ueSY4+XHRNTKwMYC9oe+YFFCqmAkF2gysYliMV/75ZXa4MMTiCWmKQZZHuSvFRz+tmIv9v1ey2EFc89LeihlxyaUVPsMRhNCg9NOlQ1VcXjaDFqW7Q0udPCIh/32tsoXtkMd7ZriYvG+KIJDZeRf3coYQ9n6SEhfpkizzT/rHcCCnV3iCuA4h2kUYmQkvztRzYGGdttpcOU4Y36teyXnwDv/cZ9FapPSiroydgj/08jcrgkvonzm2me4ddxR/38LmlrbcG2Q/7AhUj2cgICGLjys1OcjvrvZVsINF2u1kJ3qfH5ng6f2X8=

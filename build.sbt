@@ -30,8 +30,10 @@ lazy val common = project.in(file("common"))
 lazy val loader = project.in(file("loader"))
   .settings(Seq(
     name := "snowplow-bigquery-loader",
-    description := "Snowplow BigQuery Loader Dataflow Job"
+    description := "Snowplow BigQuery Loader Dataflow Job",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.loader.generated"
   ))
+  .enablePlugins(BuildInfoPlugin)
   .settings(BuildSettings.dockerSettings)
   .settings(
     BuildSettings.commonSettings,
@@ -54,11 +56,11 @@ lazy val mutator = project.in(file("mutator"))
   .settings(Seq(
     name := "snowplow-bigquery-mutator",
     description := "Snowplow BigQuery Table Mutator",
-    mainClass := Some("com.snowplowanalytics.snowplow.storage.bigquery.mutator.Main")
+    mainClass := Some("com.snowplowanalytics.snowplow.storage.bigquery.mutator.Main"),
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.mutator.generated"
   ))
   .settings(BuildSettings.dockerSettings)
   .settings(
-    maintainer in Docker := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
     BuildSettings.commonSettings,
     libraryDependencies ++= Seq(
       Dependencies.pubsub,
@@ -71,13 +73,15 @@ lazy val mutator = project.in(file("mutator"))
       Dependencies.scalaCheck
     )
   )
+  .enablePlugins(BuildInfoPlugin)
   .enablePlugins(JavaAppPackaging)
   .dependsOn(common)
 
 lazy val forwarder = project.in(file("forwarder"))
   .settings(Seq(
     name := "snowplow-bigquery-forwarder",
-    description := "Snowplow BigQuery Loader Dataflow Job"
+    description := "Snowplow BigQuery Loader Dataflow Job",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.forwarder.generated"
   ))
   .settings(BuildSettings.dockerSettings)
   .settings(
@@ -95,4 +99,5 @@ lazy val forwarder = project.in(file("forwarder"))
     )
   )
   .enablePlugins(JavaAppPackaging)
+  .enablePlugins(BuildInfoPlugin)
   .dependsOn(common)

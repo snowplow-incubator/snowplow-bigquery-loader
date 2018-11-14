@@ -56,6 +56,7 @@ object Loader {
   val BadRowsOutput: SideOutput[BadRow] =
     SideOutput[BadRow]()
 
+
   /** Run whole pipeline */
   def run(env: Environment, sc: ScioContext): Unit = {
     val tableRef = new TableReference()
@@ -96,10 +97,11 @@ object Loader {
   /** Read data from PubSub topic and transform to ready to load rows */
   def getData(resolver: JValue,
               sc: ScioContext,
-              input: String): SCollection[Either[BadRow, LoaderRow]] =
+              input: String): SCollection[Either[BadRow, LoaderRow]] = {
     sc.pubsubSubscription[String](input)
       .map(LoaderRow.parse(resolver))
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)
+  }
 
   /** Default BigQuery output options */
   def getOutput(loadMode: LoadMode): BigQueryIO.Write[LoaderRow] = {

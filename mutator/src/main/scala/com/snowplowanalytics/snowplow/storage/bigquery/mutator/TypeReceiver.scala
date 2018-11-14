@@ -14,16 +14,17 @@ package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import scala.concurrent.{ExecutionContext, Future}
 
+import com.google.api.gax.rpc.FixedHeaderProvider
+
 import io.circe.Error
 import io.circe.jawn.parse
 
-import cats.effect.IO
+import cats.effect.{ContextShift, IO}
 import cats.syntax.either._
 import cats.syntax.show._
 import cats.syntax.apply._
 
-import fs2.async
-import fs2.async.mutable.Queue
+import fs2.concurrent.Queue
 
 import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver, Subscriber}
 import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
@@ -36,8 +37,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
   * PubSub consumer, listening for shredded types and
   * enqueing them into common type queue
   */
-class TypeReceiver(queue: Queue[IO, List[InventoryItem]], verbose: Boolean)
-                  (implicit ec: ExecutionContext) extends MessageReceiver {
+class TypeReceiver(queue: Queue[IO, List[InventoryItem]], verbose: Boolean) extends MessageReceiver {
 
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
     val items: Either[Error, List[InventoryItem]] = for {
@@ -51,7 +51,9 @@ class TypeReceiver(queue: Queue[IO, List[InventoryItem]], verbose: Boolean)
       case Right(Nil) =>
         consumer.ack()
       case Right(inventoryItems) =>
-        async.unsafeRunAsync(queue.enqueue1(inventoryItems))(notificationCallback(consumer))
+        queue.enqueue1(inventoryItems).unsafeRunAsync {
+          callback => notificationCallback(consumer)(callback)
+        }
       case Left(_) =>
         notificationCallback(consumer)(items).unsafeRunSync()
     }
@@ -72,17 +74,20 @@ class TypeReceiver(queue: Queue[IO, List[InventoryItem]], verbose: Boolean)
 }
 
 object TypeReceiver {
-  def initQueue(size: Int)(implicit ec: ExecutionContext): IO[Queue[IO, List[InventoryItem]]] =
+  private val UserAgent =
+    FixedHeaderProvider.create("User-Agent", generated.BuildInfo.userAgent)
+
+  def initQueue(size: Int)(implicit cs: ContextShift[IO]): IO[Queue[IO, List[InventoryItem]]] =
     Queue.bounded[IO, List[InventoryItem]](size)
 
-  def apply(queue: Queue[IO, List[InventoryItem]], verbose: Boolean)(implicit ec: ExecutionContext): TypeReceiver =
+  def apply(queue: Queue[IO, List[InventoryItem]], verbose: Boolean): TypeReceiver =
     new TypeReceiver(queue, verbose)
 
   def startSubscription(config: Config, listener: TypeReceiver)(implicit ec: ExecutionContext): IO[Unit] = {
     def process = IO {
       Future {
         val subscription = ProjectSubscriptionName.of(config.projectId, config.typesSubscription)
-        val subscriber = Subscriber.newBuilder(subscription, listener).build()
+        val subscriber = Subscriber.newBuilder(subscription, listener).setHeaderProvider(UserAgent).build()
         subscriber.startAsync().awaitRunning()
       }
     }

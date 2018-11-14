@@ -16,6 +16,8 @@ import com.typesafe.sbt.packager.Keys.{daemonUser, maintainer}
 import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
 import com.typesafe.sbt.packager.docker.ExecCmd
 import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
+import sbtbuildinfo._
+import sbtbuildinfo.BuildInfoKeys._
 
 object BuildSettings {
   lazy val commonSettings = Seq(
@@ -31,7 +33,15 @@ object BuildSettings {
     Global / cancelable   := true,
 
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
-    addCompilerPlugin("org.spire-math" %% "kind-projector" % Dependencies.V.kindProjector)
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % Dependencies.V.kindProjector),
+
+    buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description,
+      BuildInfoKey.action("userAgent") { s"${name.value}/${version.value}" }
+    )
+  )
+
+  lazy val buildInfo = Seq(
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.generated",
   )
 
   lazy val macroSettings = Seq(

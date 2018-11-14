@@ -53,7 +53,7 @@ object CommandLine {
   val listenCmd = Opts.subcommand("listen", "Run mutator and listen for new types")((options, verbose).mapN(ListenCommand.apply))
   val addColumn = Opts.subcommand("add-column", "Add column to the BigQuery table")((options, schema, property).mapN(AddColumnCommand.apply))
 
-  val command = Command("mutator", "Snowplow BigQuery Mutator")(createCmd.orElse(listenCmd).orElse(addColumn))
+  val command = Command(generated.BuildInfo.name, generated.BuildInfo.description)(createCmd.orElse(listenCmd).orElse(addColumn))
 
   def parse(args: Seq[String]) = command.parse(args)
 }

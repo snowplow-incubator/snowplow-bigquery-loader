@@ -10,15 +10,22 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery.forwarder
+package com.snowplowanalytics.snowplow.storage.bigquery
+package forwarder
 
 import com.spotify.scio._
 
 object Main {
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
-    val env = CommandLine.parse(args)
-    Forwarder.run(env, sc)
-    val _ = sc.close().waitUntilDone()
+    CommandLine.parse(args) match {
+      case Right(env) =>
+        sc.options.setUserAgent(generated.BuildInfo.userAgent)
+        Forwarder.run(env, sc)
+        val _ = sc.close()
+      case Left(error) =>
+        System.err.println(error.getMessage)
+        System.exit(1)
+    }
   }
 }

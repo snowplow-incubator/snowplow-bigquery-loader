@@ -29,15 +29,11 @@ object CommandLine {
     def getFullFailedInsertsSub: String = s"projects/${common.config.projectId}/subscriptions/$failedInserts"
   }
 
-  def parse(args: Args): ForwarderEnvironment = {
-    val environment =
-      for {
-        c <- decodeBase64Json(args("config"))
-        r <- decodeBase64Json(args("resolver"))
-        e <- transform(EnvironmentConfig(r, c))
-        s <- Either.catchNonFatal(args("failedInsertsSub"))
-      } yield ForwarderEnvironment(e, s)
-
-    environment.fold(throw _, identity)
-  }
+  def parse(args: Args): Either[Throwable, ForwarderEnvironment] =
+    for {
+      c <- decodeBase64Json(args("config"))
+      r <- decodeBase64Json(args("resolver"))
+      e <- transform(EnvironmentConfig(r, c))
+      s <- Either.catchNonFatal(args("failedInsertsSub"))
+    } yield ForwarderEnvironment(e, s)
 }

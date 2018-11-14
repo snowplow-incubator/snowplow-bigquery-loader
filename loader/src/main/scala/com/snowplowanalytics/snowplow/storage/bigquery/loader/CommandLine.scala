@@ -24,16 +24,11 @@ import common.Config._
   * Unlike Mutator, required --key=value format and ignores unknown options (for Dataflow)
   */
 object CommandLine {
-  def parse(args: Args): Environment = {
-    val environment =
-      for {
-        c <- decodeBase64Json(args("config"))
-        r <- decodeBase64Json(args("resolver"))
-        e <- transform(EnvironmentConfig(r, c))
-      } yield e
-
-    environment.fold(throw _, id)
+  def parse(args: Args): Either[Throwable, Environment] = {
+    for {
+      c <- decodeBase64Json(args("config"))
+      r <- decodeBase64Json(args("resolver"))
+      e <- transform(EnvironmentConfig(r, c))
+    } yield e
   }
-
-  private def id[A](a: A): A = a
 }

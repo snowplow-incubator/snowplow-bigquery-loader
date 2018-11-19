@@ -40,7 +40,6 @@ import common.{Adapter, Schema, Utils => CommonUtils}
 case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[InventoryItem])
 
 object LoaderRow {
-
   /**
     * Parse enriched TSV into a loader row, ready to be loaded into bigquery
     * If Loader is able to figure out that row cannot be loaded into BQ -
@@ -114,7 +113,7 @@ object LoaderRow {
             }
           case None => "Cannot decode unstruct_event as self-describing JSON".invalidNel[List[(String, Any)]]
         }
-      case _ => s"Cannot JSON payload as any known self-describing type ${compact(payload)}".invalidNel[List[(String, Any)]]
+      case _ => s"Cannot recognize JSON payload as any known self-describing type ${compact(payload)}".invalidNel[List[(String, Any)]]
     } map(_.flatten)
   }
 

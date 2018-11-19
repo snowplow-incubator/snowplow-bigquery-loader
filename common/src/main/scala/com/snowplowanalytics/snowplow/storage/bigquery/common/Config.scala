@@ -66,7 +66,8 @@ object Config {
   case class EnvironmentConfig(resolver: JValue, config: JValue)
 
   /** Parsed common environment (resolver is a stateful object) */
-  class Environment private[Config](val resolver: Resolver, val config: Config, val resolverJson: JValue) extends Serializable
+  class Environment private[Config](val config: Config,
+                                    val resolverJson: JValue) extends Serializable
 
   sealed trait LoadMode
   object LoadMode {
@@ -110,7 +111,7 @@ object Config {
       resolver <- Resolver.parse(config.resolver).fold(asThrowableLeft, _.asRight)
       (_, data) <- validateAndIdentifySchema(config.config, dataOnly = true)(resolver).fold(asThrowableLeft, _.asRight)
       result <- Either.catchNonFatal(data.extract[Config])
-    } yield new Environment(resolver, result, config.resolver)
+    } yield new Environment(result, config.resolver)
   }
 
   /** CLI option to parse base64-encoded resolver into JSON */

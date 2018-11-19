@@ -134,7 +134,8 @@ object Mutator {
       table   = new TableReference.BigQueryTable(client, env.config.datasetId, env.config.tableId)
       fields <- table.getFields
       state  <- MVar.of(MutatorState(fields, 0))
-    } yield new Mutator(env.resolver, table, state, verbose).asRight
+      resolver <- IO.fromEither(Resolver.parse(env.resolverJson).toEither.leftMap(x => throw new RuntimeException(x.head.getMessage)))
+    } yield new Mutator(resolver, table, state, verbose).asRight
   }
 
   private def invalidSchema(schema: IgluUri) =

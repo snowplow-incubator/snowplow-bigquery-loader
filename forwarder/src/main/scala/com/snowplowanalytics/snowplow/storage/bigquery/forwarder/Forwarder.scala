@@ -13,19 +13,20 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package forwarder
 
-import com.google.api.services.bigquery.model.TableReference
 import org.joda.time.Duration
 
-import com.spotify.scio.bigquery.TableRow
 import com.spotify.scio.values.WindowOptions
 import com.spotify.scio.ScioContext
 
-import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.CommandLine.ForwarderEnvironment
-
+import org.apache.beam.sdk.options.ValueProvider
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
+import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO
 import org.apache.beam.sdk.transforms.windowing.{AfterProcessingTime, Repeatedly}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
+
+import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.CommandLine.ForwarderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.implicits._
 
 object Forwarder {
 
@@ -37,22 +38,20 @@ object Forwarder {
     AccumulationMode.DISCARDING_FIRED_PANES,
     Duration.ZERO)
 
-  def run(env: ForwarderEnvironment, sc: ScioContext): Unit = {
-    val tableRef = new TableReference()
-      .setProjectId(env.common.config.projectId)
-      .setDatasetId(env.common.config.datasetId)
-      .setTableId(env.common.config.tableId)
-
-    val output: BigQueryIO.Write[TableRow] =
-      BigQueryIO.writeTableRows()
-        .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
-        .withFailedInsertRetryPolicy(InsertRetryPolicy.alwaysRetry())
-        .withCreateDisposition(CreateDisposition.CREATE_NEVER)
-        .withWriteDisposition(WriteDisposition.WRITE_APPEND)
-        .to(tableRef)
-
-    sc.pubsubSubscription[TableRow](env.getFullFailedInsertsSub)
+  def run(env: ValueProvider[ForwarderEnvironment], sc: ScioContext): Unit = {
+    val input = PubsubIO.readStrings().fromSubscription(env.map(_.common.config.getFullFailedInsertsTopic))
+    sc.customInput("failedInserts", input)
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)
-      .saveAsCustomOutput(env.common.config.tableId, output)
+      .saveAsCustomOutput("bigquery", getOutput.to(env.map(getTableReference)))
   }
+
+  def getTableReference(env: ForwarderEnvironment): String =
+    s"${env.common.config.projectId}:${env.common.config.datasetId}.${env.common.config.tableId}"
+
+  def getOutput: BigQueryIO.Write[String] =
+    BigQueryIO.write()
+      .withCreateDisposition(CreateDisposition.CREATE_NEVER)
+      .withWriteDisposition(WriteDisposition.WRITE_APPEND)
+      .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
+      .withFailedInsertRetryPolicy(InsertRetryPolicy.retryTransientErrors())
 }

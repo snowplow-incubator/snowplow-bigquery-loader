@@ -46,6 +46,7 @@ lazy val loader = project.in(file("loader"))
       Dependencies.dataflowRunner,
 
       Dependencies.specs2,
+      Dependencies.scioTest,
       Dependencies.scalaCheck
     )
   )

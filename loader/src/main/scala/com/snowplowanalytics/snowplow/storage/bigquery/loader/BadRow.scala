@@ -34,7 +34,7 @@ object BadRow {
   private val Errors = "errors"
 
   implicit val encoder: Encoder[BadRow] =
-    Encoder.instance { (badRow: BadRow) =>
+    Encoder.instance { badRow: BadRow =>
       val encoded = Base64.getEncoder.encode(badRow.line.getBytes)
       Json.fromFields(List(
         (Line, Json.fromString(new String(encoded))),

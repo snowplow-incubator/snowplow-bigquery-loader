@@ -26,7 +26,7 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data._
 
 import fs2._
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 
 import common.Codecs._
 
@@ -42,6 +42,9 @@ import common.Codecs._
   */
 object TypePublisher {
 
+  implicit val cs = IO.contextShift(global)
+  implicit val timer = IO.timer(global)
+
   val inventoryItems = List(
     InventoryItem(Contexts(CustomContexts), "iglu:com.mparticle.snowplow/appstatetransition_event/jsonschema/1-0-0"),
     InventoryItem(Contexts(DerivedContexts), "iglu:com.snowplowanalytics.snowplow/application_background/jsonschema/1-0-0"),
@@ -51,14 +54,16 @@ object TypePublisher {
   )
 
   def run(topic: String, items: List[InventoryItem]): Unit = {
-    def stream(p: Publisher) = for {
+    val bracket =
+      Stream.resource(Resource.make(newPublisher(topic))(shutdown))
+
+    val appStream = for {
+      publisher <- bracket
       item <- Stream.emits(items)
-      _ <- Stream.eval(publish(p, item))
+      _ <- Stream.eval(publish(publisher, item))
     } yield ()
 
-    val ticks = Scheduler[IO](2).flatMap(_.awakeEvery[IO](5.seconds))
-    val appStream = Stream.bracket(newPublisher(topic))(stream, shutdown)
-
+    val ticks = Stream.awakeEvery[IO](5.seconds)
     ticks.zip(appStream).compile.drain.unsafeRunSync()
   }
 

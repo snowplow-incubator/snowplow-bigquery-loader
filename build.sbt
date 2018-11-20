@@ -1,4 +1,4 @@
-lazy val root = project.in(file("."))
+lazy val snowplowBigqueryLoader = project.in(file("."))
   .settings(BuildSettings.commonSettings)
 
 lazy val common = project.in(file("common"))

@@ -22,7 +22,7 @@ import sbtbuildinfo.BuildInfoKeys._
 object BuildSettings {
   lazy val commonSettings = Seq(
     organization          := "com.snowplowanalytics",
-    version               := "0.1.0-rc23",
+    version               := "0.1.0-rc24",
     scalaVersion          := "2.11.12",
     scalacOptions         ++= Seq("-target:jvm-1.8",
       "-deprecation",

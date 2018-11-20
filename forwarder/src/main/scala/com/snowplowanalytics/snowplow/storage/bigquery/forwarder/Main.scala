@@ -15,19 +15,16 @@ package forwarder
 
 import com.spotify.scio._
 
-import org.apache.beam.sdk.options.PipelineOptionsFactory
-
 object Main {
-  def main(args: Array[String]): Unit = {
-    PipelineOptionsFactory.register(classOf[CommandLine.Options])
-    val options = PipelineOptionsFactory
-      .fromArgs(args: _*)
-      .withValidation
-      .as(classOf[CommandLine.Options])
-    options.setStreaming(true)
-    val sc = ScioContext(options)
-    val env = CommandLine.getEnvironment(options)
-    Forwarder.run(env, sc)
-    val _ = sc.close()
+  def main(cmdlineArgs: Array[String]): Unit = {
+    val (sc, args) = ContextAndArgs(cmdlineArgs)
+    CommandLine.parse(args) match {
+      case Right(env) =>
+        Forwarder.run(env, sc)
+        val _ = sc.close()
+      case Left(error) =>
+        System.err.println(error.getMessage)
+        System.exit(1)
+    }
   }
 }

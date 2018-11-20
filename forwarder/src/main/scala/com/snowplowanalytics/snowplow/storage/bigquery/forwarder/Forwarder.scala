@@ -18,7 +18,6 @@ import org.joda.time.Duration
 import com.spotify.scio.values.WindowOptions
 import com.spotify.scio.ScioContext
 
-import org.apache.beam.sdk.options.ValueProvider
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO
@@ -26,7 +25,6 @@ import org.apache.beam.sdk.transforms.windowing.{AfterProcessingTime, Repeatedly
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 
 import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.CommandLine.ForwarderEnvironment
-import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.implicits._
 
 object Forwarder {
 
@@ -38,11 +36,11 @@ object Forwarder {
     AccumulationMode.DISCARDING_FIRED_PANES,
     Duration.ZERO)
 
-  def run(env: ValueProvider[ForwarderEnvironment], sc: ScioContext): Unit = {
-    val input = PubsubIO.readStrings().fromSubscription(env.map(_.common.config.getFullFailedInsertsTopic))
+  def run(env: ForwarderEnvironment, sc: ScioContext): Unit = {
+    val input = PubsubIO.readStrings().fromSubscription(env.common.config.getFullFailedInsertsTopic)
     sc.customInput("failedInserts", input)
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)
-      .saveAsCustomOutput("bigquery", getOutput.to(env.map(getTableReference)))
+      .saveAsCustomOutput("bigquery", getOutput.to(getTableReference(env)))
   }
 
   def getTableReference(env: ForwarderEnvironment): String =

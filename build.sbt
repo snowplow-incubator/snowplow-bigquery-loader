@@ -4,6 +4,7 @@ lazy val snowplowBigqueryLoader = project.in(file("."))
 lazy val common = project.in(file("common"))
   .settings(Seq(
     name := "snowplow-bigquery-common",
+
     description := "Snowplow BigQuery Loader Common Utils"
   ))
   .settings(

@@ -15,6 +15,9 @@ package mutator
 
 import java.time.Instant
 
+import scala.util.control.NonFatal
+import scala.concurrent.duration._
+
 import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent.MVar
@@ -46,7 +49,9 @@ import Mutator._
 class Mutator private(resolver: Resolver,
                       tableReference: TableReference,
                       state: MVar[IO, MutatorState],
-                      verbose: Boolean) {
+                      verbose: Boolean)
+                     (implicit t: Timer[IO], cs: ContextShift[IO])
+{
 
   /** Add all new columns to a table */
   def updateTable(inventoryItems: List[InventoryItem]): IO[Unit] =
@@ -55,7 +60,9 @@ class Mutator private(resolver: Resolver,
       MutatorState(fields, _) <- state.read
       existingColumns          = fields.map(_.getName)
       fieldsToAdd              = filterFields(existingColumns, inventoryItems)
-      _                       <- fieldsToAdd.traverse_(addField)
+      _                       <- log(s"Adding ${fieldsToAdd.map(_.igluUri).mkString(", ")}")
+      _                       <- fieldsToAdd.traverse_(item => addField(item).recoverWith(logAddItem(item))).timeout(30.seconds)
+      _                       <- log(s"Done")
       latestState             <- state.take
       _                       <- state.put(latestState.increment)
       _                       <- if (latestState.received % 100 == 0) log(latestState) else IO.unit
@@ -85,9 +92,9 @@ class Mutator private(resolver: Resolver,
   }
 
   /** Receive the JSON Schema from the Iglu registry */
-  def getSchema(igluUri: IgluUri): IO[Schema] =
+  def getSchema(igluUri: IgluUri)(implicit t: Timer[IO], cs: ContextShift[IO]): IO[Schema] =
     for {
-      response <- IO(resolver.lookupSchema(igluUri))
+      response <- IO(resolver.lookupSchema(igluUri)).timeout(10.seconds)
       schema   <- Utils
         .fromValidation(response)
         .leftMap(errors => MutatorError(errors.toList.mkString(", ")))
@@ -105,6 +112,15 @@ class Mutator private(resolver: Resolver,
     } else {
       log(s"received ${mutatorState.received} records; known fields are ${mutatorState.fields.map(_.getName).mkString(", ")}")
     }
+  }
+
+  private def logAddItem(item: InventoryItem): PartialFunction[Throwable, IO[Unit]] = {
+    case NonFatal(error) =>
+      IO {
+        System.err.println(s"Failed to add ${item.igluUri}")
+        error.printStackTrace()
+        System.out.println("Continuing...")
+      }
   }
 }
 
@@ -128,14 +144,24 @@ object Mutator {
   def filterFields(existingColumns: Vector[String], newItems: List[InventoryItem]): List[InventoryItem] =
     newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
 
-  def initialize(env: Environment, verbose: Boolean)(implicit F: Concurrent[IO]): IO[Either[String, Mutator]] = {
+  def initialize(env: Environment, verbose: Boolean)(implicit t: Timer[IO], cs: ContextShift[IO], c: Concurrent[IO]): IO[Either[String, Mutator]] = {
     for {
       client <- TableReference.BigQueryTable.getClient
       table   = new TableReference.BigQueryTable(client, env.config.datasetId, env.config.tableId)
       fields <- table.getFields
       state  <- MVar.of(MutatorState(fields, 0))
       resolver <- IO.fromEither(Resolver.parse(env.resolverJson).toEither.leftMap(x => throw new RuntimeException(x.head.getMessage)))
-    } yield new Mutator(resolver, table, state, verbose).asRight
+      updatedResolver <- mutateResolver(resolver)
+    } yield new Mutator(updatedResolver, table, state, verbose).asRight
+  }
+
+  /** Set cacheTtl if it is not in config */
+  private def mutateResolver(resolver: Resolver): IO[Resolver] = resolver.cacheTtl match {
+    case None => IO {
+      println("Setting Resolver cacheTtl to 90 seconds")
+      resolver.copy(cacheTtl = Some(90))
+    }
+    case Some(_) => IO.pure(resolver)
   }
 
   private def invalidSchema(schema: IgluUri) =

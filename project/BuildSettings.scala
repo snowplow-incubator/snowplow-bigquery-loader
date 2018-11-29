@@ -19,10 +19,11 @@ import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
 import sbtbuildinfo._
 import sbtbuildinfo.BuildInfoKeys._
 
+
 object BuildSettings {
   lazy val commonSettings = Seq(
     organization          := "com.snowplowanalytics",
-    version               := "0.1.0-rc24",
+    version               := "0.1.0-rc25",
     scalaVersion          := "2.11.12",
     scalacOptions         ++= Seq("-target:jvm-1.8",
       "-deprecation",

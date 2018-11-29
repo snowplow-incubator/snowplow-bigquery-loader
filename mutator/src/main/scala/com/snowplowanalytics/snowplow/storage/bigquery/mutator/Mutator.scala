@@ -60,11 +60,12 @@ class Mutator private(resolver: Resolver,
       MutatorState(fields, _) <- state.read
       existingColumns          = fields.map(_.getName)
       fieldsToAdd              = filterFields(existingColumns, inventoryItems)
-      _                       <- log(s"Adding ${fieldsToAdd.map(_.igluUri).mkString(", ")}")
+      _                       <- if (fieldsToAdd.isEmpty) IO.unit else log(s"Adding ${fieldsToAdd.map(_.igluUri).mkString(", ")}")
       _                       <- fieldsToAdd.traverse_(item => addField(item).recoverWith(logAddItem(item))).timeout(30.seconds)
-      _                       <- log(s"Done")
+      _                       <- if (fieldsToAdd.isEmpty) IO.unit else log(s"Done")
       latestState             <- state.take
       _                       <- state.put(latestState.increment)
+      _                       <- if (fieldsToAdd.isEmpty) IO.unit else log(s"Updated state")
       _                       <- if (latestState.received % 100 == 0) log(latestState) else IO.unit
     } yield ()
 

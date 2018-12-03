@@ -49,35 +49,32 @@ import Mutator._
 class Mutator private(resolver: Resolver,
                       tableReference: TableReference,
                       state: MVar[IO, MutatorState],
-                      verbose: Boolean)
-                     (implicit t: Timer[IO], cs: ContextShift[IO])
-{
+                      verbose: Boolean) {
 
   /** Add all new columns to a table */
-  def updateTable(inventoryItems: List[InventoryItem]): IO[Unit] =
+  def updateTable(inventoryItems: List[InventoryItem])
+                 (implicit t: Timer[IO], cs: ContextShift[IO]): IO[Unit] =
     for {
       _                       <- if (verbose) log(s"Received ${inventoryItems.map(x => s"${x.shredProperty} ${x.igluUri}").mkString(", ")}") else IO.unit
       MutatorState(fields, _) <- state.read
       existingColumns          = fields.map(_.getName)
       fieldsToAdd              = filterFields(existingColumns, inventoryItems)
-      _                       <- if (fieldsToAdd.isEmpty) IO.unit else log(s"Adding ${fieldsToAdd.map(_.igluUri).mkString(", ")}")
       _                       <- fieldsToAdd.traverse_(item => addField(item).recoverWith(logAddItem(item))).timeout(30.seconds)
-      _                       <- if (fieldsToAdd.isEmpty) IO.unit else log(s"Done")
       latestState             <- state.take
       _                       <- state.put(latestState.increment)
-      _                       <- if (fieldsToAdd.isEmpty) IO.unit else log(s"Updated state")
       _                       <- if (latestState.received % 100 == 0) log(latestState) else IO.unit
     } yield ()
 
   /** Perform ALTER TABLE */
-  def addField(inventoryItem: InventoryItem): IO[Unit] =
+  def addField(inventoryItem: InventoryItem)
+              (implicit t: Timer[IO], cs: ContextShift[IO]): IO[Unit] =
     for {
       schema <- getSchema(inventoryItem.igluUri)
       field   = getField(inventoryItem, schema)
       _      <- tableReference.addField(field)
       st     <- state.take
       _      <- state.put(st.add(field))
-      _      <- log(s"added ${field.getName}")
+      _      <- log(s"Added ${field.getName}")
     } yield ()
 
   /** Transform Iglu Schema into valid BigQuery field */
@@ -96,6 +93,7 @@ class Mutator private(resolver: Resolver,
   def getSchema(igluUri: IgluUri)(implicit t: Timer[IO], cs: ContextShift[IO]): IO[Schema] =
     for {
       response <- IO(resolver.lookupSchema(igluUri)).timeout(10.seconds)
+      _ <- log(s"Received $response from Iglu registry")
       schema   <- Utils
         .fromValidation(response)
         .leftMap(errors => MutatorError(errors.toList.mkString(", ")))
@@ -145,7 +143,7 @@ object Mutator {
   def filterFields(existingColumns: Vector[String], newItems: List[InventoryItem]): List[InventoryItem] =
     newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
 
-  def initialize(env: Environment, verbose: Boolean)(implicit t: Timer[IO], cs: ContextShift[IO], c: Concurrent[IO]): IO[Either[String, Mutator]] = {
+  def initialize(env: Environment, verbose: Boolean)(implicit c: Concurrent[IO]): IO[Either[String, Mutator]] = {
     for {
       client <- TableReference.BigQueryTable.getClient
       table   = new TableReference.BigQueryTable(client, env.config.datasetId, env.config.tableId)

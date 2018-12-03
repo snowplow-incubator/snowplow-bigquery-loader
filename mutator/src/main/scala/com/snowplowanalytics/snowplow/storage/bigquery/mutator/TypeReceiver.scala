@@ -54,9 +54,9 @@ class TypeReceiver(queue: Queue[IO, List[InventoryItem]], verbose: Boolean) exte
       case Right(Nil) =>
         consumer.ack()
       case Right(inventoryItems) =>
-        queue.enqueue1(inventoryItems).unsafeRunAsync {
+        queue.enqueue1(inventoryItems).runAsync {
           callback => notificationCallback(consumer)(callback)
-        }
+        }.unsafeRunSync()
       case Left(_) =>
         notificationCallback(consumer)(items).unsafeRunSync()
     }
@@ -99,14 +99,10 @@ object TypeReceiver {
     new TypeReceiver(queue, verbose)
 
   def startSubscription(config: Config, listener: TypeReceiver)(implicit ec: ExecutionContext): IO[Unit] = {
-    def process = IO {
-      Future {
-        val subscription = ProjectSubscriptionName.of(config.projectId, config.typesSubscription)
-        val subscriber = Subscriber.newBuilder(subscription, listener).setHeaderProvider(UserAgent).build()
-        subscriber.startAsync().awaitRunning()
-      }
+    IO {
+      val subscription = ProjectSubscriptionName.of(config.projectId, config.typesSubscription)
+      val subscriber = Subscriber.newBuilder(subscription, listener).setHeaderProvider(UserAgent).build()
+      subscriber.startAsync().awaitRunning()
     }
-
-    IO.fromFuture(process)
   }
 }

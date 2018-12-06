@@ -37,7 +37,7 @@ object Forwarder {
     Duration.ZERO)
 
   def run(env: ForwarderEnvironment, sc: ScioContext): Unit = {
-    val input = PubsubIO.readStrings().fromSubscription(env.common.config.getFullFailedInsertsTopic)
+    val input = PubsubIO.readStrings().fromSubscription(env.getFullFailedInsertsSub)
     sc.customInput("failedInserts", input)
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)
       .saveAsCustomOutput("bigquery", getOutput.to(getTableReference(env)))

@@ -14,17 +14,17 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package forwarder
 
 import org.joda.time.Duration
-
 import com.spotify.scio.values.WindowOptions
 import com.spotify.scio.ScioContext
-
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO
 import org.apache.beam.sdk.transforms.windowing.{AfterProcessingTime, Repeatedly}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
-
 import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.CommandLine.ForwarderEnvironment
+import com.spotify.scio.bigquery.TableRow
+import org.apache.beam.sdk.transforms.SerializableFunction
+import org.apache.beam.sdk.util.Transport
 
 object Forwarder {
 
@@ -37,7 +37,7 @@ object Forwarder {
     Duration.ZERO)
 
   def run(env: ForwarderEnvironment, sc: ScioContext): Unit = {
-    val input = PubsubIO.readStrings().fromSubscription(env.common.config.getFullFailedInsertsTopic)
+    val input = PubsubIO.readStrings().fromSubscription(env.getFullFailedInsertsSub)
     sc.customInput("failedInserts", input)
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)
       .saveAsCustomOutput("bigquery", getOutput.to(getTableReference(env)))
@@ -49,6 +49,7 @@ object Forwarder {
   def getOutput: BigQueryIO.Write[String] =
     BigQueryIO.write()
       .withCreateDisposition(CreateDisposition.CREATE_NEVER)
+      .withFormatFunction(SerializeJsonRow)
       .withWriteDisposition(WriteDisposition.WRITE_APPEND)
       .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
       .withFailedInsertRetryPolicy(InsertRetryPolicy.retryTransientErrors())

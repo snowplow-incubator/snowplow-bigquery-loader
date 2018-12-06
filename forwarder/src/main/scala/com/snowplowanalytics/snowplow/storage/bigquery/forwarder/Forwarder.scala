@@ -40,7 +40,7 @@ object Forwarder {
       sc.optionsAs[DataflowPipelineOptions].setLabels(env.labels.asJava)
     }
 
-    val input = PubsubIO.readStrings().fromSubscription(env.common.config.getFullFailedInsertsTopic)
+    val input = PubsubIO.readStrings().fromSubscription(env.getFullFailedInsertsSub)
     sc.customInput("failedInserts", input)
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)
       .saveAsCustomOutput("bigquery", getOutput.to(getTableReference(env)))

@@ -49,6 +49,9 @@ object Forwarder {
   def getOutput: BigQueryIO.Write[String] =
     BigQueryIO.write()
       .withCreateDisposition(CreateDisposition.CREATE_NEVER)
+      .withFormatFunction(new SerializableFunction[String, TableRow] {
+        override def apply(input: String): TableRow = Transport.getJsonFactory.fromString(input, classOf[TableRow])
+      })  
       .withWriteDisposition(WriteDisposition.WRITE_APPEND)
       .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
       .withFailedInsertRetryPolicy(InsertRetryPolicy.retryTransientErrors())

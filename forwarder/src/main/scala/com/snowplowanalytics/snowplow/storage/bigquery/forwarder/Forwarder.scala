@@ -18,6 +18,9 @@ import org.joda.time.Duration
 import com.spotify.scio.values.WindowOptions
 import com.spotify.scio.ScioContext
 
+import org.joda.time.Duration
+import com.spotify.scio.values.WindowOptions
+import com.spotify.scio.ScioContext
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO
@@ -49,6 +52,7 @@ object Forwarder {
   def getOutput: BigQueryIO.Write[String] =
     BigQueryIO.write()
       .withCreateDisposition(CreateDisposition.CREATE_NEVER)
+      .withFormatFunction(SerializeJsonRow)  
       .withWriteDisposition(WriteDisposition.WRITE_APPEND)
       .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
       .withFailedInsertRetryPolicy(InsertRetryPolicy.retryTransientErrors())

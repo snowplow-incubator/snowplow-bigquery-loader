@@ -62,7 +62,8 @@ object TableReference {
     def create(client: BigQuery, datasetId: String, tableId: String): IO[Table] = IO {
       val id = TableId.of(datasetId, tableId)
       val schema = BqSchema.of(Atomic.table.map(Adapter.adaptField).asJava)
-      val definition = StandardTableDefinition.newBuilder().setSchema(schema).build()
+      val partition = TimePartitioning.newBuilder(TimePartitioning.Type.DAY).setField("derived_tstamp").build()
+      val definition = StandardTableDefinition.newBuilder().setSchema(schema).setTimePartitioning(partition).build()
       val tableInfo = TableInfo.newBuilder(id, definition).build()
       client.create(tableInfo)
     }

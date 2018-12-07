@@ -22,9 +22,6 @@ import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO
 import org.apache.beam.sdk.transforms.windowing.{AfterProcessingTime, Repeatedly}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.CommandLine.ForwarderEnvironment
-import com.spotify.scio.bigquery.TableRow
-import org.apache.beam.sdk.transforms.SerializableFunction
-import org.apache.beam.sdk.util.Transport
 
 object Forwarder {
 

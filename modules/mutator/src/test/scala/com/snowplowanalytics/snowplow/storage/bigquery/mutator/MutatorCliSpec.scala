@@ -16,6 +16,8 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
 import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.MutatorCli._
 
+import com.google.cloud.bigquery.TimePartitioning
+
 import org.specs2.mutable.Specification
 
 class MutatorCliSpec extends Specification {
@@ -35,9 +37,20 @@ class MutatorCliSpec extends Specification {
       }
 
       "for create subcommand" in {
-        val expected = MutatorCommand.Create(mutatorEnv)
+        val expected = MutatorCommand.Create(
+          mutatorEnv,
+          Atomic.table.find(_.name == "derived_tstamp").get,
+          TimePartitioning.Type.DAY,
+          true
+        )
         val result =
-          MutatorCli.parse(Seq("create", "--config", validHoconB64, "--resolver", validResolverJsonB64))
+          MutatorCli.parse(Seq(
+            "create",
+            "--config", validHoconB64,
+            "--resolver", validResolverJsonB64,
+            "--partitionField", "derived_tstamp",
+            "--partitioningType", "DAY",
+            "--requirePartitionFilter"))
 
         result must beRight(expected)
       }

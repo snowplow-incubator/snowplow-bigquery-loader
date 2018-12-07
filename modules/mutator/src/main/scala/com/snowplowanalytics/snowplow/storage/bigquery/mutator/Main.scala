@@ -43,7 +43,7 @@ object Main extends IOApp {
           client <- TableReference.BigQueryTable.getClient
           _ <- TableReference
             .BigQueryTable
-            .create(client, env.projectId, env.config.output.good.datasetId, env.config.output.good.tableId)
+            .create(c, client, env.projectId, env.config.output.good.datasetId, env.config.output.good.tableId)
         } yield ExitCode.Success
 
       case Right(c: MutatorCommand.AddColumn) =>

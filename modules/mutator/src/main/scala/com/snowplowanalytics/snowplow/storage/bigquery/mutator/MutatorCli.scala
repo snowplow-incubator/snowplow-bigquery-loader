@@ -13,12 +13,16 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import com.snowplowanalytics.iglu.core.SchemaKey
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field, Type => DataType}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{Codecs, LoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.MutatorEnvironment
 
+import com.google.cloud.bigquery.TimePartitioning
+
 import cats.implicits._
+import cats.data.NonEmptyList
 import com.monovore.decline._
 
 /** Mutator-specific CLI configuration */
@@ -42,16 +46,41 @@ object MutatorCli {
 
   private val verbose: Opts[Boolean] = Opts.flag("verbose", "Provide debug output").orFalse
 
+  private val partitionField: Opts[Field] = Opts.option[String]("partitionField", "Field that table partitioned by").mapValidated {
+    fieldName =>
+      val fields = Atomic.table.appended(LoaderRow.LoadTstampField)
+      fields.find(_.name == fieldName).toValidNel[String]("Field does not exist")
+        .ensure(NonEmptyList.one("Field's type isn't timestamp"))(_.fieldType == DataType.Timestamp)
+  }
+
+  // Currently, only "day" type is supported by the used version of Google Cloud SDK however in the newer versions
+  // other types such as "hour", "month" and "year" are also supported. Therefore, this option is added already.
+  private val partitioningType: Opts[TimePartitioning.Type] = Opts.option[String]("partitioningType", "The type of time partitioning")
+    .withDefault("day")
+    .mapValidated {
+      partitioningType => partitioningType.toLowerCase match {
+        case "day" => TimePartitioning.Type.DAY.validNel
+        case _ => "Partitioning type needs to be one of the followings: [DAY]".invalidNel
+      }
+    }
+
+  private val requirePartitionFilter: Opts[Boolean] = Opts.flag("requirePartitionFilter", "Make a partition filter required for queries").orFalse
+
   sealed trait MutatorCommand extends Product with Serializable
   object MutatorCommand {
-    final case class Create(env: MutatorEnvironment) extends MutatorCommand
+    final case class Create(env: MutatorEnvironment,
+                            partitionField: Field,
+                            partitioningType: TimePartitioning.Type,
+                            requirePartitionFilter: Boolean) extends MutatorCommand
     final case class Listen(env: MutatorEnvironment, verbose: Boolean) extends MutatorCommand
     final case class AddColumn(env: MutatorEnvironment, schema: SchemaKey, property: ShredProperty)
         extends MutatorCommand
   }
 
   private val createCmd: Opts[MutatorCommand.Create] =
-    Opts.subcommand("create", "Create empty table and exit")(options.map(MutatorCommand.Create.apply))
+    Opts.subcommand("create", "Create empty table and exit")(
+      (options, partitionField, partitioningType, requirePartitionFilter).mapN(MutatorCommand.Create.apply)
+    )
   private val listenCmd: Opts[MutatorCommand.Listen] =
     Opts.subcommand("listen", "Run mutator and listen for new types")(
       (options, verbose).mapN(MutatorCommand.Listen.apply)

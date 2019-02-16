@@ -29,8 +29,8 @@ object CommandLine {
 
   val schema: Opts[SchemaKey] = Opts.option[String]("schema", "Iglu URI to add to the table").mapValidated { schema =>
     SchemaKey.fromUri(schema) match {
-      case Some(schemaKey) => schemaKey.validNel
-      case None => s"$schema is not a valid Iglu URI".invalidNel
+      case Right(schemaKey) => schemaKey.validNel
+      case Left(error) => s"$schema is not a valid Iglu URI, ${error.code}".invalidNel
     }
   }
 

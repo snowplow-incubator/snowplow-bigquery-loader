@@ -82,12 +82,12 @@ object TypeReceiver {
 
   /** Decode inventory items either in legacy (non-self-describing) format or as `shredded_types` schema'ed */
   def decodeItems(json: Json): Decoder.Result[List[InventoryItem]] = {
-    json.as[List[InventoryItem]].orElse { json.toData match {
-      case None =>
-        DecodingFailure("JSON payload is not legacy format neither self-describing", Nil).asLeft
-      case Some(SelfDescribingData(SchemaKey("com.snowplowanalytics.snowplow", "shredded_type", "jsonschema", SchemaVer.Full(1, _, _)), data)) =>
+    json.as[List[InventoryItem]].orElse { SelfDescribingData.parse(json) match {
+      case Left(error) =>
+        DecodingFailure(s"JSON payload is not legacy format neither self-describing, ${error.code}", Nil).asLeft
+      case Right(SelfDescribingData(SchemaKey("com.snowplowanalytics.snowplow", "shredded_type", "jsonschema", SchemaVer.Full(1, _, _)), data)) =>
         data.as[InventoryItem].map(item => List(item))
-      case Some(SelfDescribingData(key, _)) =>
+      case Right(SelfDescribingData(key, _)) =>
         DecodingFailure(s"JSON payload has type ${key.toSchemaUri}, which is unknown", Nil).asLeft
     } }
   }

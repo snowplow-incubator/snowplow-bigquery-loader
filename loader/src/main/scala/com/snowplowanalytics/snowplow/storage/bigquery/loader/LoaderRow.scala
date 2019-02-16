@@ -100,18 +100,18 @@ object LoaderRow {
     * where key is a column name and value is ready to load array of rows
     */
   def parseSelfDescribingJson(resolver: Resolver)(payload: JObject): ValidatedNel[String, List[(String, Any)]] = {
-    CommonUtils.toCirce(payload).toData.toList.traverse[ValidatedNel[String, ?], List[(String, Any)]] {
+    SelfDescribingData.parse(CommonUtils.toCirce(payload)).toOption.toList.traverse[ValidatedNel[String, ?], List[(String, Any)]] {
       case SelfDescribingData(SchemaKey("com.snowplowanalytics.snowplow", "contexts", _, SchemaVer.Full(1,_,_)), payload) =>
-        val contexts = payload.asArray.getOrElse(Vector.empty).flatMap(_.toData.toVector)
+        val contexts = payload.asArray.getOrElse(Vector.empty).flatMap(x => SelfDescribingData.parse(x).toOption.toVector)
         groupContexts(resolver, contexts)
       case SelfDescribingData(SchemaKey("com.snowplowanalytics.snowplow", "unstruct_event", _, SchemaVer.Full(1, _, _)), uePayload) =>
-        uePayload.toData match {
-          case Some(SelfDescribingData(key, json)) =>
+        SelfDescribingData.parse(uePayload) match {
+          case Right(SelfDescribingData(key, json)) =>
             val columnName = Schema.getColumnName(InventoryItem(UnstructEvent, key.toSchemaUri))
             transformJson(resolver)(key)(json).map { row =>
               List((columnName, Adapter.adaptRow(row)))
             }
-          case None => "Cannot decode unstruct_event as self-describing JSON".invalidNel[List[(String, Any)]]
+          case Left(error) => s"Cannot decode unstruct_event as self-describing JSON, ${error.code}".invalidNel[List[(String, Any)]]
         }
       case _ => s"Cannot recognize JSON payload as any known self-describing type ${compact(payload)}".invalidNel[List[(String, Any)]]
     } map(_.flatten)

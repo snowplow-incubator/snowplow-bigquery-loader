@@ -22,7 +22,8 @@ import com.google.cloud.pubsub.v1.Publisher
 import com.google.pubsub.v1.PubsubMessage
 import com.google.protobuf.ByteString
 
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data._
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
+import com.snowplowanalytics.iglu.core.{ SchemaKey, SchemaVer }
 
 import fs2._
 
@@ -46,14 +47,14 @@ object TypePublisher {
   implicit val timer = IO.timer(global)
 
   val inventoryItems = List(
-    InventoryItem(Contexts(CustomContexts), "iglu:com.mparticle.snowplow/appstatetransition_event/jsonschema/1-0-0"),
-    InventoryItem(Contexts(DerivedContexts), "iglu:com.snowplowanalytics.snowplow/application_background/jsonschema/1-0-0"),
-    InventoryItem(Contexts(CustomContexts), "iglu:com.snowplowanalytics.snowplow/ad_click/jsonschema/1-0-0"),
-    InventoryItem(Contexts(CustomContexts), "iglu:com.snowplowanalytics.snowplow/ua_parser_context/jsonschema/1-0-0"),
-    InventoryItem(UnstructEvent, "iglu:com.snowplowanalytics.snowplow/payload_data/jsonschema/1-0-3")
+    ShreddedType(Contexts(CustomContexts), SchemaKey("com.mparticle.snowplow","appstatetransition_event","jsonschema",SchemaVer.Full(1,0,0))),
+    ShreddedType(Contexts(DerivedContexts),SchemaKey("com.snowplowanalytics.snowplow","application_background","jsonschema",SchemaVer.Full(1,0,0))),
+    ShreddedType(Contexts(CustomContexts), SchemaKey("com.snowplowanalytics.snowplow","ad_click","jsonschema",SchemaVer.Full(1,0,0))),
+    ShreddedType(Contexts(CustomContexts), SchemaKey("com.snowplowanalytics.snowplow","ua_parser_context","jsonschema",SchemaVer.Full(1,0,0))),
+    ShreddedType(UnstructEvent, SchemaKey("com.snowplowanalytics.snowplow","payload_data","jsonschema",SchemaVer.Full(1,0,3)))
   )
 
-  def run(topic: String, items: List[InventoryItem]): Unit = {
+  def run(topic: String, items: List[ShreddedType]): Unit = {
     val bracket =
       Stream.resource(Resource.make(newPublisher(topic))(shutdown))
 
@@ -67,9 +68,9 @@ object TypePublisher {
     ticks.zip(appStream).compile.drain.unsafeRunSync()
   }
 
-  private def publish(publisher: Publisher, inventoryItem: InventoryItem): IO[Unit] = {
+  private def publish(publisher: Publisher, inventoryItem: ShreddedType): IO[Unit] = {
     val message = inventoryToMessage(inventoryItem)
-    IO(println(s"Publishing ${inventoryItem.igluUri}")).flatMap(_ => IO(publisher.publish(message)))
+    IO(println(s"Publishing ${inventoryItem.schemaKey.toSchemaUri}")).flatMap(_ => IO(publisher.publish(message)))
   }
 
   private def newPublisher(topic: String): IO[Publisher] =
@@ -78,6 +79,6 @@ object TypePublisher {
   private def shutdown(p: Publisher): IO[Unit] =
     IO(p.shutdown())
 
-  private def inventoryToMessage(inventoryItem: InventoryItem): PubsubMessage =
+  private def inventoryToMessage(inventoryItem: ShreddedType): PubsubMessage =
     PubsubMessage.newBuilder().setData(ByteString.copyFromUtf8(List(inventoryItem).asJson.noSpaces)).build()
 }

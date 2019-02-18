@@ -15,14 +15,16 @@ package loader
 
 import com.google.api.services.bigquery.model.TableReference
 import org.joda.time.Duration
-import org.json4s.jackson.JsonMethods.compact
 import com.spotify.scio.ScioContext
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
+
 import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
+
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
+
 import common.Config._
 import common.Codecs.toPayload
 import org.json4s.JsonAST.JValue
@@ -39,8 +41,8 @@ object Loader {
     Duration.ZERO)
 
   /** Side output for shredded types */
-  val ObservedTypesOutput: SideOutput[Set[InventoryItem]] =
-    SideOutput[Set[InventoryItem]]()
+  val ObservedTypesOutput: SideOutput[Set[ShreddedType]] =
+    SideOutput[Set[ShreddedType]]()
 
   /** Emit observed types every 10 minutes / workers */
   val TypesWindow: Duration =
@@ -107,11 +109,11 @@ object Loader {
   }
 
   /** Group types into smaller chunks */
-  def aggregateTypes(types: SCollection[Set[InventoryItem]]): SCollection[String] =
+  def aggregateTypes(types: SCollection[Set[ShreddedType]]): SCollection[String] =
     types
       .withFixedWindows(TypesWindow, options = OutputWindowOptions)
       .withName("aggregateTypes")
-      .aggregate(Set.empty[InventoryItem])(_ ++ _, _ ++ _)
+      .aggregate(Set.empty[ShreddedType])(_ ++ _, _ ++ _)
       .withName("withIntervalWindow")
       .withWindow[IntervalWindow]
       .swap
@@ -119,7 +121,7 @@ object Loader {
       .map { case (_, groupedSets) => groupedSets.toSet.flatten }
       .withName("filterNonEmpty")
       .filter(_.nonEmpty)
-      .map { types => compact(toPayload(types)) }
+      .map { types => toPayload(types).noSpaces }
 
   /** Read data from PubSub topic and transform to ready to load rows */
   def getData(resolver: JValue,

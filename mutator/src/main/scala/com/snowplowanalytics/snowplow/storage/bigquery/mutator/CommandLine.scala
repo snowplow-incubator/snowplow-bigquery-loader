@@ -16,9 +16,11 @@ package mutator
 import cats.implicits._
 import cats.effect.IO
 import com.monovore.decline._
+
 import com.snowplowanalytics.iglu.core.SchemaKey
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.ShredProperty
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
+
+import common.Codecs
 import common.Config._
 
 /** Mutator-specific CLI configuration */

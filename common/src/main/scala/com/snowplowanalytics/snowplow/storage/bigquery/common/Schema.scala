@@ -13,20 +13,17 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
 object Schema {
   /** Convert SchemaKey into BigQuery-compatible column name */
-  def getColumnName(inventoryItem: InventoryItem): String =
-    SchemaKey.fromUri(inventoryItem.igluUri) match {
-      case Right(SchemaKey(vendor, name, _, SchemaVer.Full(m, r, a))) =>
-        val vendor_ = vendor.replaceAll("""[\.\-]""", "_").toLowerCase
-        val name_ = normalizeCase(name)
-        val version = s"${m}_${r}_$a"
-        s"${inventoryItem.shredProperty.prefix}${vendor_}_${name_}_$version"
-      case Left(error) =>
-        throw new RuntimeException(s"Error parsing Iglu URI ${inventoryItem.igluUri}, ${error.code}")
-    }
+  def getColumnName(item: ShreddedType): String = {
+    val SchemaVer.Full(m, r, a) = item.schemaKey.version
+    val vendor_ = item.schemaKey.vendor.replaceAll("""[\.\-]""", "_").toLowerCase
+    val name_ = normalizeCase(item.schemaKey.name)
+    val version = s"${m}_${r}_$a"
+    s"${item.shredProperty.prefix}${vendor_}_${name_}_$version"
+  }
 
   def normalizeCase(string: String): String =
     string

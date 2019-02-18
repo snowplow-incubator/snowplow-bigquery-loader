@@ -12,10 +12,17 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
+import java.util.UUID
+import java.time.Instant
+
 import scalaz.Success
 
 import org.json4s.jackson.JsonMethods.{ asJsonNode, parse => parseJson }
+
 import com.fasterxml.jackson.databind.JsonNode
+
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
+import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{ Contexts, UnstructEvent }
 
 import com.snowplowanalytics.iglu.client.{Resolver, SchemaKey, Validated}
 import com.snowplowanalytics.iglu.client.repositories.{RepositoryRef, RepositoryRefConfig}
@@ -99,6 +106,22 @@ object SpecHelpers {
     SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", "1-0-0") -> geolocation100,
     SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", "1-1-0") -> geolocation110
   )
+
+  def emptyEvent(id: UUID, collectorTstamp: Instant, vCollector: String, vTstamp: String): Event =
+    Event(None, None, None, collectorTstamp, None, None, id, None, None, None, vCollector, vTstamp, None, None, None,
+      None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+      None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+      Contexts(Nil), None, None, None, None, None, UnstructEvent(None), None, None, None, None, None, None, None, None,
+      None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+      None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+      None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+      Contexts(Nil), None, None, None, None, None, None, None, None)
+
+  val ExampleEvent = emptyEvent(
+    UUID.fromString("ba553b7f-63d5-47ad-8697-06016b472c34"),
+    Instant.ofEpochMilli(1550477167580L),
+    "bq-loader-test",
+    "bq-loader-test")
 
   val resolver = Resolver(10, InMemoryRef(schemas))
 }

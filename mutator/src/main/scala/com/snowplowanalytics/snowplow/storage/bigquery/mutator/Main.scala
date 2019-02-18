@@ -17,10 +17,10 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import cats.implicits._
 import cats.effect.{ExitCode, IO, IOApp}
 
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
 object Main extends IOApp {
-  def sink(mutator: Mutator): fs2.Sink[IO, List[InventoryItem]] =
+  def sink(mutator: Mutator): fs2.Sink[IO, List[ShreddedType]] =
     _.parEvalMap(4)(items => mutator.updateTable(items))
 
   def run(args: List[String]): IO[ExitCode] = {
@@ -48,7 +48,7 @@ object Main extends IOApp {
         for {
           env     <- c.getEnv
           mutator <- Mutator.initialize(env, true).map(_.fold(e => throw new RuntimeException(e), identity))
-          _       <- mutator.addField(InventoryItem(c.property, c.schema.toSchemaUri))
+          _       <- mutator.addField(ShreddedType(c.property, c.schema))
         } yield ExitCode.Success
 
       case Left(help) =>

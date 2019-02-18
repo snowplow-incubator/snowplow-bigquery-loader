@@ -31,7 +31,7 @@ import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
 
 import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData, SchemaVer}
 import com.snowplowanalytics.iglu.core.circe.implicits._
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.InventoryItem
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
@@ -40,10 +40,10 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
   * PubSub consumer, listening for shredded types and
   * enqueing them into common type queue
   */
-class TypeReceiver(queue: Queue[IO, List[InventoryItem]], verbose: Boolean) extends MessageReceiver {
+class TypeReceiver(queue: Queue[IO, List[ShreddedType]], verbose: Boolean) extends MessageReceiver {
 
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
-    val items: Either[Error, List[InventoryItem]] = for {
+    val items: Either[Error, List[ShreddedType]] = for {
       json <- parse(message.getData.toStringUtf8)
       invetoryItems <- TypeReceiver.decodeItems(json)
     } yield invetoryItems
@@ -81,21 +81,21 @@ object TypeReceiver {
     FixedHeaderProvider.create("User-Agent", generated.BuildInfo.userAgent)
 
   /** Decode inventory items either in legacy (non-self-describing) format or as `shredded_types` schema'ed */
-  def decodeItems(json: Json): Decoder.Result[List[InventoryItem]] = {
-    json.as[List[InventoryItem]].orElse { SelfDescribingData.parse(json) match {
+  def decodeItems(json: Json): Decoder.Result[List[ShreddedType]] = {
+    json.as[List[ShreddedType]].orElse { SelfDescribingData.parse(json) match {
       case Left(error) =>
         DecodingFailure(s"JSON payload is not legacy format neither self-describing, ${error.code}", Nil).asLeft
       case Right(SelfDescribingData(SchemaKey("com.snowplowanalytics.snowplow", "shredded_type", "jsonschema", SchemaVer.Full(1, _, _)), data)) =>
-        data.as[InventoryItem].map(item => List(item))
+        data.as[ShreddedType].map(item => List(item))
       case Right(SelfDescribingData(key, _)) =>
         DecodingFailure(s"JSON payload has type ${key.toSchemaUri}, which is unknown", Nil).asLeft
     } }
   }
 
-  def initQueue(size: Int)(implicit cs: ContextShift[IO]): IO[Queue[IO, List[InventoryItem]]] =
-    Queue.bounded[IO, List[InventoryItem]](size)
+  def initQueue(size: Int)(implicit cs: ContextShift[IO]): IO[Queue[IO, List[ShreddedType]]] =
+    Queue.bounded[IO, List[ShreddedType]](size)
 
-  def apply(queue: Queue[IO, List[InventoryItem]], verbose: Boolean): TypeReceiver =
+  def apply(queue: Queue[IO, List[ShreddedType]], verbose: Boolean): TypeReceiver =
     new TypeReceiver(queue, verbose)
 
   def startSubscription(config: Config, listener: TypeReceiver): IO[Unit] = {

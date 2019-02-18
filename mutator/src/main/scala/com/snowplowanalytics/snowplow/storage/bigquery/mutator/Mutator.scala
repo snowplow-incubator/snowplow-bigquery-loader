@@ -17,26 +17,21 @@ import java.time.Instant
 
 import scala.util.control.NonFatal
 import scala.concurrent.duration._
-
 import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent.MVar
-
 import org.json4s.jackson.JsonMethods.fromJsonNode
-
 import com.google.cloud.bigquery.Field
-
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.implicits._
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field => DdlField}
-
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data.{IgluUri, InventoryItem}
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data
-
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
 import common.{Adapter, Utils, Schema => LoaderSchema}
+import com.snowplowanalytics.iglu.core.SchemaKey
 import common.Config._
 import Mutator._
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
 /**
   * Mutator is stateful worker that emits `alter table` requests.
@@ -52,10 +47,10 @@ class Mutator private(resolver: Resolver,
                       verbose: Boolean) {
 
   /** Add all new columns to a table */
-  def updateTable(inventoryItems: List[InventoryItem])
+  def updateTable(inventoryItems: List[Data.ShreddedType])
                  (implicit t: Timer[IO], cs: ContextShift[IO]): IO[Unit] =
     for {
-      _                       <- if (verbose) log(s"Received ${inventoryItems.map(x => s"${x.shredProperty} ${x.igluUri}").mkString(", ")}") else IO.unit
+      _                       <- if (verbose) log(s"Received ${inventoryItems.map(x => s"${x.shredProperty} ${x.schemaKey.toSchemaUri}").mkString(", ")}") else IO.unit
       MutatorState(fields, _) <- state.read
       existingColumns          = fields.map(_.getName)
       fieldsToAdd              = filterFields(existingColumns, inventoryItems)
@@ -66,10 +61,10 @@ class Mutator private(resolver: Resolver,
     } yield ()
 
   /** Perform ALTER TABLE */
-  def addField(inventoryItem: InventoryItem)
+  def addField(inventoryItem: ShreddedType)
               (implicit t: Timer[IO], cs: ContextShift[IO]): IO[Unit] =
     for {
-      schema <- getSchema(inventoryItem.igluUri)
+      schema <- getSchema(inventoryItem.schemaKey)
       field   = getField(inventoryItem, schema)
       _      <- tableReference.addField(field)
       st     <- state.take
@@ -78,7 +73,7 @@ class Mutator private(resolver: Resolver,
     } yield ()
 
   /** Transform Iglu Schema into valid BigQuery field */
-  def getField(inventoryItem: InventoryItem, schema: Schema): Field = {
+  def getField(inventoryItem: Data.ShreddedType, schema: Schema): Field = {
     val mode = inventoryItem.shredProperty match {
       case Data.UnstructEvent => Mode.Nullable
       case Data.Contexts(_) => Mode.Repeated
@@ -90,9 +85,9 @@ class Mutator private(resolver: Resolver,
   }
 
   /** Receive the JSON Schema from the Iglu registry */
-  def getSchema(igluUri: IgluUri)(implicit t: Timer[IO], cs: ContextShift[IO]): IO[Schema] =
+  def getSchema(igluUri: SchemaKey)(implicit t: Timer[IO], cs: ContextShift[IO]): IO[Schema] =
     for {
-      response <- IO(resolver.lookupSchema(igluUri)).timeout(10.seconds)
+      response <- IO(resolver.lookupSchema(igluUri.toSchemaUri)).timeout(10.seconds)
       _ <- log(s"Received $response from Iglu registry")
       schema   <- Utils
         .fromValidation(response)
@@ -113,10 +108,10 @@ class Mutator private(resolver: Resolver,
     }
   }
 
-  private def logAddItem(item: InventoryItem): PartialFunction[Throwable, IO[Unit]] = {
+  private def logAddItem(item: Data.ShreddedType): PartialFunction[Throwable, IO[Unit]] = {
     case NonFatal(error) =>
       IO {
-        System.err.println(s"Failed to add ${item.igluUri}")
+        System.err.println(s"Failed to add ${item.schemaKey.toSchemaUri} as ${item.shredProperty.name}")
         error.printStackTrace()
         System.out.println("Continuing...")
       }
@@ -140,7 +135,7 @@ object Mutator {
       MutatorState(fields :+ field, received)
   }
 
-  def filterFields(existingColumns: Vector[String], newItems: List[InventoryItem]): List[InventoryItem] =
+  def filterFields(existingColumns: Vector[String], newItems: List[ShreddedType]): List[ShreddedType] =
     newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
 
   def initialize(env: Environment, verbose: Boolean)(implicit c: Concurrent[IO]): IO[Either[String, Mutator]] = {
@@ -163,7 +158,7 @@ object Mutator {
     case Some(_) => IO.pure(resolver)
   }
 
-  private def invalidSchema(schema: IgluUri) =
-    MutatorError(s"Schema [$schema] cannot be parsed")
+  private def invalidSchema(schema: SchemaKey) =
+    MutatorError(s"Schema [${schema.toSchemaUri}] cannot be parsed")
 
 }

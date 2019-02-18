@@ -16,7 +16,8 @@ import io.circe.Json
 
 import org.specs2.Specification
 
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data._
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
+import com.snowplowanalytics.iglu.core.{ SchemaKey, SchemaVer }
 
 
 class TypeReceiverSpec extends Specification { def is = s2"""
@@ -37,8 +38,8 @@ class TypeReceiverSpec extends Specification { def is = s2"""
 
     val result = TypeReceiver.decodeItems(input)
     val expected = List(
-      InventoryItem(UnstructEvent, "iglu:com.snowplowanalytics/event/jsonschema/1-0-0"),
-      InventoryItem(Contexts(CustomContexts), "iglu:com.snowplowanalytics/context/jsonschema/1-0-0")
+      ShreddedType(UnstructEvent, SchemaKey("com.snowplowanalytics","event","jsonschema",SchemaVer.Full(1,0,0))),
+      ShreddedType(Contexts(CustomContexts), SchemaKey("com.snowplowanalytics","context","jsonschema",SchemaVer.Full(1,0,0)))
     )
 
     result must beRight(expected)

@@ -19,17 +19,19 @@ import cats.instances.list._
 import cats.syntax.either._
 import cats.syntax.option._
 
-import org.json4s.JsonAST.{JArray, JValue}
-import org.json4s.JsonDSL._
+import com.snowplowanalytics.iglu.core.SchemaKey
 
-import com.snowplowanalytics.snowplow.analytics.scalasdk.json.Data._
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 
 object Codecs {
-  def toPayload(item: InventoryItem): JValue =
-    ("schema" -> item.igluUri) ~ ("type" -> item.shredProperty.name.toUpperCase)
+  def toPayload(item: ShreddedType): Json =
+    Json.fromFields(List(
+      "schema" -> Json.fromString(item.schemaKey.toSchemaUri),
+      "type" -> Json.fromString(item.shredProperty.name.toUpperCase)
+    ))
 
-  def toPayload(items: Set[InventoryItem]): JValue =
-    JArray(items.toList.map(toPayload))
+  def toPayload(items: Set[ShreddedType]): Json =
+    Json.fromValues(items.toList.map(toPayload))
 
   private val ContextsName = "CONTEXTS"
   private val DerivedContextsName = "DERIVED_CONTEXTS"
@@ -62,28 +64,33 @@ object Codecs {
       }
     }
 
-  implicit val inventoryDecoder: Decoder[InventoryItem] =
-    new Decoder[InventoryItem] {
-      def apply(c: HCursor): Decoder.Result[InventoryItem] =
+  implicit val inventoryDecoder: Decoder[ShreddedType] =
+    new Decoder[ShreddedType] {
+      def apply(c: HCursor): Decoder.Result[ShreddedType] =
         c.value.asObject match {
           case Some(obj) =>
             val map = obj.toMap
             for {
-              schema <- map.get("schema").liftTo[Decoder.Result](DecodingFailure("Property \"schema\" is not present", c.history))
-              schemaStr <- schema.asString.liftTo[Decoder.Result](DecodingFailure("Property \"schema\" is not a string", c.history))
-              shredPropertyStr <- map.get("type").liftTo[Decoder.Result](DecodingFailure("Property \"type\" is not present", c.history))
+              schema <- map.get("schema")
+                .liftTo[Decoder.Result](DecodingFailure("Property \"schema\" is not present", c.history))
+              schemaStr <- schema.asString
+                .liftTo[Decoder.Result](DecodingFailure("Property \"schema\" is not a string", c.history)).flatMap {
+                x => SchemaKey.fromUri(x).leftMap(e => DecodingFailure(e.code, Nil))
+              }
+              shredPropertyStr <- map
+                .get("type").liftTo[Decoder.Result](DecodingFailure("Property \"type\" is not present", c.history))
               shredProperty <- shredPropertyStr.as[ShredProperty]
-            } yield InventoryItem(shredProperty, schemaStr)
+            } yield ShreddedType(shredProperty, schemaStr)
           case None =>
             DecodingFailure(s"Cannot decode InventoryItem, ${c.value} is not an object", c.history).asLeft
         }
     }
 
-  implicit val inventoryEncoder: Encoder[InventoryItem] =
-    new Encoder[InventoryItem] {
-      def apply(a: InventoryItem): Json = {
+  implicit val inventoryEncoder: Encoder[ShreddedType] =
+    new Encoder[ShreddedType] {
+      def apply(a: ShreddedType): Json = {
         val items = List(
-          "schema" -> Json.fromString(a.igluUri),
+          "schema" -> Json.fromString(a.schemaKey.toSchemaUri),
           "type" -> shredPropertyEncoder(a.shredProperty)
         )
 
@@ -91,6 +98,6 @@ object Codecs {
       }
     }
 
-  implicit val inventoryListEncoder: Encoder[List[InventoryItem]] =
+  implicit val inventoryListEncoder: Encoder[List[ShreddedType]] =
     Encoder.instance(items => Json.fromValues(items.map(inventoryEncoder.apply)))
 }

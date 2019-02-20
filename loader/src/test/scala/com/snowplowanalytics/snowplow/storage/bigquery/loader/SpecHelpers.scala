@@ -14,97 +14,82 @@ package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
 import java.util.UUID
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 
-import scalaz.Success
+import cats.Id
+import cats.effect.Clock
 
-import org.json4s.jackson.JsonMethods.{ asJsonNode, parse => parseJson }
-
-import com.fasterxml.jackson.databind.JsonNode
+import io.circe.literal._
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
-import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{ Contexts, UnstructEvent }
+import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
 
-import com.snowplowanalytics.iglu.client.{Resolver, SchemaKey, Validated}
-import com.snowplowanalytics.iglu.client.repositories.{RepositoryRef, RepositoryRefConfig}
+import com.snowplowanalytics.iglu.core.{SchemaVer, SchemaMap, SelfDescribingSchema}
+import com.snowplowanalytics.iglu.client.Resolver
+import com.snowplowanalytics.iglu.client.resolver.registries.Registry
 
 object SpecHelpers {
 
-  case class InMemoryRef(schemas: Map[SchemaKey, JsonNode]) extends RepositoryRef {
-
-    val classPriority: Int = 1
-    val descriptor: String = "In memory registry"
-    val config: RepositoryRefConfig = RepositoryRefConfig(descriptor, 1, List("com.snowplowanalytics"))
-
-    def lookupSchema(schemaKey: SchemaKey): Validated[Option[JsonNode]] =
-      Success(schemas.get(schemaKey))
-  }
-
-  private val adClick = asJsonNode(parseJson("""{
-    |	"$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
-    |	"description": "Schema for an ad click event",
-    |	"self": {	"vendor":"com.snowplowanalytics.snowplow","name":"ad_click","format":"jsonschema","version":"1-0-0"},
-    |	"type": "object",
-    |	"properties": {
-    |		"clickId": {"type": "string"},
-    |		"impressionId": {"type": "string"},
-    |		"zoneId": {"type": "string"},
-    |		"bannerId": {"type": "string"},
-    |		"campaignId": {"type": "string"},
-    |		"advertiserId": {"type": "string"},
-    |		"targetUrl": {"type": "string","minLength":1},
-    |		"costModel": {"enum": ["cpa", "cpc", "cpm"]},
-    |		"cost": {	"type": "number",	"minimum": 0}
-    |	},
-    |	"required": ["targetUrl"],
-    |	"dependencies": {"cost": ["costModel"]},
-    |	"additionalProperties": false
-    |}
-    |""".stripMargin))
-  private val geolocation100 = asJsonNode(parseJson(
+  private val adClick = json"""{
+    	"$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+    	"description": "Schema for an ad click event",
+    	"type": "object",
+    	"properties": {
+    		"clickId": {"type": "string"},
+    		"impressionId": {"type": "string"},
+    		"zoneId": {"type": "string"},
+    		"bannerId": {"type": "string"},
+    		"campaignId": {"type": "string"},
+    		"advertiserId": {"type": "string"},
+    		"targetUrl": {"type": "string","minLength":1},
+    		"costModel": {"enum": ["cpa", "cpc", "cpm"]},
+    		"cost": {	"type": "number",	"minimum": 0}
+    	},
+    	"required": ["targetUrl"],
+    	"dependencies": {"cost": ["costModel"]},
+    	"additionalProperties": false
+    }
     """
-      |{
-      |"$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
-      |"description": "Schema for client geolocation contexts",
-      |"self": {"vendor": "com.snowplowanalytics.snowplow","name": "geolocation_context","format": "jsonschema","version": "1-0-0"},
-      |"type": "object",
-      |"properties": {
-      |   "latitude": {"type": "number","minimum": -90,"maximum": 90},
-      |   "longitude": {"type": "number","minimum": -180,"maximum": 180},
-      |		"latitudeLongitudeAccuracy": {"type": "number"},
-      |		"altitude": {"type": "number"},
-      |		"altitudeAccuracy": {"type": "number"},
-      |		"bearing": {"type": "number"},
-      |		"speed": {"type": "number"}
-      |},
-      |"required": ["latitude", "longitude"],
-      |"additionalProperties": false
-      |}
-    """.stripMargin))
-  private val geolocation110 = asJsonNode(parseJson(
+  private val geolocation100 = json"""{
+     "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+     "description": "Schema for client geolocation contexts",
+     "type": "object",
+     "properties": {
+        "latitude": {"type": "number","minimum": -90,"maximum": 90},
+        "longitude": {"type": "number","minimum": -180,"maximum": 180},
+     		"latitudeLongitudeAccuracy": {"type": "number"},
+     		"altitude": {"type": "number"},
+     		"altitudeAccuracy": {"type": "number"},
+     		"bearing": {"type": "number"},
+     		"speed": {"type": "number"}
+     },
+     "required": ["latitude", "longitude"],
+     "additionalProperties": false
+     }
     """
-      |{
-      |"$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
-      |"description": "Schema for client geolocation contexts",
-      |"self": {"vendor": "com.snowplowanalytics.snowplow","name":"geolocation_context","format":"jsonschema","version":"1-1-0"},
-      |"type": "object",
-      |"properties": {
-      |   "latitude": {"type": "number","minimum": -90,"maximum": 90},
-      |   "longitude": {"type": "number","minimum": -180,"maximum": 180},
-      |		"latitudeLongitudeAccuracy": {"type": ["number", "null"]},
-      |		"altitude": {"type": ["number", "null"]},
-      |		"altitudeAccuracy": {"type": ["number", "null"]},
-      |		"bearing": {"type": ["number", "null"]},
-      |		"speed": {"type": ["number", "null"]}
-      |},
-      |"required": ["latitude", "longitude"],
-      |"additionalProperties": false
-      |}
-    """.stripMargin))
+  private val geolocation110 = json"""
+      {
+      "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+      "description": "Schema for client geolocation contexts",
+      "type": "object",
+      "properties": {
+         "latitude": {"type": "number","minimum": -90,"maximum": 90},
+         "longitude": {"type": "number","minimum": -180,"maximum": 180},
+      		"latitudeLongitudeAccuracy": {"type": ["number", "null"]},
+      		"altitude": {"type": ["number", "null"]},
+      		"altitudeAccuracy": {"type": ["number", "null"]},
+      		"bearing": {"type": ["number", "null"]},
+      		"speed": {"type": ["number", "null"]}
+      },
+      "required": ["latitude", "longitude"],
+      "additionalProperties": false
+      }
+    """
 
   val schemas = Map(
-    SchemaKey("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", "1-0-0") -> adClick,
-    SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", "1-0-0") -> geolocation100,
-    SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", "1-1-0") -> geolocation110
+    SchemaMap("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1,0,0)) -> adClick,
+    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1,0,0)) -> geolocation100,
+    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1,1,0)) -> geolocation110
   )
 
   def emptyEvent(id: UUID, collectorTstamp: Instant, vCollector: String, vTstamp: String): Event =
@@ -123,5 +108,19 @@ object SpecHelpers {
     "bq-loader-test",
     "bq-loader-test")
 
-  val resolver = Resolver(10, InMemoryRef(schemas))
+  object IdInstances {
+    implicit val idClock: Clock[Id] = new Clock[Id] {
+      def realTime(unit: TimeUnit): Id[Long] =
+        unit.convert(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+
+      def monotonic(unit: TimeUnit): Id[Long] =
+        unit.convert(System.nanoTime(), TimeUnit.NANOSECONDS)
+    }
+  }
+
+  val StaticRegistry: Registry = Registry.InMemory(
+    Registry.Config("InMemory", 1, List.empty),
+    schemas.toList.map { case (k, v) => SelfDescribingSchema(k, v)})
+
+  val resolver = Resolver[Id](List(StaticRegistry), None)
 }

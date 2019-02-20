@@ -17,31 +17,39 @@ import java.time.Instant
 
 import scala.util.control.NonFatal
 import scala.concurrent.duration._
+
+import io.circe.Json
+
+import cats.data.EitherT
 import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent.MVar
-import org.json4s.jackson.JsonMethods.fromJsonNode
+
 import com.google.cloud.bigquery.Field
-import com.snowplowanalytics.iglu.client.Resolver
-import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
-import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.implicits._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field => DdlField}
+
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
-import common.{Adapter, Utils, Schema => LoaderSchema}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
+
 import com.snowplowanalytics.iglu.core.SchemaKey
+import com.snowplowanalytics.iglu.client.{ Client, ClientError }
+
+import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
+import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field => DdlField}
+
+import common.{Adapter, Schema => LoaderSchema}
 import common.Config._
 import Mutator._
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
 /**
   * Mutator is stateful worker that emits `alter table` requests.
   * It does not depend on any source of requests (such as PubSub topic)
   *
-  * @param resolver iglu resolver, responsible for fetching schemas
+  * @param igluClient iglu resolver, responsible for fetching schemas
   * @param tableReference object responsible for table interactions
   * @param state current state of the table, source of truth
   */
-class Mutator private(resolver: Resolver,
+class Mutator private(igluClient: Client[IO, Json],
                       tableReference: TableReference,
                       state: MVar[IO, MutatorState],
                       verbose: Boolean) {
@@ -85,17 +93,15 @@ class Mutator private(resolver: Resolver,
   }
 
   /** Receive the JSON Schema from the Iglu registry */
-  def getSchema(igluUri: SchemaKey)(implicit t: Timer[IO], cs: ContextShift[IO]): IO[Schema] =
-    for {
-      response <- IO(resolver.lookupSchema(igluUri.toSchemaUri)).timeout(10.seconds)
-      _ <- log(s"Received $response from Iglu registry")
-      schema   <- Utils
-        .fromValidation(response)
-        .leftMap(errors => MutatorError(errors.toList.mkString(", ")))
-        .map(fromJsonNode)
-        .flatMap(json => Schema.parse(json).liftTo[Either[MutatorError, ?]](invalidSchema(igluUri)))
-        .fold(IO.raiseError[Schema], IO.pure)
+  def getSchema(key: SchemaKey)(implicit t: Timer[IO], cs: ContextShift[IO]): IO[Schema] = {
+    val action = for {
+      response <- EitherT(igluClient.resolver.lookupSchema(key).timeout(10.seconds)).leftMap(fetchError)
+      _        <- EitherT.liftF(log(s"Received $response from Iglu registry"))
+      schema   <- EitherT.fromOption[IO](Schema.parse(response), invalidSchema(key))
     } yield schema
+
+    action.value.flatMap(IO.fromEither)
+  }
 
   private def log(message: String): IO[Unit] =
     IO(println(s"Mutator ${Instant.now()}: $message"))
@@ -123,13 +129,8 @@ object Mutator {
   case class MutatorError(message: String) extends Throwable
 
   case class MutatorState(fields: Vector[Field], received: Long) {
-    def increment: MutatorState = {
-      if (received == Long.MaxValue - 1) {
-        MutatorState(fields, 0)
-      } else {
-        MutatorState(fields, received + 1)
-      }
-    }
+    def increment: MutatorState =
+      if (received >= Long.MaxValue - 1) MutatorState(fields, 0) else  MutatorState(fields, received + 1)
 
     def add(field: Field): MutatorState =
       MutatorState(fields :+ field, received)
@@ -140,25 +141,18 @@ object Mutator {
 
   def initialize(env: Environment, verbose: Boolean)(implicit c: Concurrent[IO]): IO[Either[String, Mutator]] = {
     for {
-      client <- TableReference.BigQueryTable.getClient
-      table   = new TableReference.BigQueryTable(client, env.config.datasetId, env.config.tableId)
-      fields <- table.getFields
-      state  <- MVar.of(MutatorState(fields, 0))
-      resolver <- IO.fromEither(Resolver.parse(env.resolverJson).toEither.leftMap(x => throw new RuntimeException(x.head.getMessage)))
-      updatedResolver <- mutateResolver(resolver)
-    } yield new Mutator(updatedResolver, table, state, verbose).asRight
-  }
-
-  /** Set cacheTtl if it is not in config */
-  private def mutateResolver(resolver: Resolver): IO[Resolver] = resolver.cacheTtl match {
-    case None => IO {
-      println("Setting Resolver cacheTtl to 90 seconds")
-      resolver.copy(cacheTtl = Some(90))
-    }
-    case Some(_) => IO.pure(resolver)
+      bqClient   <- TableReference.BigQueryTable.getClient
+      table       = new TableReference.BigQueryTable(bqClient, env.config.datasetId, env.config.tableId)
+      fields     <- table.getFields
+      state      <- MVar.of(MutatorState(fields, 0))
+      igluClient <- Client.parseDefault[IO](env.resolverJson).value.flatMap(IO.fromEither)
+    } yield new Mutator(igluClient, table, state, verbose).asRight
   }
 
   private def invalidSchema(schema: SchemaKey) =
     MutatorError(s"Schema [${schema.toSchemaUri}] cannot be parsed")
+
+  private def fetchError(error: ClientError.ResolutionError) =    // TODO: actual implementation
+    MutatorError(s"Schema [$error] cannot be parsed")
 
 }

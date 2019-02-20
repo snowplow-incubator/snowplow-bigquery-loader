@@ -15,25 +15,24 @@ package loader
 
 import org.joda.time.Instant
 
+import cats.Id
 import cats.data.{EitherNel, NonEmptyList, ValidatedNel}
 import cats.implicits._
 
 import io.circe.Json
-
-import org.json4s.JsonAST._
-import org.json4s.jackson.JsonMethods.fromJsonNode
 
 import com.spotify.scio.bigquery.TableRow
 
 import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{Schema => DdlSchema}
-import com.snowplowanalytics.iglu.schemaddl.jsonschema.json4s.implicits._
+import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError, Row, Field}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 
-import common.{Adapter, Schema, Utils => CommonUtils}
+import common.{Adapter, Schema}
+import IdInstances._
 
 /** Row ready to be passed into Loader stream and Mutator topic */
 case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])
@@ -49,7 +48,7 @@ object LoaderRow {
     * @param record enriched TSV line
     * @return either bad with error messages or entity ready to be loaded
     */
-  def parse(resolver: JValue)(record: String): Either[BadRow, LoaderRow] = {
+  def parse(resolver: Json)(record: String): Either[BadRow, LoaderRow] = {
     val loaderRow: EitherNel[String, LoaderRow] = for {
       event         <- Event.parse(record).toEither
       rowWithTstamp <- fromEvent(singleton.ResolverSingleton.get(resolver))(event)
@@ -62,7 +61,7 @@ object LoaderRow {
   type Transformed[A] = ValidatedNel[String, A]
 
   /** Parse JSON object provided by Snowplow Analytics SDK */
-  def fromEvent(resolver: Resolver)(event: Event): EitherNel[String, (TableRow, Instant)] = {
+  def fromEvent(resolver: Resolver[Id])(event: Event): EitherNel[String, (TableRow, Instant)] = {
     val atomic: Transformed[List[(String, Any)]] = event
       .atomic
       .filter { case (key, value) => key == "geo_location" || !value.isNull }
@@ -95,7 +94,7 @@ object LoaderRow {
   }
 
   /** Group list of contexts by their full URI and transform values into ready to load rows */
-  def groupContexts(resolver: Resolver, contexts: Vector[SelfDescribingData[Json]]): ValidatedNel[String, List[(String, Any)]] = {
+  def groupContexts(resolver: Resolver[Id], contexts: Vector[SelfDescribingData[Json]]): ValidatedNel[String, List[(String, Any)]] = {
     val grouped = contexts.groupBy(_.schema).map { case (key, groupedContexts) =>
       val contexts = groupedContexts.map(_.data)    // Strip away URI
       val columnName = Schema.getColumnName(ShreddedType(Contexts(CustomContexts), key))
@@ -114,17 +113,14 @@ object LoaderRow {
     * Get BigQuery-compatible table rows from data-only JSON payload
     * Can be transformed to contexts (via Repeated) later only remain ue-compatible
     */
-  def transformJson(resolver: Resolver)(schemaKey: SchemaKey)(data: Json): ValidatedNel[String, Row] = {
-    def stringifyNel[E](nel: NonEmptyList[E]): NonEmptyList[String] =
-      nel.map(_.toString)
-
-    CommonUtils.fromValidationZ(resolver
-      .lookupSchema(schemaKey.toSchemaUri)
-      .map(fromJsonNode))
-      .leftMap(stringifyNel)
-      .andThen(schema => DdlSchema.parse(schema).toValidNel(s"Cannot parse JSON Schema [$schemaKey]"))
+  def transformJson(resolver: Resolver[Id])(schemaKey: SchemaKey)(data: Json): ValidatedNel[String, Row] = {
+    // TODO: proper stringify
+    resolver.lookupSchema(schemaKey)
+      .leftMap(_.toString)
+      .flatMap(schema => DdlSchema.parse(schema).toRight(s"Cannot parse JSON Schema [$schemaKey]"))
       .map(schema => Field.build("", schema, false))
-      .andThen(Row.cast(_)(data).leftMap(stringifyCastErrors))
+      .flatMap(Row.cast(_)(data).leftMap(stringifyCastErrors).toEither.leftMap(s => s.toList.mkString(",")))
+      .toValidatedNel
   }
 
   def stringifyCastErrors(nel: NonEmptyList[CastError]): NonEmptyList[String] =

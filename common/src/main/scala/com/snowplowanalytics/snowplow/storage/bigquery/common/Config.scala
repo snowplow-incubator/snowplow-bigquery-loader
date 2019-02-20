@@ -14,19 +14,23 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import java.util.{ Base64, UUID }
 
-import scalaz.NonEmptyList
+import cats.data.{ ValidatedNel, EitherT }
+import cats.syntax.show._
+import cats.syntax.either._
+import cats.effect.{Clock, IO}
 
-import org.json4s._
-import org.json4s.ext.JavaTypesSerializers
-import org.json4s.jackson.Serialization
-import org.json4s.jackson.JsonMethods.{ parse, compact }
+import io.circe.{ Json, Decoder, DecodingFailure }
+import io.circe.parser.parse
+import io.circe.generic.semiauto._
 
-import cats.data.ValidatedNel
-import cats.implicits._
 import com.monovore.decline.Opts
 
-import com.snowplowanalytics.iglu.client.Resolver
-import com.snowplowanalytics.iglu.client.validation.ValidatableJValue.validateAndIdentifySchema
+import com.snowplowanalytics.iglu.core.SelfDescribingData
+import com.snowplowanalytics.iglu.core.circe.implicits._
+
+import com.snowplowanalytics.iglu.client.Client
+import com.snowplowanalytics.iglu.client.resolver.Resolver
+import com.snowplowanalytics.iglu.client.validator.{ CirceValidator => Validator }
 
 /**
   * Main storage target configuration file
@@ -62,75 +66,66 @@ case class Config(name: String,
 
 object Config {
 
+  /** An exception that can be raised during initialization on e.g. invalid configuration */
+  case class InitializationError(message: String) extends Throwable {
+    override def getMessage: String = message
+  }
+
   /** Common pure configuration for Loader and Mutator */
-  case class EnvironmentConfig(resolver: JValue, config: JValue)
+  case class EnvironmentConfig(resolver: Json, config: Json)
 
   /** Parsed common environment (resolver is a stateful object) */
   class Environment private[Config](val config: Config,
-                                    val resolverJson: JValue) extends Serializable
+                                    val resolverJson: Json) extends Serializable
 
   sealed trait LoadMode
   object LoadMode {
     case class StreamingInserts(retry: Boolean) extends LoadMode
     case class FileLoads(frequency: Int) extends LoadMode
 
-    implicit val serializer = new CustomSerializer[LoadMode]((_: Formats) =>
-      (
-        {
-          case JObject(fields) =>
-            val jsonObject = fields.toMap
-            jsonObject.get("mode") match {
-              case Some(JString("STREAMING_INSERTS")) => jsonObject.get("retry") match {
-                case Some(JBool(retry)) => StreamingInserts(retry)
-                case Some(other) => throw new MappingException(s"Cannot convert object to StreamingInserts; retry property ${compact(other)} is not supported")
-                case None => throw new MappingException(s"Cannot convert object to StreamingInserts; retry property is missing")
-              }
-              case Some(JString("FILE_LOADS")) => jsonObject.get("frequency") match {
-                case Some(JInt(frequency)) => FileLoads(frequency.toInt)
-                case Some(other) => throw new MappingException(s"Cannot convert object to FileLoads; frequency property ${compact(other)} is not supported")
-                case None => throw new MappingException(s"Cannot convert object to FileLoads; frequency property is missing")
-              }
-              case None => throw new MappingException("Cannot convert object to LoadMode; required mode property is missing")
-              case Some(other) => throw new MappingException(s"Cannot convert object to LoadMode; mode can be STREAMING_INSERTS or FILE_LOADS, ${compact(other)} given")
-            }
-          case other => throw new MappingException(s"Cannot convert $other to Loadode")
-        },
-        {
-          case StreamingInserts(retry) => JObject(List(("mode", JString("STREAMING_INSERTS")), ("retry", JBool(retry))))
-          case FileLoads(frequency) =>  JObject(List(("mode", JString("FILE_LOADS")), ("frequency", JInt(frequency))))
+    implicit val loadModeCirceDecoder: Decoder[LoadMode] =
+      Decoder.instance { cursor =>
+        cursor.downField("mode").as[String] match {
+          case Right("STREAMING_INSERTS") =>
+            cursor.downField("retry").as[Boolean].map(b => StreamingInserts(b))
+          case Right("FILE_LOADS") =>
+            cursor.downField("frequence").as[Int].map(f => FileLoads(f))
+          case Right(unkown) =>
+            DecodingFailure(s"Unknown mode [$unkown]", cursor.history).asLeft
+          case Left(error) =>
+            error.asLeft
         }
-      )
-    )
+      }
   }
 
-  private implicit val formats: org.json4s.Formats =
-    Serialization.formats(NoTypeHints) ++ JavaTypesSerializers.all + LoadMode.serializer
+  implicit val configCirceDecoder: Decoder[Config] = deriveDecoder[Config]
 
-  def transform(config: EnvironmentConfig): Either[Throwable, Environment] = {
+  private implicit val clock: Clock[IO] = Clock.create[IO]
+
+  def transform(config: EnvironmentConfig): EitherT[IO, InitializationError, Environment] =
     for {
-      resolver <- Resolver.parse(config.resolver).fold(asThrowableLeft, _.asRight)
-      (_, data) <- validateAndIdentifySchema(config.config, dataOnly = true)(resolver).fold(asThrowableLeft, _.asRight)
-      result <- Either.catchNonFatal(data.extract[Config])
+      resolver   <- EitherT[IO, DecodingFailure, Resolver[IO]](Resolver.parse(config.resolver)).leftMap(err => InitializationError(err.show))
+      jsonConfig <- EitherT.fromEither[IO](SelfDescribingData.parse(config.config)).leftMap(err => InitializationError(s"Configuration is not self-describing, ${err.code}"))
+      client      = Client(resolver, Validator)
+      _          <- client.check(jsonConfig).leftMap(err => InitializationError(s"Validation failure: $err"))
+      result     <- EitherT.fromEither[IO](jsonConfig.data.as[Config]).leftMap(err => InitializationError(s"Decoding failure: ${err.show}"))
+
     } yield new Environment(result, config.resolver)
-  }
 
   /** CLI option to parse base64-encoded resolver into JSON */
-  val resolverOpt: Opts[JValue] = Opts.option[String]("resolver", "Base64-encoded Iglu Resolver configuration")
+  val resolverOpt: Opts[Json] = Opts.option[String]("resolver", "Base64-encoded Iglu Resolver configuration")
     .mapValidated(toValidated(decodeBase64Json))
 
   /** CLI option to parse base64-encoded config into JSON */
-  val configOpt: Opts[JValue] = Opts.option[String]("config", "Base64-encoded BigQuery configuration")
+  val configOpt: Opts[Json] = Opts.option[String]("config", "Base64-encoded BigQuery configuration")
     .mapValidated(toValidated(decodeBase64Json))
 
-  def decodeBase64Json(base64: String): Either[Throwable, JValue] =
+  def decodeBase64Json(base64: String): Either[Throwable, Json] =
     for {
       text <- Either.catchNonFatal(new String(Base64.getDecoder.decode(base64)))
-      json <- Either.catchNonFatal(parse(text))
+      json <- parse(text)
     } yield json
 
   private def toValidated[A, R](f: A => Either[Throwable, R])(a: A): ValidatedNel[String, R] =
     f(a).leftMap(_.getMessage).toValidatedNel
-
-  private def asThrowableLeft[A](errors: NonEmptyList[A]) =
-    new RuntimeException(errors.list.mkString(", ")).asLeft
 }

@@ -27,7 +27,7 @@ import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO
 import org.apache.beam.sdk.transforms.windowing.{AfterProcessingTime, Repeatedly}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 
-import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.CommandLine.ForwarderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.ForwarderCli.ForwarderEnvironment
 
 object Forwarder {
 

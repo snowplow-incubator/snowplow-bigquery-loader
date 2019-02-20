@@ -12,7 +12,7 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
-import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
+import com.snowplowanalytics.iglu.core.SchemaVer
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
 object Schema {

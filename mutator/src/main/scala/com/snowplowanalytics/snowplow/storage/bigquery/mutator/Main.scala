@@ -12,16 +12,16 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import scala.concurrent.ExecutionContext.Implicits.global
-
 import cats.implicits._
 import cats.effect.{ExitCode, IO, IOApp}
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
 object Main extends IOApp {
-  def sink(mutator: Mutator): fs2.Sink[IO, List[ShreddedType]] =
-    _.parEvalMap(4)(items => mutator.updateTable(items))
+  private val MaxConcurrency = 4
+
+  def sink(mutator: Mutator): fs2.Pipe[IO, List[ShreddedType], Unit] =
+    _.parEvalMap(MaxConcurrency)(items => mutator.updateTable(items))
 
   def run(args: List[String]): IO[ExitCode] = {
     CommandLine.parse(args) match {
@@ -32,7 +32,7 @@ object Main extends IOApp {
           queue   <- TypeReceiver.initQueue(512).stream
           _       <- TypeReceiver.startSubscription(env.config, TypeReceiver(queue, c.verbose)).stream
           _       <- IO(println(s"Mutator is listening ${env.config.typesSubscription} PubSub subscription")).stream
-          _       <- queue.dequeue.to(sink(mutator))
+          _       <- queue.dequeue.through(sink(mutator))
         } yield ()
 
         appStream.compile.drain.as(ExitCode.Success)

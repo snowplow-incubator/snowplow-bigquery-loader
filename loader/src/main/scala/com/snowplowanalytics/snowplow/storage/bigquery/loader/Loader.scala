@@ -14,7 +14,11 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
 import com.google.api.services.bigquery.model.TableReference
+
+import io.circe.Json
+
 import org.joda.time.Duration
+
 import com.spotify.scio.ScioContext
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
 
@@ -27,7 +31,6 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
 import common.Config._
 import common.Codecs.toPayload
-import org.json4s.JsonAST.JValue
 
 
 object Loader {
@@ -124,7 +127,7 @@ object Loader {
       .map { types => toPayload(types).noSpaces }
 
   /** Read data from PubSub topic and transform to ready to load rows */
-  def getData(resolver: JValue,
+  def getData(resolver: Json,
               sc: ScioContext,
               input: String): SCollection[Either[BadRow, LoaderRow]] =
     sc.pubsubSubscription[String](input)

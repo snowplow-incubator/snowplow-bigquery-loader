@@ -15,17 +15,15 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common
 import org.json4s.JsonAST._
 import org.json4s.jackson.JsonMethods.fromJsonNode
 
-import scalaz.{Failure, Success, ValidationNel}
-
 import io.circe.Json
 
-import cats.data.{NonEmptyList, Validated, ValidatedNel}
-import cats.syntax.either._
+import cats.data.{Validated, ValidatedNel}
 
 import com.fasterxml.jackson.databind.JsonNode
 
 object Utils {
-  def toCirce(json: JValue): Json =
+  @deprecated
+  private def toCirce(json: JValue): Json =
     json match {
       case JString(string) => Json.fromString(string)
       case JInt(int) => Json.fromBigInt(int)
@@ -37,19 +35,12 @@ object Utils {
       case _ => Json.Null
     }
 
-  def fromJackson(json: JsonNode): Json =
+  @deprecated
+  private def fromJackson(json: JsonNode): Json =
     toCirce(fromJsonNode(json))
 
-  def fromValidation[E, A](validation: ValidationNel[E, A]): Either[NonEmptyList[E], A] =
-    validation match {
-      case Success(a) => a.asRight
-      case Failure(errors) => NonEmptyList.fromListUnsafe(errors.list).asLeft
-    }
-
-  def fromValidationZ[E, A](validation: ValidationNel[E, A]): ValidatedNel[E, A] =
-    fromValidation(validation).toValidated
-
-  def catchNonFatalMessage[A](a: => A): ValidatedNel[String, A] =
+  @deprecated
+  private def catchNonFatalMessage[A](a: => A): ValidatedNel[String, A] =
     Validated
       .catchNonFatal(a)
       .leftMap(_.getMessage)

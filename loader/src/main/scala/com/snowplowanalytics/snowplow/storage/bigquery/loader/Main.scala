@@ -18,7 +18,7 @@ import com.spotify.scio._
 object Main {
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
-    CommandLine.parse(args) match {
+    LoaderCli.parse(args) match {
       case Right(env) =>
         Loader.run(env, sc)
         val _ = sc.close()

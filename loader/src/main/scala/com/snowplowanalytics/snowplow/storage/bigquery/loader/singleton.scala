@@ -12,16 +12,18 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import org.json4s.JsonAST.JValue
+import cats.Id
+
+import io.circe.Json
 
 import com.snowplowanalytics.iglu.client.Resolver
 
 object singleton {
   /** Singleton for Resolver to maintain one per node */
   object ResolverSingleton {
-    @volatile private var instance: Resolver = _
+    @volatile private var instance: Resolver[Id] = _
     /** Retrieve or build an instance of a Resolver */
-    def get(r: JValue): Resolver = {
+    def get(r: Json): Resolver[Id] = {
       if (instance == null) {
         synchronized {
           if (instance == null) {
@@ -32,5 +34,4 @@ object singleton {
       instance
     }
   }
-
 }

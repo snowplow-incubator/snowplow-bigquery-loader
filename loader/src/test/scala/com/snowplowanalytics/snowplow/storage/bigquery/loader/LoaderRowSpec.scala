@@ -21,7 +21,6 @@ import org.joda.time.Instant
 
 import com.google.api.services.bigquery.model.TableRow
 
-import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 
 class LoaderRowSpec extends org.specs2.Specification { def is = s2"""
@@ -58,8 +57,7 @@ class LoaderRowSpec extends org.specs2.Specification { def is = s2"""
 
   def e4 = {
     val input = SpecHelpers.ExampleEvent.copy(br_cookies = Some(false), domain_sessionidx = Some(3))
-    val resolver = Resolver(0, Nil, None)
-    val result = LoaderRow.fromEvent(resolver)(input)
+    val result = LoaderRow.fromEvent(SpecHelpers.resolver)(input)
     val tableRow = new TableRow()
       .set("v_collector", "bq-loader-test")
       .set("collector_tstamp", "2019-02-18T08:06:07.580Z")

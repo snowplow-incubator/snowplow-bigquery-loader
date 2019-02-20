@@ -22,7 +22,7 @@ import common.Config._
   * Unlike Mutator, required --key=value format and ignores unknown options (for Dataflow)
   * Unlike Loader, also required `--failedInsertsSub`
   */
-object CommandLine {
+object ForwarderCli {
   case class ForwarderEnvironment(common: Environment, failedInserts: String) {
     def getFullFailedInsertsSub: String = s"projects/${common.config.projectId}/subscriptions/$failedInserts"
   }
@@ -31,7 +31,7 @@ object CommandLine {
     for {
       c <- decodeBase64Json(args("config"))
       r <- decodeBase64Json(args("resolver"))
-      e <- transform(EnvironmentConfig(r, c))
+      e <- transform(EnvironmentConfig(r, c)).value.unsafeRunSync()
       s <- Either.catchNonFatal(args("failedInsertsSub"))
     } yield ForwarderEnvironment(e, s)
 }

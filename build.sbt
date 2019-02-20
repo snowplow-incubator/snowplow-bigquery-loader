@@ -12,7 +12,6 @@ lazy val common = project.in(file("common"))
     libraryDependencies ++= Seq(
       Dependencies.decline,
       Dependencies.cats,
-      Dependencies.json4sExt,
       Dependencies.analyticsSdk,
       Dependencies.schemaDdl,
       Dependencies.igluClient,
@@ -69,12 +68,14 @@ lazy val mutator = project.in(file("mutator"))
     libraryDependencies ++= Seq(
       Dependencies.pubsub,
       Dependencies.bigQuery,
+      Dependencies.igluClient,
 
       Dependencies.fs2,
       Dependencies.catsEffect,
 
       Dependencies.specs2,
-      Dependencies.scalaCheck
+      Dependencies.scalaCheck,
+      Dependencies.circeLiteral
     )
   )
   .enablePlugins(BuildInfoPlugin)

@@ -16,7 +16,7 @@ object Dependencies {
   object V {
     // Scala Snowplow
     val analyticsSdk       = "0.4.0"
-    val igluClient         = "0.5.0"
+    val igluClient         = "0.6.0-M4"
     val igluCore           = "0.4.0"
     val processingManifest = "0.1.0"
     val schemaDdl          = "0.9.0"
@@ -24,22 +24,21 @@ object Dependencies {
     val cats               = "1.6.0"
     val catsEffect         = "1.2.0"
     val circe              = "0.11.1"
-    val decline            = "0.5.1"
+    val decline            = "0.6.0"
     val fs2                = "1.0.3"
-    val json4sJackson      = "3.2.11"
-    val scalaz7            = "7.0.9"
     val scio               = "0.6.1"
+    val pubsubFs2          = "0.1.0"
     // Java
     val beam               = "2.6.0"
     val googleCloud        = "1.51.0"
     val slf4j              = "1.7.25"
     // Scala (test only)
-    val specs2             = "4.3.5"
+    val specs2             = "4.3.6"
     val scalaCheck         = "1.14.0"
     // Build
     val scalaMacrosVersion = "2.1.0"
     val betterMonadicFor   = "0.2.4"
-    val kindProjector      = "0.9.7"
+    val kindProjector      = "0.9.9"
   }
 
   val bigQuery           = "com.google.cloud"      %  "google-cloud-bigquery"        % V.googleCloud
@@ -61,11 +60,9 @@ object Dependencies {
   val circeJawn          = "io.circe"              %% "circe-jawn"                   % V.circe
   val decline            = "com.monovore"          %% "decline"                      % V.decline
   val fs2                = "co.fs2"                %% "fs2-core"                     % V.fs2
-  val json4sJackson      = "org.json4s"            %% "json4s-jackson"               % V.json4sJackson
-  val json4sExt          = "org.json4s"            %% "json4s-ext"                   % V.json4sJackson
-  val scalaz7            = "org.scalaz"            %% "scalaz-core"                  % V.scalaz7
   val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio
   val scioRepl           = "com.spotify"           %% "scio-repl"                    % V.scio
+  val pubsubFs2          = "com.github.hyjay"      %% "fs2-google-cloud-pubsub"      % V.pubsubFs2
 
   // Java
   val dataflowRunner     = "org.apache.beam"       % "beam-runners-google-cloud-dataflow-java" % V.beam

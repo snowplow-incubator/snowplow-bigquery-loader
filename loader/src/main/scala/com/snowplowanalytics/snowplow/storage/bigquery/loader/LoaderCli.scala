@@ -23,12 +23,12 @@ import common.Config._
   * Loader specific CLI configuration
   * Unlike Mutator, required --key=value format and ignores unknown options (for Dataflow)
   */
-object CommandLine {
+object LoaderCli {
   def parse(args: Args): Either[Throwable, Environment] =
     for {
       c <- decodeBase64Json(args("config"))
       r <- decodeBase64Json(args("resolver"))
-      e <- transform(EnvironmentConfig(r, c))
+      e <- transform(EnvironmentConfig(r, c)).value.unsafeRunSync()
     } yield e
 }
 

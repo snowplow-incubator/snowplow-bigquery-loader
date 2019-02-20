@@ -44,8 +44,7 @@ object CommandLine {
 
   sealed trait MutatorCommand extends Product with Serializable {
     def config: EnvironmentConfig
-    def getEnv: IO[Environment] =
-      IO.fromEither(transform(config))
+    def getEnv: IO[Environment] = transform(config).value.flatMap(IO.fromEither)
   }
   case class CreateCommand(config: EnvironmentConfig) extends MutatorCommand
   case class ListenCommand(config: EnvironmentConfig, verbose: Boolean) extends MutatorCommand
@@ -57,5 +56,5 @@ object CommandLine {
 
   val command = Command(generated.BuildInfo.name, generated.BuildInfo.description)(createCmd.orElse(listenCmd).orElse(addColumn))
 
-  def parse(args: Seq[String]) = command.parse(args)
+  def parse(args: Seq[String]): Either[Help, MutatorCommand] = command.parse(args)
 }

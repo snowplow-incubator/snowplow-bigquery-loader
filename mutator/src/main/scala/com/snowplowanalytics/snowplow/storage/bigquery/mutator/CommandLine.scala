@@ -14,7 +14,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package mutator
 
 import cats.implicits._
-import cats.effect.IO
+import cats.effect.{ IO, Clock }
 import com.monovore.decline._
 
 import com.snowplowanalytics.iglu.core.SchemaKey
@@ -25,6 +25,9 @@ import common.Config._
 
 /** Mutator-specific CLI configuration */
 object CommandLine {
+
+  private implicit val privateIoClock: Clock[IO] =
+    Clock.create[IO]
 
   private val options = (resolverOpt, configOpt)
     .mapN { (resolver, config) => EnvironmentConfig(resolver, config) }
@@ -44,7 +47,7 @@ object CommandLine {
 
   sealed trait MutatorCommand extends Product with Serializable {
     def config: EnvironmentConfig
-    def getEnv: IO[Environment] = transform(config).value.flatMap(IO.fromEither)
+    def getEnv: IO[Environment] = transform[IO](config).value.flatMap(IO.fromEither[Environment])
   }
   case class CreateCommand(config: EnvironmentConfig) extends MutatorCommand
   case class ListenCommand(config: EnvironmentConfig, verbose: Boolean) extends MutatorCommand

@@ -14,6 +14,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
 import cats.syntax.either._
+import cats.effect.{ IO, Clock }
 
 import com.spotify.scio.Args
 
@@ -24,11 +25,14 @@ import common.Config._
   * Unlike Mutator, required --key=value format and ignores unknown options (for Dataflow)
   */
 object LoaderCli {
+  private implicit val privateIoClock: Clock[IO] =
+    Clock.create[IO]
+
   def parse(args: Args): Either[Throwable, Environment] =
     for {
       c <- decodeBase64Json(args("config"))
       r <- decodeBase64Json(args("resolver"))
-      e <- transform(EnvironmentConfig(r, c)).value.unsafeRunSync()
+      e <- transform[IO](EnvironmentConfig(r, c)).value.unsafeRunSync()
     } yield e
 }
 

@@ -28,9 +28,8 @@ import com.monovore.decline.Opts
 import com.snowplowanalytics.iglu.core.SelfDescribingData
 import com.snowplowanalytics.iglu.core.circe.implicits._
 
-import com.snowplowanalytics.iglu.client.Client
-import com.snowplowanalytics.iglu.client.resolver.Resolver
-import com.snowplowanalytics.iglu.client.validator.{ CirceValidator => Validator }
+import com.snowplowanalytics.iglu.client.{ Client, Resolver, ClientError }
+import com.snowplowanalytics.iglu.client.validator.{ CirceValidator => Validator, ValidatorError }
 
 /**
   * Main storage target configuration file
@@ -107,7 +106,7 @@ object Config {
       resolver   <- EitherT[IO, DecodingFailure, Resolver[IO]](Resolver.parse(config.resolver)).leftMap(err => InitializationError(err.show))
       jsonConfig <- EitherT.fromEither[IO](SelfDescribingData.parse(config.config)).leftMap(err => InitializationError(s"Configuration is not self-describing, ${err.code}"))
       client      = Client(resolver, Validator)
-      _          <- client.check(jsonConfig).leftMap(err => InitializationError(s"Validation failure: $err"))
+      _          <- client.check(jsonConfig).leftMap(err => InitializationError(showClientError(err)))
       result     <- EitherT.fromEither[IO](jsonConfig.data.as[Config]).leftMap(err => InitializationError(s"Decoding failure: ${err.show}"))
 
     } yield new Environment(result, config.resolver)
@@ -128,4 +127,25 @@ object Config {
 
   private def toValidated[A, R](f: A => Either[Throwable, R])(a: A): ValidatedNel[String, R] =
     f(a).leftMap(_.getMessage).toValidatedNel
+
+  // TODO: move to iglu client
+  def showClientError(error: ClientError): String = error match {
+    case ClientError.ValidationError(ValidatorError.InvalidData(reports)) =>
+      val issues = reports.toList.groupBy(_.path)
+        .map {
+          case (path, messages) =>
+            s"* At ${path.getOrElse("unknown path")}:\n" ++ messages.map(_.message).map(m => s"  - $m").mkString("\n")
+        }
+      s"Instance is not valid against its schema:\n${issues.mkString("\n")}"
+    case ClientError.ValidationError(ValidatorError.InvalidSchema(reports)) =>
+      val r = reports.toList.map(i => s"* [${i.message}] (at ${i.path})").mkString(",\n")
+      s"Resolved schema cannot be used to validate an instance. Following issues found:\n$r"
+    case ClientError.ResolutionError(lookup) =>
+      val attempts = (a: Int) => if (a == 1) "1 attempt" else s"$a attempts"
+      val errors = lookup.map {
+        case (repo, tries) =>
+          s"* $repo due [${tries.errors.map(_.message).mkString(", ")}] after ${attempts(tries.attempts)}"
+      }
+      s"Schema cannot be resolved in following repositories:\n${errors.mkString("\n")}"
+  }
 }

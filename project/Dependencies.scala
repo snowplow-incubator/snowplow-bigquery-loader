@@ -27,7 +27,9 @@ object Dependencies {
     val decline            = "0.6.0"
     val fs2                = "1.0.3"
     val scio               = "0.6.1"
-    val pubsubFs2          = "0.1.0"
+    val pubsubFs2          = "0.9.0"
+    val httpClient         = "0.20.0-M6"
+    val logging            = "0.3.0"
     // Java
     val beam               = "2.6.0"
     val googleCloud        = "1.51.0"
@@ -43,6 +45,7 @@ object Dependencies {
 
   val bigQuery           = "com.google.cloud"      %  "google-cloud-bigquery"        % V.googleCloud
   val pubsub             = "com.google.cloud"      %  "google-cloud-pubsub"          % V.googleCloud
+  val gcs                = "com.google.cloud"      %  "google-cloud-storage"         % V.googleCloud
 
   // Scala
   val analyticsSdk       = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk
@@ -62,7 +65,9 @@ object Dependencies {
   val fs2                = "co.fs2"                %% "fs2-core"                     % V.fs2
   val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio
   val scioRepl           = "com.spotify"           %% "scio-repl"                    % V.scio
-  val pubsubFs2          = "com.github.hyjay"      %% "fs2-google-cloud-pubsub"      % V.pubsubFs2
+  val pubsubFs2          = "com.permutive"         %% "fs2-google-pubsub-http"       % V.pubsubFs2
+  val httpClient         = "org.http4s"            %% "http4s-async-http-client"     % V.httpClient
+  val logging            = "io.chrisdavenport"     %% "log4cats-slf4j"               % V.logging
 
   // Java
   val dataflowRunner     = "org.apache.beam"       % "beam-runners-google-cloud-dataflow-java" % V.beam

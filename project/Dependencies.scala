@@ -13,21 +13,29 @@
 import sbt._
 
 object Dependencies {
+
+  val ResolutionRepos = Seq(
+    // Speed-up build
+    "snowplow" at "https://snowplow.bintray.com/snowplow-maven"
+  )
+
   object V {
     // Scala Snowplow
     val analyticsSdk       = "0.4.2-M3"
     val igluClient         = "0.6.0-M8"
-    val igluCore           = "0.4.0"
+    val igluCore           = "0.5.1"
     val processingManifest = "0.1.0"
     val schemaDdl          = "0.9.0"
     // Scala
     val cats               = "1.6.0"
     val catsEffect         = "1.2.0"
     val circe              = "0.11.1"
-    val decline            = "0.6.0"
-    val fs2                = "1.0.3"
+    val decline            = "0.6.2"
+    val fs2                = "1.0.4"
     val scio               = "0.6.1"
-    val pubsubFs2          = "0.1.0"
+    val pubsubFs2          = "0.12.0"
+    val httpClient         = "0.20.0"
+    val logging            = "0.3.0"
     // Java
     val beam               = "2.6.0"
     val googleCloud        = "1.51.0"
@@ -43,6 +51,7 @@ object Dependencies {
 
   val bigQuery           = "com.google.cloud"      %  "google-cloud-bigquery"        % V.googleCloud
   val pubsub             = "com.google.cloud"      %  "google-cloud-pubsub"          % V.googleCloud
+  val gcs                = "com.google.cloud"      %  "google-cloud-storage"         % V.googleCloud
 
   // Scala
   val analyticsSdk       = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk
@@ -62,7 +71,10 @@ object Dependencies {
   val fs2                = "co.fs2"                %% "fs2-core"                     % V.fs2
   val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio
   val scioRepl           = "com.spotify"           %% "scio-repl"                    % V.scio
-  val pubsubFs2          = "com.github.hyjay"      %% "fs2-google-cloud-pubsub"      % V.pubsubFs2
+  val pubsubFs2          = "com.permutive"         %% "fs2-google-pubsub-http"       % V.pubsubFs2
+  val pubsubFs2Grpc      = "com.permutive"         %% "fs2-google-pubsub-grpc"       % V.pubsubFs2
+  val httpClient         = "org.http4s"            %% "http4s-async-http-client"     % V.httpClient
+  val logging            = "io.chrisdavenport"     %% "log4cats-slf4j"               % V.logging
 
   // Java
   val dataflowRunner     = "org.apache.beam"       % "beam-runners-google-cloud-dataflow-java" % V.beam

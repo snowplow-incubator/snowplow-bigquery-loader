@@ -1,14 +1,10 @@
-lazy val snowplowBigqueryLoader = project.in(file("."))
-  .settings(BuildSettings.commonSettings)
-
 lazy val common = project.in(file("common"))
+  .settings(BuildSettings.commonSettings)
   .settings(Seq(
     name := "snowplow-bigquery-common",
-
     description := "Snowplow BigQuery Loader Common Utils"
   ))
   .settings(
-    BuildSettings.commonSettings,
     libraryDependencies ++= Seq(
       Dependencies.decline,
       Dependencies.cats,
@@ -85,7 +81,7 @@ lazy val mutator = project.in(file("mutator"))
 lazy val forwarder = project.in(file("forwarder"))
   .settings(Seq(
     name := "snowplow-bigquery-forwarder",
-    description := "Snowplow BigQuery Loader Dataflow Job",
+    description := "Snowplow BigQuery Dataflow Job for replaying events from failed inserts subscription",
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.forwarder.generated"
   ))
   .settings(BuildSettings.dockerSettings)
@@ -98,6 +94,37 @@ lazy val forwarder = project.in(file("forwarder"))
       Dependencies.slf4j,
       Dependencies.directRunner,
       Dependencies.dataflowRunner,
+
+      Dependencies.specs2,
+      Dependencies.scalaCheck
+    )
+  )
+  .enablePlugins(JavaAppPackaging)
+  .enablePlugins(BuildInfoPlugin)
+  .dependsOn(common)
+
+lazy val repeater = project.in(file("repeater"))
+  .settings(BuildSettings.commonSettings)
+  .settings(Seq(
+    name := "snowplow-bigquery-repeater",
+    scalaVersion := "2.12.8",
+    description := "Snowplow BigQuery Java app for replaying events from failed inserts subscription",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.repeater.generated"
+  ))
+  .settings(BuildSettings.dockerSettings)
+  .settings(
+    BuildSettings.macroSettings,
+    libraryDependencies ++= Seq(
+      Dependencies.pubsub,
+      Dependencies.bigQuery,
+      Dependencies.gcs,
+
+      Dependencies.fs2,
+      Dependencies.pubsubFs2Grpc,
+      Dependencies.catsEffect,
+      Dependencies.httpClient,
+      Dependencies.logging,
+      Dependencies.slf4j,
 
       Dependencies.specs2,
       Dependencies.scalaCheck

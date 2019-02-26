@@ -17,7 +17,7 @@ import java.util.{ Base64, UUID }
 import cats.data.{ ValidatedNel, EitherT }
 import cats.syntax.show._
 import cats.syntax.either._
-import cats.effect.{Clock, IO}
+import cats.effect.{Clock, IO, Sync}
 
 import io.circe.{ Json, Decoder, DecodingFailure }
 import io.circe.parser.parse
@@ -28,9 +28,8 @@ import com.monovore.decline.Opts
 import com.snowplowanalytics.iglu.core.SelfDescribingData
 import com.snowplowanalytics.iglu.core.circe.implicits._
 
-import com.snowplowanalytics.iglu.client.Client
-import com.snowplowanalytics.iglu.client.resolver.Resolver
-import com.snowplowanalytics.iglu.client.validator.{ CirceValidator => Validator }
+import com.snowplowanalytics.iglu.client.{ Client, Resolver, ClientError }
+import com.snowplowanalytics.iglu.client.validator.{ CirceValidator => Validator, ValidatorError }
 
 /**
   * Main storage target configuration file
@@ -102,13 +101,13 @@ object Config {
 
   private implicit val clock: Clock[IO] = Clock.create[IO]
 
-  def transform(config: EnvironmentConfig): EitherT[IO, InitializationError, Environment] =
+  def transform[F[_]: Sync: Clock](config: EnvironmentConfig): EitherT[F, InitializationError, Environment] =
     for {
-      resolver   <- EitherT[IO, DecodingFailure, Resolver[IO]](Resolver.parse(config.resolver)).leftMap(err => InitializationError(err.show))
-      jsonConfig <- EitherT.fromEither[IO](SelfDescribingData.parse(config.config)).leftMap(err => InitializationError(s"Configuration is not self-describing, ${err.code}"))
+      resolver   <- EitherT[F, DecodingFailure, Resolver[F]](Resolver.parse(config.resolver)).leftMap(err => InitializationError(err.show))
+      jsonConfig <- EitherT.fromEither[F](SelfDescribingData.parse(config.config)).leftMap(err => InitializationError(s"Configuration is not self-describing, ${err.code}"))
       client      = Client(resolver, Validator)
-      _          <- client.check(jsonConfig).leftMap(err => InitializationError(s"Validation failure: $err"))
-      result     <- EitherT.fromEither[IO](jsonConfig.data.as[Config]).leftMap(err => InitializationError(s"Decoding failure: ${err.show}"))
+      _          <- client.check(jsonConfig).leftMap(err => InitializationError(err.show))
+      result     <- EitherT.fromEither[F](jsonConfig.data.as[Config]).leftMap(err => InitializationError(s"Decoding failure: ${err.show}"))
 
     } yield new Environment(result, config.resolver)
 

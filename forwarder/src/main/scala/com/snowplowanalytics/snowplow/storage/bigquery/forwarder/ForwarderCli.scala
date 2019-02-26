@@ -14,6 +14,8 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package forwarder
 
 import cats.syntax.either._
+import cats.effect.{ IO, Clock }
+
 import com.spotify.scio.Args
 import common.Config._
 
@@ -23,6 +25,9 @@ import common.Config._
   * Unlike Loader, also required `--failedInsertsSub`
   */
 object ForwarderCli {
+  private implicit val privateIoClock: Clock[IO] =
+    Clock.create[IO]
+
   case class ForwarderEnvironment(common: Environment, failedInserts: String) {
     def getFullFailedInsertsSub: String = s"projects/${common.config.projectId}/subscriptions/$failedInserts"
   }
@@ -31,7 +36,7 @@ object ForwarderCli {
     for {
       c <- decodeBase64Json(args("config"))
       r <- decodeBase64Json(args("resolver"))
-      e <- transform(EnvironmentConfig(r, c)).value.unsafeRunSync()
+      e <- transform[IO](EnvironmentConfig(r, c)).value.unsafeRunSync()
       s <- Either.catchNonFatal(args("failedInsertsSub"))
     } yield ForwarderEnvironment(e, s)
 }

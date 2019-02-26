@@ -32,6 +32,7 @@ packages:
     build_commands:
       - 'sbt "project loader" universal:packageBin'
       - 'sbt "project mutator" universal:packageBin'
+      - 'sbt "project repeater" universal:packageBin'
 
     # Required: Artifact
     artifacts:

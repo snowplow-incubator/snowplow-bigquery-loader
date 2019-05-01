@@ -30,14 +30,34 @@ import com.google.common.collect.ImmutableMap
 
 import com.permutive.pubsub.consumer.decoder.MessageDecoder
 
+/**
+  * Primary data type for events parsed from `failedInserts` PubSub subscription
+  * (which should be an enriched event)
+  */
 case class EventContainer(eventId: UUID, etlTstamp: Instant, payload: JsonObject) {
+  /** Transform the scala class into Java Map, understandable by BigQuery client */
   def decompose: JMap[String, Any] = EventContainer.decomposeObject(payload)
 
+  /** Check if event is older than `seconds` (time to create a column) */
   def isReady[F[_]: Sync](seconds: Long): F[Boolean] =
     Sync[F].delay(etlTstamp.isBefore(Instant.now().minusSeconds(seconds)))
 }
 
 object EventContainer {
+
+  /**
+    * The last incarnation of enriched event, that can go only into GCS bucket
+    * @param payload the original enriched event payload, produced by BQ Loader (Analtyics SDK)
+    * @param error happened during repeat (retry insert)
+    */
+  case class Desperate(payload: JsonObject, error: FailedRetry)
+
+  object Desperate {
+    implicit def circeDesperateEncoder: Encoder[Desperate] =
+      deriveEncoder[Desperate]
+  }
+
+  /** Result of repeat (retry insert) */
   sealed trait FailedRetry
   object FailedRetry {
     case class BigQueryError(reason: String, location: Option[String], message: String) extends FailedRetry
@@ -64,13 +84,6 @@ object EventContainer {
       deriveEncoder[FailedRetry]
   }
 
-  case class Desperate(payload: JsonObject, error: FailedRetry)
-
-  object Desperate {
-    implicit def circeDesperateEncoder: Encoder[Desperate] =
-      deriveEncoder[Desperate]
-  }
-
   implicit val circeEventDecoder: Decoder[EventContainer] = Decoder.instance { cursor =>
     for {
       jsonObject <- cursor.as[JsonObject]
@@ -87,25 +100,26 @@ object EventContainer {
     } yield payload
   }
 
-  def decomposeJson(json: Json): Any = {
-    json.fold(
-      null,
-      b => b,
-      i => i.toInt.orElse(i.toBigInt.map(_.bigInteger)).getOrElse(i.toDouble),
-      s => s,
-      a => a,
-      o => decomposeObject(o)
-    )
-  }
-
-  def decomposeArray(arr: Vector[Json]): JList[Any] =
+  private def decomposeArray(arr: Vector[Json]): JList[Any] =
     arr.map(decomposeJson).asJava
 
-  def decomposeObject(json: JsonObject): JMap[String, Any] = {
+  private def decomposeObject(json: JsonObject): JMap[String, Any] = {
     val map = ImmutableMap.builder[String, Any]()
     json.toMap.foreach { case (k, v) =>
       map.put(k, decomposeJson(v))
     }
     map.build()
   }
+
+  private def decomposeJson(json: Json): Any = {
+    json.fold(
+      null,
+      b => b,
+      i => i.toInt.orElse(i.toBigInt.map(_.bigInteger)).getOrElse(i.toDouble),
+      s => s,
+      a => decomposeArray(a),
+      o => decomposeObject(o)
+    )
+  }
+
 }

@@ -22,6 +22,9 @@ import common.Config._
 object RepeaterCli {    // TODO: factor out into a common module
   private val GcsPrefix = "gs://"
 
+  val DefaultWindow = 30
+  val DefaultBufferSize = 20
+
   case class GcsPath(bucket: String, path: String)
 
   private val options = (resolverOpt, configOpt)
@@ -37,11 +40,22 @@ object RepeaterCli {    // TODO: factor out into a common module
         case Nil => "GCS bucket cannot be empty".invalidNel
       } } else { s"GCS bucket must start with $GcsPrefix".invalidNel }
     }
+  val bufferSize = Opts.option[Int]("desperatesBufferSize", "Amount of items that failed re-insertion that " +
+    "will be buffered before sinking them to GCS, complementary to desperatesWindow")
+    .validate("Buffer size needs to be greater than 0") { _ > 0 }
+    .withDefault(DefaultBufferSize)
+  val window = Opts.option[Int]("desperatesWindow", "Amount of seconds to wait until dump desperates to GCS. " +
+    "Complementary to desperatesBufferSize")
+    .validate("Time needs to be greater than 0") { _ > 0 }
+    .withDefault(DefaultWindow)
+
   val verbose = Opts.flag("verbose", "Provide debug output").orFalse
 
-  case class ListenCommand(config: EnvironmentConfig, failedInsertsSub: String, deadEndBucket: GcsPath, verbose: Boolean)
+  case class ListenCommand(config: EnvironmentConfig, failedInsertsSub: String, deadEndBucket: GcsPath, verbose: Boolean, bufferSize: Int, window: Int)
 
-  val command = Command(generated.BuildInfo.name, generated.BuildInfo.description)((options, failedInsertsSub, deadEndBucket, verbose).mapN(ListenCommand.apply))
+  val command = Command(generated.BuildInfo.name, generated.BuildInfo.description) {
+    (options, failedInsertsSub, deadEndBucket, verbose, bufferSize, window).mapN(ListenCommand.apply)
+  }
 
   def parse(args: Seq[String]) = command.parse(args)
 

@@ -13,11 +13,17 @@
 import sbt._
 
 object Dependencies {
+
+  val ResolutionRepos = Seq(
+    // Speed-up build
+    "snowplow" at "https://snowplow.bintray.com/snowplow-maven"
+  )
+
   object V {
     // Scala Snowplow
     val analyticsSdk       = "0.4.0"
-    val igluClient         = "0.6.0-M4"
-    val igluCore           = "0.4.0"
+    val igluClient         = "0.6.0-M7"
+    val igluCore           = "0.5.0"
     val processingManifest = "0.1.0"
     val schemaDdl          = "0.9.0"
     // Scala
@@ -27,8 +33,8 @@ object Dependencies {
     val decline            = "0.6.0"
     val fs2                = "1.0.3"
     val scio               = "0.6.1"
-    val pubsubFs2          = "0.9.0"
-    val httpClient         = "0.20.0-M6"
+    val pubsubFs2          = "0.12.0"
+    val httpClient         = "0.20.0"
     val logging            = "0.3.0"
     // Java
     val beam               = "2.6.0"

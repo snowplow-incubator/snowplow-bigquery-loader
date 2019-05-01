@@ -14,14 +14,14 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import cats.Applicative
 import cats.syntax.all._
-import cats.effect.{Concurrent, ConcurrentEffect, ExitCode, IO, IOApp, Sync, Timer }
+import cats.effect._
 import cats.effect.concurrent.Ref
 
 import org.http4s.client.Client
 import org.http4s.client.asynchttpclient.AsyncHttpClient
 
 import fs2.Stream
-import fs2.concurrent.Queue
+import fs2.concurrent.{ Queue, Signal, SignallingRef }
 
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
@@ -44,8 +44,8 @@ object Repeater extends IOApp {
   val DefaultBufferSize = 5
   val DefaultBackoffTime = 5
 
-  def getServiceAccountPath: IO[String] =
-    IO(System.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+  def getServiceAccountPath[F[_]: Sync]: F[String] =
+    Sync[F].delay(System.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 
   def getSubscription[F[_]: Concurrent: Timer: Logger](env: Config.Environment,
                                                        serviceAccount: String,
@@ -66,8 +66,8 @@ object Repeater extends IOApp {
     )
   }
 
-  def getClient: IO[BigQuery] =
-    IO(BigQueryOptions.getDefaultInstance.getService)
+  def getClient[F[_]: Sync]: F[BigQuery] =
+    Sync[F].delay(BigQueryOptions.getDefaultInstance.getService)
 
   def buildRequest(dataset: String, table: String, event: EventContainer) =
     InsertAllRequest.newBuilder(TableId.of(dataset, table))
@@ -118,31 +118,79 @@ object Repeater extends IOApp {
       } yield ()
     } yield ()
 
+  // TODO: use it
+  def flush[F[_]: Sync](buffer: Queue[F, Desperate]): F[List[Desperate]] = {
+    val last = Stream
+      .repeatEval(buffer.tryDequeueChunk1(10))
+      .takeWhile(_.isDefined)
+      .flatMap {
+        case Some(chunk) => Stream.chunk(chunk)
+        case None => Stream.empty
+      }
+    last.compile.toList
+  }
+
+  /**
+    * Resources container, allowing to manipulate all acquired entities
+    * @param bigQuery BigQuery client provided by SDK
+    * @param bucket destination path
+    * @param env whole configuration, extracted from config files
+    * @param queue
+    * @param counter
+    * @param stop
+    * @param serviceAccount
+    * @param client
+    */
+  class Env[F[_]](val bigQuery: BigQuery,
+                  val bucket: GcsPath,
+                  val env: Config.Environment,
+                  val queue: Queue[F, Desperate],
+                  val counter: Ref[F, Int],
+                  val stop: Signal[F, Boolean],
+                  val serviceAccount: String,
+                  val client: Client[F])
+
+  object Env {
+    def acquire[F[_]: ConcurrentEffect: Clock](command: RepeaterCli.ListenCommand): Resource[F, Env[F]] = {
+      val environment = for {
+        transformed <- Config.transform[F](command.config).value
+        env <- Sync[F].fromEither(transformed)
+        bigQuery <- getClient[F]
+        serviceAccount <- getServiceAccountPath[F]
+        queue      <- Queue.bounded[F, Desperate](DefaultBufferSize)
+        counter    <- Ref[F].of[Int](0)
+        stop <- SignallingRef[F, Boolean](false)
+      } yield new Env(bigQuery, command.deadEndBucket, env, queue, counter, stop, serviceAccount, _: Client[F])
+
+
+      for {   // Initialize resource
+        envF <- Resource.liftF(environment)
+        client <- AsyncHttpClient.resource[F]()
+      } yield envF(client)
+    }
+  }
+
+  def sink[F[_]: Logger: ConcurrentEffect](env: Env[F])(stream: Stream[F, Model.Record[F, EventContainer]]) = {
+    for {
+      event      <- stream
+      act         = process[F](env.bigQuery, env.env.config.datasetId, env.env.config.tableId, event)
+      insertion  <- Stream.eval(act)
+      desperate  <- insertion match {
+        case Right(_) => Stream.empty
+        case Left(e) => Stream.emit(e)
+      }
+      _ <- Stream.eval(sinkDesperate(env.bucket, env.queue, env.counter, desperate))
+    } yield ()
+  }
+
   def run(args: List[String]): IO[ExitCode] = {
     RepeaterCli.parse(args) match {
       case Right(command) =>
-        val init = for {
-          env <- Config.transform(command.config).value.flatMap(IO.fromEither)
-          serviceAccount <- getServiceAccountPath
-        } yield (env, serviceAccount)
-
-        val events: Stream[IO, Unit] = for {
-          bigQuery   <- Stream.eval(getClient)
-          (env, serviceAccount) <- Stream.eval(init)
-          queue      <- Stream.eval(Queue.bounded[IO, Desperate](DefaultBufferSize))
-          client     <- AsyncHttpClient.stream[IO]()
-          counter    <- Stream.eval(Ref[IO].of(0))
-
-          event      <- getSubscription(env, serviceAccount, command.failedInsertsSub, client)
-          act         = process[IO](bigQuery, env.config.datasetId, env.config.tableId, event)
-          insertion  <- Stream.eval(act)
-          desperate  <- insertion match {
-            case Right(_) => Stream.empty
-            case Left(e) => Stream.emit(e)
-          }
-          _ <- Stream.eval(sinkDesperate(command.deadEndBucket, queue, counter, desperate))
+        val events = for {
+          env   <- Stream.resource(Env.acquire[IO](command))
+          events = getSubscription(env.env, env.serviceAccount, command.failedInsertsSub, env.client).interruptWhen(env.stop)
+          _     <- sink(env)(events)
         } yield ()
-
 
         events
           .compile
@@ -150,7 +198,7 @@ object Repeater extends IOApp {
           .attempt
           .flatMap {
             case Right(_) =>
-              IO.pure(ExitCode.Success)
+              IO.delay(println("Closing Snowplow BigQuery Repeater")) *> IO.pure(ExitCode.Success)
             case Left(Config.InitializationError(message)) =>
               IO(System.err.println(s"Snowplow BigQuery Repeater failed to start. $message")) >> IO.pure(ExitCode.Error)
             case Left(e: java.util.concurrent.TimeoutException) =>

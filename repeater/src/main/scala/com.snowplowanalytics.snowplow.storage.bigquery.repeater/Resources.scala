@@ -40,11 +40,9 @@ class Resources[F[_]](val bigQuery: BigQuery,
                       val desperates: Queue[F, Desperate],
                       val counter: Ref[F, Int],
                       val stop: SignallingRef[F, Boolean],
-                      val serviceAccount: String,
                       val statistics: Ref[F, Resources.Statistics],
                       val bufferSize: Int,
-                      val windowTime: Int,
-                      val client: Client[F]) {
+                      val windowTime: Int) {
   def logInserted: F[Unit] = statistics.update(s => s.copy(inserted = s.inserted + 1))
   def logAbandoned: F[Unit] = statistics.update(s => s.copy(desperates = s.desperates + 1))
 
@@ -72,17 +70,16 @@ object Resources {
       transformed    <- Config.transform[F](command.config).value
       env            <- Sync[F].fromEither(transformed)
       bigQuery       <- services.Database.getClient[F]
-      serviceAccount <- getServiceAccountPath[F]
       queue          <- Queue.bounded[F, Desperate](command.bufferSize * 2)
       counter        <- Ref[F].of[Int](0)
       stop           <- SignallingRef[F, Boolean](false)
       statistics     <- Ref[F].of[Statistics](Statistics.start)
       _              <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId}")
-    } yield new Resources(bigQuery, command.deadEndBucket, env, queue, counter, stop, serviceAccount, statistics, command.bufferSize, command.window, _: Client[F])
+    } yield new Resources(bigQuery, command.deadEndBucket, env, queue, counter, stop, statistics, command.bufferSize, command.window)
 
     for {
-      client <- AsyncHttpClient.resource[F]()
-      env <- Resource.make(environment.map(e => e.apply(client)))(release)
+      _t <- AsyncHttpClient.resource[F]()
+      env <- Resource.make(environment)(release)
     } yield env
   }
 

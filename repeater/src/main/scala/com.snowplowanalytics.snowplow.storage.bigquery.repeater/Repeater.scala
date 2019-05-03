@@ -52,9 +52,10 @@ object Repeater extends SafeIOApp {
             case Left(Config.InitializationError(message)) =>
               IO(System.err.println(s"Snowplow BigQuery Repeater failed to start. $message")) >> IO.pure(ExitCode.Error)
             case Left(e: java.util.concurrent.TimeoutException) =>
-              println(e.getCause)
-              throw e
+              System.out.println(e.toString)
+              IO.raiseError(e) >> IO.pure(ExitCode.Error)
             case Left(NonFatal(e)) =>
+              System.out.println(e.toString)
               IO.raiseError(e) >> IO.pure(ExitCode.Error)
           }
       case Left(error) =>

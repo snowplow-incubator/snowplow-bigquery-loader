@@ -13,21 +13,17 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import java.time.Instant
+import java.util
 import java.util.{UUID, List => JList, Map => JMap}
 
 import scala.collection.JavaConverters._
-
 import cats.syntax.either._
 import cats.effect.Sync
-
-import com.google.cloud.bigquery.{BigQueryError => JBigQueryError, BigQueryException}
-
+import com.google.cloud.bigquery.{BigQueryException, BigQueryError => JBigQueryError}
 import io.circe.{Decoder, Encoder, Json, JsonObject}
 import io.circe.parser.parse
 import io.circe.generic.semiauto._
-
 import com.google.common.collect.ImmutableMap
-
 import com.permutive.pubsub.consumer.decoder.MessageDecoder
 
 /**
@@ -104,11 +100,11 @@ object EventContainer {
     arr.map(decomposeJson).asJava
 
   private def decomposeObject(json: JsonObject): JMap[String, Any] = {
-    val map = ImmutableMap.builder[String, Any]()
+    val map = new util.HashMap[String, Any]()
     json.toMap.foreach { case (k, v) =>
       map.put(k, decomposeJson(v))
     }
-    map.build()
+    map
   }
 
   private def decomposeJson(json: Json): Any = {

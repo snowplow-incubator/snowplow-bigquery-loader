@@ -31,8 +31,6 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.EventContainer.D
   * @param desperates queue of events that still could not be loaded into BQ
   * @param counter counter for batches of desperates
   * @param stop a signal to stop retreving items
-  * @param serviceAccount GCP service account name
-  * @param client HTTP client for PubSub
   */
 class Resources[F[_]](val bigQuery: BigQuery,
                       val bucket: GcsPath,

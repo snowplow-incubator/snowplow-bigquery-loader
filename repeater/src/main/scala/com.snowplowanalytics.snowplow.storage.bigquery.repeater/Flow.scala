@@ -33,17 +33,53 @@ object Flow {
     * @param resources all application resources
     * @param events stream of events from PubSub
     */
-  def process[F[_]: Logger: Timer: ConcurrentEffect](resources: Resources[F])(events: Stream[F, Model.Record[F, EventContainer]]): Stream[F, Unit] =
-    for {
-      event      <- events
-      act         = checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, event)
-      insertion  <- Stream.eval(act)
-      desperateSink = insertion match {
-        case Right(_) => Stream.eval(resources.logInserted)
-        case Left(d) => Stream.eval(resources.logAbandoned *> resources.desperates.enqueue1(d))
+  def process[F[_]: Logger: Timer: ConcurrentEffect](resources: Resources[F])(events: Stream[F, Model.Record[F, EventContainer]]): Stream[F, Unit] = {
+    val inserting = events
+      .evalMap(checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId))
+      .evalMap {
+        case Right(_) => resources.logInserted
+        case Left(d) => resources.logAbandoned *> resources.desperates.enqueue1(d)
       }
-      _ <- desperateSink.concurrently(dequeueDesperates(resources))
-    } yield ()
+    inserting.concurrently(dequeueDesperates(resources))
+  }
+
+  object WeirdChunks {
+    import cats.effect.concurrent.Ref
+    import fs2.concurrent.Queue
+    import scala.concurrent.duration._
+
+    implicit val t = IO.timer(scala.concurrent.ExecutionContext.global)
+    implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
+
+    def init: IO[(Ref[IO, Int], Queue[IO, String])] =
+      (Ref.of[IO, Int](0), Queue.bounded[IO, String](10)).tupled
+
+    def generate(c: Ref[IO, Int]): IO[Either[String, Int]] =
+      (IO.sleep(200.millis) *> c.update(_ + 1) *> c.get).map { cc => if (cc % 2 != 0) Left(s"$cc is odd") else Right(cc) }
+
+    // I expect that no matter how elements are inserted, they should be grouped by 10/2sec
+    def pull(q: Queue[IO, String]): Stream[IO, Unit] =
+      q.dequeue.groupWithin(10, 2.seconds).evalMap { c => IO(println(c.toList)) } // It always prints List with single element
+
+    def start(i: Int): IO[Unit] = {
+      val stream = for {
+        r <- Stream.eval(init)
+        (c, q) = r
+        a <- Stream.repeatEval(generate(c)).take(i)
+        putting = a match {   // Behaves differently if I flatMap it
+          case Right(n) => Stream.eval(IO(println(s"$n is fine")))
+          case Left(error) => Stream.eval(q.enqueue1(error))
+        }
+        pulling = pull(q)
+        _ <- putting.concurrently(pulling)
+      } yield ()
+
+      stream.compile.drain
+    }
+  }
+
+  WeirdChunks.start(50)
+
 
   /** Process dequeueing desperates and sinking them to GCS */
   def dequeueDesperates[F[_]: Timer: ConcurrentEffect: Logger](resources: Resources[F]): Stream[F, Unit] =
@@ -65,8 +101,8 @@ object Flow {
 
   def checkAndInsert[F[_]: Sync: Logger](client: BigQuery,
                                          dataset: String,
-                                         table: String,
-                                         event: Model.Record[F, EventContainer]): F[Either[Desperate, Unit]] =
+                                         table: String)
+                                        (event: Model.Record[F, EventContainer]): F[Either[Desperate, Unit]] =
     for {
       ready <- event.value.isReady(DefaultBackoffTime)
       result <- if (ready)

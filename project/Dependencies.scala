@@ -72,6 +72,7 @@ object Dependencies {
   val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio
   val scioRepl           = "com.spotify"           %% "scio-repl"                    % V.scio
   val pubsubFs2          = "com.permutive"         %% "fs2-google-pubsub-http"       % V.pubsubFs2
+  val pubsubFs2Grpc      = "com.permutive"         %% "fs2-google-pubsub-grpc"       % V.pubsubFs2
   val httpClient         = "org.http4s"            %% "http4s-async-http-client"     % V.httpClient
   val logging            = "io.chrisdavenport"     %% "log4cats-slf4j"               % V.logging
 

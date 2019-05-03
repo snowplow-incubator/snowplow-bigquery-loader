@@ -122,7 +122,7 @@ lazy val repeater = project.in(file("repeater"))
       Dependencies.gcs,
 
       Dependencies.fs2,
-      Dependencies.pubsubFs2,
+      Dependencies.pubsubFs2Grpc,
       Dependencies.catsEffect,
       Dependencies.httpClient,
       Dependencies.logging,

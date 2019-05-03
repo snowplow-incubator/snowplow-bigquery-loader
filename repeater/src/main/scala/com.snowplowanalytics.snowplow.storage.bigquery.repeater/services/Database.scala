@@ -25,13 +25,11 @@ object Database {
         Desperate(event.payload, EventContainer.FailedRetry.extract(throwable)).asLeft
       case Left(unknown) =>
         throw unknown
-    }.flatMap { result =>
-      result match {
-        case Right(_) =>
-          Logger[F].debug(s"Event ${event.eventId}/${event.etlTstamp} successfully inserted").as(result)
-        case Left(desperate) =>
-          Logger[F].debug(s"Event ${event.eventId}/${event.etlTstamp} could not be inserted. ${desperate.error}").as(result)
-      }
+    }.flatTap {
+      case Right(_) =>
+        Logger[F].debug(s"Event ${event.eventId}/${event.etlTstamp} successfully inserted")
+      case Left(desperate) =>
+        Logger[F].debug(s"Event ${event.eventId}/${event.etlTstamp} could not be inserted. ${desperate.error}")
     }
   }
 

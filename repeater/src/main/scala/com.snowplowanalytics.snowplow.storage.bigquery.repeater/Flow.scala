@@ -79,7 +79,7 @@ object Flow {
   }
 
   /** Process dequeueing desperates and sinking them to GCS */
-  def dequeueDesperates[F[_]: Timer: ConcurrentEffect: Logger](resources: Resources[F]): Stream[F, Unit] =
+  def dequeueDesperates[F[_]: Timer: Concurrent: Logger](resources: Resources[F]): Stream[F, Unit] =
     resources
       .desperates
       .dequeueChunk(resources.bufferSize)
@@ -87,7 +87,7 @@ object Flow {
       .evalMap(sinkChunk(resources.counter, resources.bucket))
 
   /** Sink whole chunk of desperates into a filename, composed of time and chunk number */
-  def sinkChunk[F[_]: Timer: ConcurrentEffect: Logger](counter: Ref[F, Int], bucket: GcsPath)(chunk: Chunk[Desperate]): F[Unit] =
+  def sinkChunk[F[_]: Timer: Sync: Logger](counter: Ref[F, Int], bucket: GcsPath)(chunk: Chunk[Desperate]): F[Unit] =
     for {
       time <- getTime
       _ <- Logger[F].debug(s"Preparing for sinking a chunk, $time")
@@ -95,7 +95,7 @@ object Flow {
       i <- counter.get
       file = Storage.getFileName(bucket.path, i, time)
       _ <- Logger[F].debug(s"Filename will be $file")
-      _  <- Storage.uploadChunk[F](bucket.bucket, file)(chunk)
+      _  <- Storage.uploadChunk[F](bucket.bucket, file, chunk)
     } yield ()
 
   def checkAndInsert[F[_]: Sync: Logger](client: BigQuery,

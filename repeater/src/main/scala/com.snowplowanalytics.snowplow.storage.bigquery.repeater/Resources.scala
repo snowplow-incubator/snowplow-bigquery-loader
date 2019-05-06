@@ -50,6 +50,8 @@ class Resources[F[_]](val bigQuery: BigQuery,
 
 object Resources {
 
+  val QueueSize = 100
+
   case class Statistics(inserted: Int, desperates: Int)
 
   object Statistics {
@@ -68,7 +70,7 @@ object Resources {
       transformed <- Config.transform[F](command.config).value
       env         <- Sync[F].fromEither(transformed)
       bigQuery    <- services.Database.getClient[F]
-      queue       <- Queue.bounded[F, Desperate](100)
+      queue       <- Queue.bounded[F, Desperate](QueueSize)
       counter     <- Ref[F].of[Int](0)
       stop        <- SignallingRef[F, Boolean](false)
       statistics  <- Ref[F].of[Statistics](Statistics.start)

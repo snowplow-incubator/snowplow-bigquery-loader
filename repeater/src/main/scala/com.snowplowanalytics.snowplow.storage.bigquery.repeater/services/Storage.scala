@@ -24,15 +24,15 @@ object Storage {
   // TODO: this is certainly non-RT
   private val storage = StorageOptions.getDefaultInstance.getService
 
-  val TimestampFormat = DateTimeFormat.forPattern("-YYYY-MM-dd-HHmmssSSS")
+  val TimestampFormat = DateTimeFormat.forPattern("YYYY-MM-dd-HHmmssSSS")
   val DefaultAcl = new JArrayList(JArrays.asList(Acl.of(User.ofAllUsers, Role.READER)))
 
   def getFileName(base: String, n: Int, tstamp: DateTime): String =
-    base ++ n.toString ++ DateTime.now(DateTimeZone.UTC).toString(TimestampFormat)
+    base ++ DateTime.now(DateTimeZone.UTC).toString(TimestampFormat) ++ n.toString
 
   def uploadChunk[F[_]: ConcurrentEffect: Logger](bucketName: String, fileName: String)(rows: Chunk[Desperate]): F[Unit] = {
     val blobInfo = BlobInfo.newBuilder(bucketName, fileName).setAcl(DefaultAcl).build()
-    Stream.chunk(rows)
+    val upload = Stream.chunk(rows)
       .map(_.asJson.noSpaces)
       .intersperse("\n")
       .through(text.utf8Encode)
@@ -46,5 +46,10 @@ object Storage {
       }
       .compile
       .drain
+
+    for {
+      _ <- Logger[F].info(s"Preparing write to a $fileName")
+      _ <- upload
+    } yield ()
   }
 }

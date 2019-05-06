@@ -65,20 +65,17 @@ object Resources {
   /** Allocate all resources for an application */
   def acquire[F[_]: ConcurrentEffect: Timer: Logger](command: RepeaterCli.ListenCommand): Resource[F, Resources[F]] = {
     val environment = for {
-      transformed    <- Config.transform[F](command.config).value
-      env            <- Sync[F].fromEither(transformed)
-      bigQuery       <- services.Database.getClient[F]
-      queue          <- Queue.bounded[F, Desperate](command.bufferSize * 2)
-      counter        <- Ref[F].of[Int](0)
-      stop           <- SignallingRef[F, Boolean](false)
-      statistics     <- Ref[F].of[Statistics](Statistics.start)
-      _              <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId}")
+      transformed <- Config.transform[F](command.config).value
+      env         <- Sync[F].fromEither(transformed)
+      bigQuery    <- services.Database.getClient[F]
+      queue       <- Queue.bounded[F, Desperate](100)
+      counter     <- Ref[F].of[Int](0)
+      stop        <- SignallingRef[F, Boolean](false)
+      statistics  <- Ref[F].of[Statistics](Statistics.start)
+      _           <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId}")
     } yield new Resources(bigQuery, command.deadEndBucket, env, queue, counter, stop, statistics, command.bufferSize, command.window)
 
-    for {
-      _t <- AsyncHttpClient.resource[F]()
-      env <- Resource.make(environment)(release)
-    } yield env
+    Resource.make(environment)(release)
   }
 
   /**

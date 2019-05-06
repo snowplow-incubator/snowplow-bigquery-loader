@@ -19,11 +19,13 @@ import java.util.{UUID, List => JList, Map => JMap}
 import scala.collection.JavaConverters._
 import cats.syntax.either._
 import cats.effect.Sync
+
 import com.google.cloud.bigquery.{BigQueryException, BigQueryError => JBigQueryError}
+
 import io.circe.{Decoder, Encoder, Json, JsonObject}
 import io.circe.parser.parse
 import io.circe.generic.semiauto._
-import com.google.common.collect.ImmutableMap
+
 import com.permutive.pubsub.consumer.decoder.MessageDecoder
 
 /**

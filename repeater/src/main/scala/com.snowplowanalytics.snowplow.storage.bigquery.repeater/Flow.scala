@@ -78,9 +78,6 @@ object Flow {
     }
   }
 
-  WeirdChunks.start(50)
-
-
   /** Process dequeueing desperates and sinking them to GCS */
   def dequeueDesperates[F[_]: Timer: ConcurrentEffect: Logger](resources: Resources[F]): Stream[F, Unit] =
     resources
@@ -93,9 +90,11 @@ object Flow {
   def sinkChunk[F[_]: Timer: ConcurrentEffect: Logger](counter: Ref[F, Int], bucket: GcsPath)(chunk: Chunk[Desperate]): F[Unit] =
     for {
       time <- getTime
+      _ <- Logger[F].debug(s"Preparing for sinking a chunk, $time")
       _ <- counter.update(_ + 1)
       i <- counter.get
       file = Storage.getFileName(bucket.path, i, time)
+      _ <- Logger[F].debug(s"Filename will be $file")
       _  <- Storage.uploadChunk[F](bucket.bucket, file)(chunk)
     } yield ()
 

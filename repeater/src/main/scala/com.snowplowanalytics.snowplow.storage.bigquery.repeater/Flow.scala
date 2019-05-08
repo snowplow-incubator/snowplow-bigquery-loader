@@ -1,3 +1,15 @@
+/*
+ * Copyright (c) 2019 Snowplow Analytics Ltd. All rights reserved.
+ *
+ * This program is licensed to you under the Apache License Version 2.0,
+ * and you may not use this file except in compliance with the Apache License Version 2.0.
+ * You may obtain a copy of the Apache License Version 2.0 at http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the Apache License Version 2.0 is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
+ */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import org.joda.time.DateTime
@@ -23,9 +35,6 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.services.Storage
 
 object Flow {
 
-  /** Time to wait since etl_tstamp to ack an event */
-  val DefaultBackoffTime = 10
-
   /**
     * Main sink, processing data parsed from `failedInserts`
     * Attempts to insert a record into BigQuery. If insertion fails - turn it into a `Desperate`
@@ -35,47 +44,12 @@ object Flow {
     */
   def process[F[_]: Logger: Timer: ConcurrentEffect](resources: Resources[F])(events: Stream[F, Model.Record[F, EventContainer]]): Stream[F, Unit] = {
     val inserting = events
-      .evalMap(checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId))
+      .evalMap(checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime))
       .evalMap {
         case Right(_) => resources.logInserted
         case Left(d) => resources.logAbandoned *> resources.desperates.enqueue1(d)
       }
     inserting.concurrently(dequeueDesperates(resources))
-  }
-
-  object WeirdChunks {
-    import cats.effect.concurrent.Ref
-    import fs2.concurrent.Queue
-    import scala.concurrent.duration._
-
-    implicit val t = IO.timer(scala.concurrent.ExecutionContext.global)
-    implicit val cs = IO.contextShift(scala.concurrent.ExecutionContext.global)
-
-    def init: IO[(Ref[IO, Int], Queue[IO, String])] =
-      (Ref.of[IO, Int](0), Queue.bounded[IO, String](10)).tupled
-
-    def generate(c: Ref[IO, Int]): IO[Either[String, Int]] =
-      (IO.sleep(200.millis) *> c.update(_ + 1) *> c.get).map { cc => if (cc % 2 != 0) Left(s"$cc is odd") else Right(cc) }
-
-    // I expect that no matter how elements are inserted, they should be grouped by 10/2sec
-    def pull(q: Queue[IO, String]): Stream[IO, Unit] =
-      q.dequeue.groupWithin(10, 2.seconds).evalMap { c => IO(println(c.toList)) } // It always prints List with single element
-
-    def start(i: Int): IO[Unit] = {
-      val stream = for {
-        r <- Stream.eval(init)
-        (c, q) = r
-        a <- Stream.repeatEval(generate(c)).take(i)
-        putting = a match {   // Behaves differently if I flatMap it
-          case Right(n) => Stream.eval(IO(println(s"$n is fine")))
-          case Left(error) => Stream.eval(q.enqueue1(error))
-        }
-        pulling = pull(q)
-        _ <- putting.concurrently(pulling)
-      } yield ()
-
-      stream.compile.drain
-    }
   }
 
   /** Process dequeueing desperates and sinking them to GCS */
@@ -100,10 +74,11 @@ object Flow {
 
   def checkAndInsert[F[_]: Sync: Logger](client: BigQuery,
                                          dataset: String,
-                                         table: String)
+                                         table: String,
+                                         backoffTime: Int)
                                         (event: Model.Record[F, EventContainer]): F[Either[Desperate, Unit]] =
     for {
-      ready <- event.value.isReady(DefaultBackoffTime)
+      ready <- event.value.isReady(backoffTime)
       result <- if (ready)
         event.ack >>
           services.Database.insert[F](client, dataset, table, event.value)

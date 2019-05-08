@@ -24,6 +24,7 @@ object RepeaterCli {    // TODO: factor out into a common module
 
   val DefaultWindow = 30
   val DefaultBufferSize = 20
+  val DefaultBackoffTime = 900
 
   case class GcsPath(bucket: String, path: String)
 
@@ -48,13 +49,22 @@ object RepeaterCli {    // TODO: factor out into a common module
     "Complementary to desperatesBufferSize")
     .validate("Time needs to be greater than 0") { _ > 0 }
     .withDefault(DefaultWindow)
+  val backoffPeriod = Opts.option[Int]("backoffPeriod", "Amount of seconds to wait until re-insertion attempt will be made.")
+    .validate("Time needs to be greater than 0") { _ > 0 }
+    .withDefault(DefaultBackoffTime)
 
   val verbose = Opts.flag("verbose", "Provide debug output").orFalse
 
-  case class ListenCommand(config: EnvironmentConfig, failedInsertsSub: String, deadEndBucket: GcsPath, verbose: Boolean, bufferSize: Int, window: Int)
+  case class ListenCommand(config: EnvironmentConfig,
+                           failedInsertsSub: String,
+                           deadEndBucket: GcsPath,
+                           verbose: Boolean,
+                           bufferSize: Int,
+                           window: Int,
+                           backoff: Int)
 
   val command = Command(generated.BuildInfo.name, generated.BuildInfo.description) {
-    (options, failedInsertsSub, deadEndBucket, verbose, bufferSize, window).mapN(ListenCommand.apply)
+    (options, failedInsertsSub, deadEndBucket, verbose, bufferSize, window, backoffPeriod).mapN(ListenCommand.apply)
   }
 
   def parse(args: Seq[String]) = command.parse(args)

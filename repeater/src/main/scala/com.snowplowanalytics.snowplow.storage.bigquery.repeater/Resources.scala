@@ -1,3 +1,15 @@
+/*
+ * Copyright (c) 2019 Snowplow Analytics Ltd. All rights reserved.
+ *
+ * This program is licensed to you under the Apache License Version 2.0,
+ * and you may not use this file except in compliance with the Apache License Version 2.0.
+ * You may obtain a copy of the Apache License Version 2.0 at http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the Apache License Version 2.0 is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
+ */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import scala.concurrent.duration._
@@ -40,7 +52,8 @@ class Resources[F[_]](val bigQuery: BigQuery,
                       val stop: SignallingRef[F, Boolean],
                       val statistics: Ref[F, Resources.Statistics],
                       val bufferSize: Int,
-                      val windowTime: Int) {
+                      val windowTime: Int,
+                      val backoffTime: Int) {
   def logInserted: F[Unit] = statistics.update(s => s.copy(inserted = s.inserted + 1))
   def logAbandoned: F[Unit] = statistics.update(s => s.copy(desperates = s.desperates + 1))
 
@@ -61,9 +74,6 @@ object Resources {
       s => s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected"
   }
 
-  def getServiceAccountPath[F[_]: Sync]: F[String] =
-    Sync[F].delay(System.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-
   /** Allocate all resources for an application */
   def acquire[F[_]: ConcurrentEffect: Timer: Logger](command: RepeaterCli.ListenCommand): Resource[F, Resources[F]] = {
     val environment = for {
@@ -75,7 +85,7 @@ object Resources {
       stop        <- SignallingRef[F, Boolean](false)
       statistics  <- Ref[F].of[Statistics](Statistics.start)
       _           <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId}")
-    } yield new Resources(bigQuery, command.deadEndBucket, env, queue, counter, stop, statistics, command.bufferSize, command.window)
+    } yield new Resources(bigQuery, command.deadEndBucket, env, queue, counter, stop, statistics, command.bufferSize, command.window, command.backoff)
 
     Resource.make(environment)(release)
   }

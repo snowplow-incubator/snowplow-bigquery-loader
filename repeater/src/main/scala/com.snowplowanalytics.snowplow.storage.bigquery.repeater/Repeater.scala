@@ -13,6 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import scala.concurrent.duration._
+import scala.util.control.NonFatal
 
 import cats.syntax.all._
 import cats.effect._
@@ -24,9 +25,11 @@ import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 
-import scala.util.control.NonFatal
+import com.snowplowanalytics.snowplow.badrows.Processor
 
 object Repeater extends SafeIOApp {
+
+  val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
 
@@ -36,7 +39,7 @@ object Repeater extends SafeIOApp {
         val process = for {
           resources <- Stream.resource(Resources.acquire[IO](command))
           _         <- Stream.eval(resources.showStats)
-          events     = services.PubSub.getEvents(resources.env.config.projectId, command.failedInsertsSub).interruptWhen(resources.stop)
+          events     = services.PubSub.getEvents(resources.env.config.projectId, command.failedInsertsSub, resources.desperates).interruptWhen(resources.stop)
           processing = Flow.process(resources)(events)
           logging    = Stream.awakeEvery[IO](5.minute).evalMap(_ => resources.showStats)
           _         <- processing.concurrently(logging)

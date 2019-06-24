@@ -44,7 +44,7 @@ object BuildSettings {
   )
 
   lazy val buildInfo = Seq(
-    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.generated",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.generated"
   )
 
   lazy val macroSettings = Seq(
@@ -64,5 +64,21 @@ object BuildSettings {
     dockerCommands += ExecCmd("RUN", "cp", "/opt/docker/bin/docker-entrypoint.sh", "/usr/local/bin/"),
     dockerEntrypoint := Seq("docker-entrypoint.sh"),
     dockerCmd := Seq("--help")
+  )
+
+  // Makes package (build) metadata available withing source code
+  lazy val scalifySettings = Seq(
+    sourceGenerators in Compile += Def.task {
+      val file = (sourceManaged in Compile).value / "settings.scala"
+      IO.write(file, """package %s
+                       |object ProjectMetadata {
+                       |  val version = "%s"
+                       |  val name = "%s"
+                       |  val organization = "%s"
+                       |  val scalaVersion = "%s"
+                       |}
+                       |""".stripMargin.format(buildInfoPackage.value, version.value, name.value, organization.value, scalaVersion.value))
+      Seq(file)
+    }.taskValue
   )
 }

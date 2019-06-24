@@ -26,6 +26,7 @@ object Dependencies {
     val igluCore           = "0.5.0"
     val processingManifest = "0.1.0"
     val schemaDdl          = "0.9.0"
+    val badrows            = "0.1.0"
     // Scala
     val cats               = "1.6.0"
     val catsEffect         = "1.2.0"
@@ -59,13 +60,14 @@ object Dependencies {
   val igluCoreCirce      = "com.snowplowanalytics" %% "iglu-core-circe"              % V.igluCore
   val processingManifest = "com.snowplowanalytics" %% "snowplow-processing-manifest" % V.processingManifest
   val schemaDdl          = "com.snowplowanalytics" %% "schema-ddl"                   % V.schemaDdl
+  val badrows            = "com.snowplowanalytics" %% "snowplow-badrows"             % V.badrows
 
   val cats               = "org.typelevel"         %% "cats-core"                    % V.cats
   val catsEffect         = "org.typelevel"         %% "cats-effect"                  % V.catsEffect
   val circe              = "io.circe"              %% "circe-core"                   % V.circe
   val circeJavaTime      = "io.circe"              %% "circe-java8"                  % V.circe
   val circeParser        = "io.circe"              %% "circe-parser"                 % V.circe
-  val circeLiteral       = "io.circe"              %% "circe-literal"                % V.circe        % "test"
+  val circeLiteral       = "io.circe"              %% "circe-literal"                % V.circe
   val circeJawn          = "io.circe"              %% "circe-jawn"                   % V.circe
   val decline            = "com.monovore"          %% "decline"                      % V.decline
   val fs2                = "co.fs2"                %% "fs2-core"                     % V.fs2
@@ -84,5 +86,6 @@ object Dependencies {
   // Scala (test only)
   val scalaCheck         = "org.scalacheck"        %% "scalacheck"                   % V.scalaCheck     % "test"
   val specs2             = "org.specs2"            %% "specs2-core"                  % V.specs2         % "test"
+  val specs2ScalaCheck   = "org.specs2"            %% "specs2-scalacheck"            % V.specs2         % "test"
   val scioTest           = "com.spotify"           %% "scio-test"                    % V.scio           % "test"
 }

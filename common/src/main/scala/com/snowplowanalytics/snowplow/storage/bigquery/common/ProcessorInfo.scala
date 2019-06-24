@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Snowplow Analytics Ltd. All rights reserved.
+ * Copyright (c) 2018-2019 Snowplow Analytics Ltd. All rights reserved.
  *
  * This program is licensed to you under the Apache License Version 2.0,
  * and you may not use this file except in compliance with the Apache License Version 2.0.
@@ -10,16 +10,18 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery.loader
+package com.snowplowanalytics.snowplow.storage.bigquery.common
 
-import com.spotify.scio.bigquery.TableRow
+import io.circe.Encoder
+import io.circe.generic.semiauto._
 
-import org.apache.beam.sdk.transforms.SerializableFunction
+/**
+  * Gives info about the processor where error occurred
+  * @param artifact artifact name of the processor
+  * @param version version of the processor
+  */
+final case class ProcessorInfo(artifact: String, version: String)
 
-/** Extract TableRow from raw row */
-object SerializeLoaderRow extends SerializableFunction[LoaderRow, TableRow] {
-  def apply(input: LoaderRow): TableRow = {
-    input.data
-  }
+object ProcessorInfo {
+  implicit val processorCirceJsonEncoder: Encoder[ProcessorInfo] = deriveEncoder[ProcessorInfo]
 }
-

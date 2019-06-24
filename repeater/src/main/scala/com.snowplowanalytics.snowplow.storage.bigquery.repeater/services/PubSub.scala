@@ -18,18 +18,20 @@ import cats.effect._
 import io.chrisdavenport.log4cats.Logger
 
 import com.permutive.pubsub.consumer.Model
-import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig }
+import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
 
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.BadRow.PubSubError
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.EventContainer
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.Resources
 
 /** Module responsible for reading PubSub */
 object PubSub {
   /** Read events from `failedInserts` topic */
-  def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](projectId: String, subscription: String) =
+  def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](subscription: String, resources: Resources[F]) =
     PubsubGoogleConsumer.subscribe[F, EventContainer](
-      Model.ProjectId(projectId),
+      Model.ProjectId(resources.env.config.projectId),
       Model.Subscription(subscription),
-      (msg, err, ack, _) => Logger[F].error(s"Msg $msg got error $err") >> ack,
+      (msg, err, ack, _) => resources.logAbandoned *> resources.desperates.enqueue1(PubSubError(msg.toString, err.toString)) >> ack,
       PubsubGoogleConsumerConfig[F](onFailedTerminate = t => Logger[F].error(s"Terminating consumer due $t"))
     )
 }

@@ -31,6 +31,7 @@ lazy val loader = project.in(file("loader"))
   ))
   .enablePlugins(BuildInfoPlugin)
   .settings(BuildSettings.dockerSettings)
+  .settings(BuildSettings.scalifySettings)
   .settings(
     BuildSettings.commonSettings,
     BuildSettings.macroSettings,
@@ -46,7 +47,8 @@ lazy val loader = project.in(file("loader"))
       Dependencies.circeJawn,
       Dependencies.specs2,
       Dependencies.scioTest,
-      Dependencies.scalaCheck
+      Dependencies.scalaCheck,
+      Dependencies.specs2ScalaCheck
     )
   )
   .enablePlugins(JavaAppPackaging)
@@ -114,6 +116,7 @@ lazy val repeater = project.in(file("repeater"))
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.repeater.generated"
   ))
   .settings(BuildSettings.dockerSettings)
+  .settings(BuildSettings.scalifySettings)
   .settings(
     BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
@@ -127,9 +130,11 @@ lazy val repeater = project.in(file("repeater"))
       Dependencies.httpClient,
       Dependencies.logging,
       Dependencies.slf4j,
+      Dependencies.circeLiteral,
 
       Dependencies.specs2,
-      Dependencies.scalaCheck
+      Dependencies.scalaCheck,
+      Dependencies.specs2ScalaCheck
     )
   )
   .enablePlugins(JavaAppPackaging)

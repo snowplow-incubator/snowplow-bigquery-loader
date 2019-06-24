@@ -21,6 +21,7 @@ import org.joda.time.Duration
 
 import com.spotify.scio.ScioContext
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
+import com.spotify.scio.coders.Coder
 
 import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
@@ -34,6 +35,8 @@ import common.Codecs.toPayload
 
 
 object Loader {
+
+  implicit val coderBadRow: Coder[BadRow] = Coder.kryo[BadRow]
 
   val OutputWindow: Duration =
     Duration.millis(10000)

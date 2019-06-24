@@ -36,7 +36,7 @@ object Repeater extends SafeIOApp {
         val process = for {
           resources <- Stream.resource(Resources.acquire[IO](command))
           _         <- Stream.eval(resources.showStats)
-          events     = services.PubSub.getEvents(resources.env.config.projectId, command.failedInsertsSub).interruptWhen(resources.stop)
+          events     = services.PubSub.getEvents(command.failedInsertsSub, resources).interruptWhen(resources.stop)
           processing = Flow.process(resources)(events)
           logging    = Stream.awakeEvery[IO](5.minute).evalMap(_ => resources.showStats)
           _         <- processing.concurrently(logging)

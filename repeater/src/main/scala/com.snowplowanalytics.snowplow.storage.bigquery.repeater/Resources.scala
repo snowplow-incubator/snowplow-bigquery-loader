@@ -14,25 +14,21 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import scala.concurrent.duration._
 
-import cats.{ Show, Monad }
+import cats.{Monad, Show}
 import cats.syntax.all._
-import cats.instances.all._
 import cats.effect._
 import cats.effect.concurrent.Ref
 
-import org.http4s.client.Client
-import org.http4s.client.asynchttpclient.AsyncHttpClient
-
-import fs2.{ Stream, Chunk }
-import fs2.concurrent.{ Queue, SignallingRef }
+import fs2.{Chunk, Stream}
+import fs2.concurrent.{Queue, SignallingRef}
 
 import io.chrisdavenport.log4cats.Logger
 
 import com.google.cloud.bigquery._
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
-import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.GcsPath
-import com.snowplowanalytics.snowplow.storage.bigquery.repeater.EventContainer.Desperate
+
+import RepeaterCli.GcsPath
 
 
 /**
@@ -47,7 +43,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.EventContainer.D
 class Resources[F[_]](val bigQuery: BigQuery,
                       val bucket: GcsPath,
                       val env: Config.Environment,
-                      val desperates: Queue[F, Desperate],
+                      val desperates: Queue[F, BadRow],
                       val counter: Ref[F, Int],
                       val stop: SignallingRef[F, Boolean],
                       val statistics: Ref[F, Resources.Statistics],
@@ -80,7 +76,7 @@ object Resources {
       transformed <- Config.transform[F](command.config).value
       env         <- Sync[F].fromEither(transformed)
       bigQuery    <- services.Database.getClient[F]
-      queue       <- Queue.bounded[F, Desperate](QueueSize)
+      queue       <- Queue.bounded[F, BadRow](QueueSize)
       counter     <- Ref[F].of[Int](0)
       stop        <- SignallingRef[F, Boolean](false)
       statistics  <- Ref[F].of[Statistics](Statistics.start)
@@ -94,7 +90,7 @@ object Resources {
     * Try to get desperate items in queue all at once
     * Assuming that data is not sinking into `desperates` anymore (`stop.set(true)` in `release`)
     */
-  def pullRemaining[F[_]: Sync](desperates: Queue[F, Desperate]): F[List[Desperate]] = {
+  def pullRemaining[F[_]: Sync](desperates: Queue[F, BadRow]): F[List[BadRow]] = {
     val last = Stream
       .repeatEval(desperates.tryDequeueChunk1(10))
       .takeWhile(_.isDefined)

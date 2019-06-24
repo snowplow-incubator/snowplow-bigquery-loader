@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Snowplow Analytics Ltd. All rights reserved.
+ * Copyright (c) 2018-2019 Snowplow Analytics Ltd. All rights reserved.
  *
  * This program is licensed to you under the Apache License Version 2.0,
  * and you may not use this file except in compliance with the Apache License Version 2.0.
@@ -12,52 +12,156 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import java.util.Base64
-
-import cats.implicits._
 import cats.data.NonEmptyList
 
-import io.circe.{Decoder, DecodingFailure, Encoder, Json}
+import io.circe.{Encoder, Json}
 import io.circe.syntax._
+import io.circe.literal._
+import io.circe.generic.semiauto._
+
+import com.snowplowanalytics.iglu.client.ClientError
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError => BigQueryCastError}
+import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
+import com.snowplowanalytics.iglu.core.circe.instances._
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
+
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{BadRowSchemas, ProcessorInfo}
+import com.snowplowanalytics.snowplow.storage.bigquery.loader.generated.ProjectMetadata
 
 /**
-  * Class representing an enriched event that failed BigQuery Loader transformation,
-  * e.g. due unavailable schema, bug in Schema DDL or unexpected structure
-  * Unlike "failed insert" it did not get to BigQuery table
+  * Represents events which are problematic to process due to
+  * several reasons such as could not be parsed, error while validating
+  * them with Iglu, error while casting them to BigQuery types etc.
   */
-case class BadRow(line: String, errors: NonEmptyList[String]) {
-  def compact: String = this.asJson.noSpaces
+sealed trait BadRow extends Product with Serializable {
+  def getSelfDescribingData: SelfDescribingData[Json]
+  def compact: String  = getSelfDescribingData.asJson.noSpaces
 }
 
 object BadRow {
-  private val Line = "line"
-  private val Errors = "errors"
+  val BQLoaderProcessorInfo = ProcessorInfo(ProjectMetadata.name, ProjectMetadata.version)
 
-  implicit val encoder: Encoder[BadRow] =
-    Encoder.instance { badRow: BadRow =>
-      val encoded = Base64.getEncoder.encode(badRow.line.getBytes)
-      Json.fromFields(List(
-        (Line, Json.fromString(new String(encoded))),
-        (Errors, Json.fromValues(badRow.errors.toList.map(Json.fromString)))
-      ))
+  implicit val bqLoaderBadRowCirceJsonEncoder: Encoder[BadRow] =
+    Encoder.instance {
+      case ParsingError(payload, errors) => json"""{
+          "payload": $payload,
+          "errors": $errors,
+          "processor": $BQLoaderProcessorInfo
+        }"""
+      case IgluError(original, errorInfos) => json"""{
+          "original": $original,
+          "errors": $errorInfos,
+          "processor": $BQLoaderProcessorInfo
+        }"""
+      case CastError(original, errorInfos) => json"""{
+          "original": $original,
+          "errors": $errorInfos,
+          "processor": $BQLoaderProcessorInfo
+        }"""
+      case RuntimeError(original, errorInfos) => json"""{
+          "original": $original,
+          "errors": $errorInfos,
+          "processor": $BQLoaderProcessorInfo
+        }"""
     }
 
-  implicit val decoder: Decoder[BadRow] =
-    Decoder.instance[BadRow] { cursor =>
-      for {
-        jsonObject <- cursor.value
-          .asObject
-          .toRight(DecodingFailure("Bad row should be an object", cursor.history))
-        map = jsonObject.toMap
-        line <- map.get(Line)
-          .flatMap(_.asString)
-          .toRight(DecodingFailure(s"$Line should be a string", cursor.history))
-        decodedLine <- Either.catchNonFatal(new String(Base64.getDecoder.decode(line)))
-          .leftMap(error => DecodingFailure(s"Cannot decode $Line ${error.getMessage}", cursor.history))
-        errors <- map.get(Errors)
-          .flatMap(_.as[NonEmptyList[String]].toOption)
-          .toRight(DecodingFailure(s"Cannot decode $Errors", cursor.history))
+  /**
+    * Represents the failure case where data can not be parsed as a proper event
+    * @param payload data blob tried to be parsed
+    * @param errors  errors in the end of the parsing process
+    */
+  final case class ParsingError(payload: String, errors: NonEmptyList[String]) extends BadRow {
+    def getSelfDescribingData: SelfDescribingData[Json] =
+      SelfDescribingData(BadRowSchemas.LoaderParsingError, (this: BadRow).asJson)
+  }
 
-      } yield BadRow(decodedLine, errors)
+  /**
+    * Represents errors which occurs when making validation
+    * against a schema with Iglu client
+    * @param original event which is worked on when error is got
+    * @param errorInfos list of error info objects which contains reasons of errors
+    */
+  final case class IgluError(original: Event, errorInfos: NonEmptyList[IgluErrorInfo]) extends BadRow {
+    def getSelfDescribingData: SelfDescribingData[Json] =
+      SelfDescribingData(BadRowSchemas.LoaderIgluError, (this: BadRow).asJson)
+  }
+
+  /**
+    * Gives information about Iglu error such as which schema to work with
+    * and error object which is got from client
+    * @param schemaKey key of schema which is worked with when error got
+    * @param error error object from Iglu client which gives information about error
+    */
+  final case class IgluErrorInfo(schemaKey: SchemaKey, error: ClientError)
+
+  implicit val bqLoaderIgluErrorInfoCirceJsonEncoder: Encoder[IgluErrorInfo] = deriveEncoder[IgluErrorInfo]
+
+  /**
+    * Represents errors which occurs when trying to turn JSON value
+    * into BigQuery-compatible row
+    * @param original event which is worked on when error is got
+    * @param errorInfos list of error info objects which contains reasons of errors
+    */
+  final case class CastError(original: Event, errorInfos: NonEmptyList[CastErrorInfo]) extends BadRow {
+    def getSelfDescribingData: SelfDescribingData[Json] =
+      SelfDescribingData(BadRowSchemas.CastError, (this: BadRow).asJson)
+  }
+
+  /**
+    * Gives information about error which is got while casting data to
+    * BigQuery-compatible format.
+    * @param data data which tried to be casted during error
+    * @param schemaKey key of schema which is Ddl schema for row is created
+    * @param errors error objects from SchemaDDL which is the library where
+    *               cast operation is done
+    */
+  final case class CastErrorInfo(data: Json, schemaKey: SchemaKey, errors: NonEmptyList[BigQueryCastError])
+
+  implicit val bqLoaderCastErrorInfoCirceJsonEncoder: Encoder[CastErrorInfo] = deriveEncoder[CastErrorInfo]
+
+  /**
+    * Represents errors which are not expected to happen. For example,
+    * if some error happens during parsing the schema json to Ddl schema,
+    * this is due to some bugs in SchemaDDL library which is unlikely to
+    * happen. Therefore, these types error collected under one type of error
+    * @param original event which is worked on when error is got
+    * @param errorInfos list of error info objects which contains
+*                       reasons of errors
+    */
+  final case class RuntimeError(original: Event, errorInfos: NonEmptyList[RuntimeErrorInfo]) extends BadRow {
+    def getSelfDescribingData: SelfDescribingData[Json] =
+      SelfDescribingData(BadRowSchemas.LoaderRuntimeError, (this: BadRow).asJson)
+  }
+
+  /**
+    * Gives information about unexpected error with bearing some value related
+    * with error and error message
+    * @param value json value which is given since it is thought related to error
+    * @param message error message
+    */
+  final case class RuntimeErrorInfo(value: Json, message: String)
+
+  implicit val bqLoaderRuntimeErrorInfoCirceJsonEncoder: Encoder[RuntimeErrorInfo] = deriveEncoder[RuntimeErrorInfo]
+
+  implicit val bqLoaderBigQueryCastErrorJsonEncoder: Encoder[BigQueryCastError] =
+    Encoder.instance {
+      case BigQueryCastError.WrongType(value, expected) => json"""{
+            "wrongType": {
+              "value": $value,
+              "expectedType": ${expected.toString}
+            }
+          }"""
+      case BigQueryCastError.NotAnArray(value, expected) => json"""{
+            "notAnArray": {
+              "value": $value,
+              "expectedType": ${expected.toString}
+            }
+          }"""
+      case BigQueryCastError.MissingInValue(key, value) => json"""{
+            "missingInValue": {
+              "value": $value,
+              "missingKey": $key
+            }
+          }"""
     }
 }

@@ -17,16 +17,16 @@ import java.util
 import java.util.{UUID, List => JList, Map => JMap}
 
 import scala.collection.JavaConverters._
+
 import cats.syntax.either._
 import cats.effect.Sync
 
-import com.google.cloud.bigquery.{BigQueryException, BigQueryError => JBigQueryError}
-
-import io.circe.{Decoder, Encoder, Json, JsonObject}
+import io.circe.{Decoder, Json, JsonObject}
 import io.circe.parser.parse
-import io.circe.generic.semiauto._
 
 import com.permutive.pubsub.consumer.decoder.MessageDecoder
+
+import PayloadParser.ReconstructedEvent
 
 /**
   * Primary data type for events parsed from `failedInserts` PubSub subscription
@@ -39,48 +39,12 @@ case class EventContainer(eventId: UUID, etlTstamp: Instant, payload: JsonObject
   /** Check if event is older than `seconds` (time to create a column) */
   def isReady[F[_]: Sync](seconds: Long): F[Boolean] =
     Sync[F].delay(etlTstamp.isBefore(Instant.now().minusSeconds(seconds)))
+
+  def parsePayload[F[_]: Sync]: F[Either[BadRow, ReconstructedEvent]] =
+    Sync[F].delay(PayloadParser.parse(payload))
 }
 
 object EventContainer {
-
-  /**
-    * The last incarnation of enriched event, that can go only into GCS bucket
-    * @param payload the original enriched event payload, produced by BQ Loader (Analtyics SDK)
-    * @param error happened during repeat (retry insert)
-    */
-  case class Desperate(payload: JsonObject, error: FailedRetry)
-
-  object Desperate {
-    implicit def circeDesperateEncoder: Encoder[Desperate] =
-      deriveEncoder[Desperate]
-  }
-
-  /** Result of repeat (retry insert) */
-  sealed trait FailedRetry
-  object FailedRetry {
-    case class BigQueryError(reason: String, location: Option[String], message: String) extends FailedRetry
-    case class UnknownError(message: String) extends FailedRetry
-
-    def fromJava(error: JBigQueryError): BigQueryError =
-      BigQueryError(error.getReason, Option(error.getLocation), error.getMessage)
-
-    def extract(exception: BigQueryException): FailedRetry = {
-      val default = BigQueryError("Unknown reason", None, exception.getMessage)
-      Option(exception.getError).map(fromJava).getOrElse(default)
-    }
-
-    def extract(errors: JMap[java.lang.Long, JList[JBigQueryError]]): FailedRetry =
-      errors
-        .asScala
-        .toList
-        .flatMap(_._2.asScala.toList)
-        .headOption
-        .map(fromJava)
-        .getOrElse(UnknownError(errors.toString))
-
-    implicit def circeFailedRetryEncoder: Encoder[FailedRetry] =
-      deriveEncoder[FailedRetry]
-  }
 
   implicit val circeEventDecoder: Decoder[EventContainer] = Decoder.instance { cursor =>
     for {

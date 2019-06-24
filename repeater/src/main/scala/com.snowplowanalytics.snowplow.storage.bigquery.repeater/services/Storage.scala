@@ -19,7 +19,6 @@ import cats.effect.Sync
 
 import com.google.cloud.storage.Acl.{Role, User}
 import com.google.cloud.storage.{Acl, BlobInfo, StorageOptions}
-import com.snowplowanalytics.snowplow.storage.bigquery.repeater.EventContainer.Desperate
 
 import fs2.Chunk
 
@@ -29,6 +28,9 @@ import org.joda.time.format.DateTimeFormat
 import org.joda.time.{DateTime, DateTimeZone}
 
 import io.circe.syntax._
+
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.BadRow
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.BadRow._
 
 object Storage {
 
@@ -41,11 +43,11 @@ object Storage {
   def getFileName(base: String, n: Int, tstamp: DateTime): String =
     base ++ DateTime.now(DateTimeZone.UTC).toString(TimestampFormat) ++ n.toString
 
-  def uploadChunk[F[_]: Sync: Logger](bucketName: String, fileName: String, rows: Chunk[Desperate]): F[Unit] = {
+  def uploadChunk[F[_]: Sync: Logger](bucketName: String, fileName: String, rows: Chunk[BadRow]): F[Unit] = {
     val blobInfo = BlobInfo.newBuilder(bucketName, fileName).setAcl(DefaultAcl).build()
     val content = rows
       .toChain
-      .map(_.asJson.noSpaces)
+      .map(_.compact)
       .mkString_("", "\n", "")
       .getBytes()
 

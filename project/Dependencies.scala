@@ -65,7 +65,7 @@ object Dependencies {
   val circe              = "io.circe"              %% "circe-core"                   % V.circe
   val circeJavaTime      = "io.circe"              %% "circe-java8"                  % V.circe
   val circeParser        = "io.circe"              %% "circe-parser"                 % V.circe
-  val circeLiteral       = "io.circe"              %% "circe-literal"                % V.circe        % "test"
+  val circeLiteral       = "io.circe"              %% "circe-literal"                % V.circe
   val circeJawn          = "io.circe"              %% "circe-jawn"                   % V.circe
   val decline            = "com.monovore"          %% "decline"                      % V.decline
   val fs2                = "co.fs2"                %% "fs2-core"                     % V.fs2
@@ -85,5 +85,6 @@ object Dependencies {
   // Scala (test only)
   val scalaCheck         = "org.scalacheck"        %% "scalacheck"                   % V.scalaCheck     % "test"
   val specs2             = "org.specs2"            %% "specs2-core"                  % V.specs2         % "test"
+  val specs2ScalaCheck   = "org.specs2"            %% "specs2-scalacheck"            % V.specs2         % "test"
   val scioTest           = "com.spotify"           %% "scio-test"                    % V.scio           % "test"
 }

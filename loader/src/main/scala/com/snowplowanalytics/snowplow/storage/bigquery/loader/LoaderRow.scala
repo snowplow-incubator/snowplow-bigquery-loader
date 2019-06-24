@@ -16,10 +16,11 @@ package loader
 import org.joda.time.Instant
 
 import cats.Id
-import cats.data.{EitherNel, NonEmptyList, ValidatedNel}
+import cats.data.ValidatedNel
 import cats.implicits._
 
 import io.circe.Json
+import io.circe.syntax._
 
 import com.spotify.scio.bigquery.TableRow
 
@@ -27,12 +28,13 @@ import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{Schema => DdlSchema}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError, Row, Field}
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field, Row}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 
 import common.{Adapter, Schema}
 import IdInstances._
+import loader.BadRow._
 
 /** Row ready to be passed into Loader stream and Mutator topic */
 case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])
@@ -48,32 +50,29 @@ object LoaderRow {
     * @param record enriched TSV line
     * @return either bad with error messages or entity ready to be loaded
     */
-  def parse(resolver: Json)(record: String): Either[BadRow, LoaderRow] = {
-    val loaderRow: EitherNel[String, LoaderRow] = for {
-      event         <- Event.parse(record).toEither
+  def parse(resolver: Json)(record: String): Either[BadRow, LoaderRow] =
+    for {
+      event         <- Event.parse(record).toEither.leftMap(e => ParsingError(record, e))
       rowWithTstamp <- fromEvent(singleton.ResolverSingleton.get(resolver))(event)
       (row, tstamp)  = rowWithTstamp
     } yield LoaderRow(tstamp, row, event.inventory)
 
-    loaderRow.leftMap(errors => BadRow(record, errors))
-  }
-
-  type Transformed[A] = ValidatedNel[String, A]
+  type Transformed[A] = ValidatedNel[InternalErrorInfo, A]
 
   /** Parse JSON object provided by Snowplow Analytics SDK */
-  def fromEvent(resolver: Resolver[Id])(event: Event): EitherNel[String, (TableRow, Instant)] = {
+  def fromEvent(resolver: Resolver[Id])(event: Event): Either[InternalError, (TableRow, Instant)] = {
     val atomic: Transformed[List[(String, Any)]] = event
       .atomic
       .filter { case (key, value) => key == "geo_location" || !value.isNull }
       .toList
-      .traverse[ValidatedNel[String, ?], (String, Any)] { case (key, value) =>
+      .traverse[ValidatedNel[InternalErrorInfo, ?], (String, Any)] { case (key, value) =>
         value.fold(
-          s"Unexpected JSON null in [$key]".invalidNel,   // Should not happen
+          InternalErrorInfo.UnexpectedError(value, s"Unexpected JSON null in [$key]").invalidNel,   // Should not happen
           b => b.validNel,
           i => i.toInt.orElse(i.toBigDecimal).getOrElse(i.toDouble).validNel,
           s => s.validNel,
-          _ => s"Unexpected JSON array with key [$key] found in EnrichedEvent".invalidNel,
-          _ => s"Unexpected JSON object with key [$key] found in EnrichedEvent".invalidNel
+          _ => InternalErrorInfo.UnexpectedError(value, s"Unexpected JSON array with key [$key] found in EnrichedEvent").invalidNel,
+          _ => InternalErrorInfo.UnexpectedError(value, s"Unexpected JSON object with key [$key] found in EnrichedEvent").invalidNel
         ).map { v => (key, v)}
       }
 
@@ -90,58 +89,36 @@ object LoaderRow {
       val rows = a ++ c ++ dc ++ e
       (TableRow(rows: _*), new Instant(event.collector_tstamp.toEpochMilli) )
     }
-    result.toEither
+    result.toEither.leftMap[InternalError](failureInfo => InternalError(event, failureInfo))
   }
 
   /** Group list of contexts by their full URI and transform values into ready to load rows */
-  def groupContexts(resolver: Resolver[Id], contexts: Vector[SelfDescribingData[Json]]): ValidatedNel[String, List[(String, Any)]] = {
+  def groupContexts(resolver: Resolver[Id], contexts: Vector[SelfDescribingData[Json]]): ValidatedNel[InternalErrorInfo, List[(String, Any)]] = {
     val grouped = contexts.groupBy(_.schema).map { case (key, groupedContexts) =>
       val contexts = groupedContexts.map(_.data)    // Strip away URI
       val columnName = Schema.getColumnName(ShreddedType(Contexts(CustomContexts), key))
       val getRow = transformJson(resolver)(key)(_)
       contexts
         .toList
-        .traverse[ValidatedNel[String, ?], Row](getRow)
+        .traverse[ValidatedNel[InternalErrorInfo, ?], Row](getRow)
         .map(rows => (columnName, Adapter.adaptRow(Row.Repeated(rows))))
     }
     grouped
       .toList
-      .sequence[ValidatedNel[String, ?], (String, AnyRef)]
+      .sequence[ValidatedNel[InternalErrorInfo, ?], (String, AnyRef)]
   }
 
   /**
     * Get BigQuery-compatible table rows from data-only JSON payload
     * Can be transformed to contexts (via Repeated) later only remain ue-compatible
     */
-  def transformJson(resolver: Resolver[Id])(schemaKey: SchemaKey)(data: Json): ValidatedNel[String, Row] = {
+  def transformJson(resolver: Resolver[Id])(schemaKey: SchemaKey)(data: Json): ValidatedNel[InternalErrorInfo, Row] = {
     // TODO: proper stringify
     resolver.lookupSchema(schemaKey, 3)
-      .leftMap(_.toString)
-      .flatMap(schema => DdlSchema.parse(schema).toRight(s"Cannot parse JSON Schema [$schemaKey]"))
+      .leftMap(InternalErrorInfo.IgluValidationError(schemaKey, _))
+      .flatMap(schema => DdlSchema.parse(schema).toRight(InternalErrorInfo.UnexpectedError(schemaKey.toSchemaUri.asJson, "Error while parsing ddl schema")))
       .map(schema => Field.build("", schema, false))
-      .flatMap(Row.cast(_)(data).leftMap(stringifyCastErrors).toEither.leftMap(s => s.toList.mkString(",")))
-      .toValidatedNel
+      .flatMap(Row.cast(_)(data).leftMap(InternalErrorInfo.CastError(data, schemaKey, _)).toEither)
+      .toValidatedNel[InternalErrorInfo]
   }
-
-  def stringifyCastErrors(nel: NonEmptyList[CastError]): NonEmptyList[String] =
-    nel.map {
-      case CastError.WrongType(value, expected) =>
-        Json.fromFields(List(
-          ("message", Json.fromString("Unexpected type of value")),
-          ("value", value),
-          ("expectedType", Json.fromString(expected.toString))
-        )).noSpaces
-      case CastError.NotAnArray(value, expected) =>
-        Json.fromFields(List(
-          ("message", Json.fromString("Value should be in array")),
-          ("value", value),
-          ("expectedType", Json.fromString(expected.toString))
-        )).noSpaces
-      case CastError.MissingInValue(key, value) =>
-        Json.fromFields(List(
-          ("message", Json.fromString("Key is missing in value")),
-          ("value", value),
-          ("missingKey", Json.fromString(key))
-        )).noSpaces
-    }
 }

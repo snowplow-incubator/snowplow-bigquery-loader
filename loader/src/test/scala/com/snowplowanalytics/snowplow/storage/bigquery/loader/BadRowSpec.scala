@@ -12,34 +12,103 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import io.circe.Json
-
-import cats.data.NonEmptyList
-
+import scala.reflect.{ClassTag, classTag}
+import io.circe.literal._
+import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
+import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent._
+import com.snowplowanalytics.snowplow.storage.bigquery.loader.BadRow.{InternalError, InternalErrorInfo, ParsingError}
 import org.specs2.Specification
+import org.specs2.matcher.{Expectable, MatchFailure, MatchResult, MatchSuccess, Matcher}
 
-object BadRowSpec extends Specification { def is = s2"""
-  encoder produces correct JSON $e1
-  decoder extracts correct BadRow $e2
+object BadRowSpec {
+
+  val notEnrichedEvent = "Not enriched event"
+
+  val resolverConfig = json"""
+      {
+         "schema":"iglu:com.snowplowanalytics.iglu/resolver-config/jsonschema/1-0-0",
+         "data":{
+            "cacheSize":500,
+            "repositories":[
+               {
+                  "name":"Iglu Central",
+                  "priority":0,
+                  "vendorPrefixes":[
+                     "com.snowplowanalytics"
+                  ],
+                  "connection":{
+                     "http":{
+                        "uri":"http://iglucentral.com"
+                     }
+                  }
+               }
+            ]
+         }
+      }
+    """
+
+  def beEventParsingErrorAndHaveSamePayload(record: String): Matcher[BadRow] = new Matcher[BadRow] {
+    override def apply[S <: BadRow](t: Expectable[S]): MatchResult[S] = {
+      t.value match {
+        case ParsingError(`record`, _) =>
+          MatchSuccess("Event parsing errors have same payload", "", t)
+        case ParsingError(_, _) =>
+          MatchFailure("", "Event parsing errors have different payload", t)
+        case _ =>
+          MatchFailure("", "Given bad row is not EventParsingError", t)
+      }
+    }
+  }
+
+
+  def beTypeOfErrorAndHaveSamePayload[T <: InternalErrorInfo: ClassTag](event: Event): Matcher[InternalError] = new Matcher[InternalError] {
+    override def apply[S <: InternalError](t: Expectable[S]): MatchResult[S] = t.value match {
+      case InternalError(`event`, errorInfos) =>
+        val res = errorInfos.foldLeft(true)((res, e) => res & classTag[T].runtimeClass.isInstance(e))
+        Matcher.result(
+          res,
+          "All the errors are IgluValidationError and payload is equal to given event",
+          "All the errors are not IgluValidationError",
+          t)
+      case _ => MatchFailure("", "Given bad row is not BigQueryError", t)
+    }
+  }
+}
+
+class BadRowSpec extends Specification { def is = s2"""
+  parsing not enriched event returns error $e1
+  fromEvent returns IgluValidationError if event has contexts with not existing schemas $e2
+  fromEvent returns CastError if event has missing fields with respect to its schema $e3
   """
+  import BadRowSpec._
 
   def e1 = {
-    val input = BadRow("foo", NonEmptyList.of("one", "two", "three"))
-    val expected = Json.fromFields(List(
-      ("line", Json.fromString("Zm9v")),
-      ("errors", Json.fromValues(List(Json.fromString("one"), Json.fromString("two"), Json.fromString("three"))))
-    ))
-    val result = BadRow.encoder(input)
-    result mustEqual expected
+    val res = LoaderRow.parse(BadRowSpec.resolverConfig)(notEnrichedEvent)
+    res.swap.getOrElse(throw new RuntimeException("Result need to be left")) must beEventParsingErrorAndHaveSamePayload(notEnrichedEvent)
   }
 
   def e2 = {
-    val input = Json.fromFields(List(
-      ("line", Json.fromString("Zm9v")),
-      ("errors", Json.fromValues(List(Json.fromString("one"), Json.fromString("two"), Json.fromString("three"))))
-    ))
-    val expected = BadRow("foo", NonEmptyList.of("one", "two", "three"))
-    val result = BadRow.decoder.decodeJson(input)
-    result must beRight(expected)
+    val contexts = List(
+      SelfDescribingData(
+        SchemaKey("com.snowplowanalytics.snowplow", "not_existing_context", "jsonschema", SchemaVer.Full(1, 0, 0)),
+        json"""{"latitude": 22, "longitude": 23.1, "latitudeLongitudeAccuracy": 23} """
+      )
+    )
+    val event = SpecHelpers.ExampleEvent.copy(contexts = Contexts(contexts), derived_contexts = Contexts(contexts))
+    val res = LoaderRow.fromEvent(SpecHelpers.resolver)(event)
+    res.swap.getOrElse(throw new RuntimeException("Result need to be left")) must beTypeOfErrorAndHaveSamePayload[InternalErrorInfo.IgluValidationError](event)
+  }
+
+  def e3 = {
+    val contexts = List(
+      SelfDescribingData(
+        SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0)),
+        json"""{}"""
+      )
+    )
+    val event = SpecHelpers.ExampleEvent.copy(contexts = Contexts(contexts), derived_contexts = Contexts(contexts))
+    val res = LoaderRow.fromEvent(SpecHelpers.resolver)(event)
+    res.swap.getOrElse(throw new RuntimeException("Result need to be left")) must beTypeOfErrorAndHaveSamePayload[InternalErrorInfo.CastError](event)
   }
 }

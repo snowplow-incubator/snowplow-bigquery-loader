@@ -36,6 +36,7 @@ lazy val loader = project.in(file("loader"))
     BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
       Dependencies.scioCore,
+      Dependencies.scioBigQuery,
 
       Dependencies.slf4j,
       Dependencies.directRunner,
@@ -90,6 +91,7 @@ lazy val forwarder = project.in(file("forwarder"))
     BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
       Dependencies.scioCore,
+      Dependencies.scioBigQuery,
 
       Dependencies.slf4j,
       Dependencies.directRunner,

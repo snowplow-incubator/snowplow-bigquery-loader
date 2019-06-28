@@ -32,12 +32,12 @@ object Dependencies {
     val circe              = "0.11.1"
     val decline            = "0.6.2"
     val fs2                = "1.0.4"
-    val scio               = "0.6.1"
     val pubsubFs2          = "0.12.0"
     val httpClient         = "0.20.0"
     val logging            = "0.3.0"
+    val scio               = "0.7.4"
     // Java
-    val beam               = "2.6.0"
+    val beam               = "2.11.0"
     val googleCloud        = "1.51.0"
     val slf4j              = "1.7.25"
     // Scala (test only)
@@ -75,6 +75,7 @@ object Dependencies {
   val pubsubFs2Grpc      = "com.permutive"         %% "fs2-google-pubsub-grpc"       % V.pubsubFs2
   val httpClient         = "org.http4s"            %% "http4s-async-http-client"     % V.httpClient
   val logging            = "io.chrisdavenport"     %% "log4cats-slf4j"               % V.logging
+  val scioBigQuery       = "com.spotify"           %% "scio-bigquery"                % V.scio
 
   // Java
   val dataflowRunner     = "org.apache.beam"       % "beam-runners-google-cloud-dataflow-java" % V.beam

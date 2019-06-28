@@ -13,6 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
+import scala.concurrent.duration.Duration
 import com.spotify.scio._
 
 object Main {
@@ -21,7 +22,7 @@ object Main {
     LoaderCli.parse(args) match {
       case Right(env) =>
         Loader.run(env, sc)
-        val _ = sc.close()
+        val _ = sc.run().waitUntilDone(Duration.Inf)
       case Left(error) =>
         System.err.println(error.getMessage)
         System.exit(1)

@@ -28,9 +28,9 @@ object Dependencies {
     val fs2                = "1.0.0"
     val json4sJackson      = "3.2.11"
     val scalaz7            = "7.0.9"
-    val scio               = "0.6.1"
+    val scio               = "0.7.4"
     // Java
-    val beam               = "2.6.0"
+    val beam               = "2.11.0"
     val googleCloud        = "1.51.0"
     val slf4j              = "1.7.25"
     // Scala (test only)
@@ -64,6 +64,7 @@ object Dependencies {
   val scalaz7            = "org.scalaz"            %% "scalaz-core"                  % V.scalaz7
   val scioCore           = "com.spotify"           %% "scio-core"                    % V.scio
   val scioRepl           = "com.spotify"           %% "scio-repl"                    % V.scio
+  val scioBigQuery       = "com.spotify"           %% "scio-bigquery"                % V.scio
 
   // Java
   val dataflowRunner     = "org.apache.beam"       % "beam-runners-google-cloud-dataflow-java" % V.beam

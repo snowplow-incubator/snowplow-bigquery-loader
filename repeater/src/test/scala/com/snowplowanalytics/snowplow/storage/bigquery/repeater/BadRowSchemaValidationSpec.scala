@@ -42,18 +42,42 @@ object BadRowSchemaValidationSpec {
          "data":{
             "cacheSize":500,
             "repositories":[
-               {
-                 "name":"Iglu Central",
-                 "priority":0,
-                 "vendorPrefixes":[
-                   "com.snowplowanalytics"
-                 ],
-                 "connection":{
-                   "http":{
-                     "uri":"http://iglucentral.com"
-                   }
+              {
+               "name":"Iglu Central Mirror",
+               "priority":0,
+               "vendorPrefixes":[
+                 "com.snowplowanalytics"
+               ],
+               "connection":{
+                 "http":{
+                  "uri":"http://18.195.229.140"
                  }
                }
+              },
+              {
+                "name":"Local Iglu Central",
+                "priority":0,
+                "vendorPrefixes":[
+                  "com.snowplowanalytics"
+                ],
+                "connection":{
+                  "http":{
+                    "uri":"http://localhost:4040"
+                  }
+                }
+              },
+              {
+               "name":"Iglu Central",
+               "priority":0,
+               "vendorPrefixes":[
+                 "com.snowplowanalytics"
+               ],
+               "connection":{
+                 "http":{
+                   "uri":"http://iglucentral.com"
+                 }
+               }
+              }
             ]
          }
       }

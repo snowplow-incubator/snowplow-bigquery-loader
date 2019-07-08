@@ -1,3 +1,12 @@
+Version 0.2.0 (2019-x-x)
+--------------------------
+Bump Schema DDL to 0.9.0 (#18)
+Bump Scala Analytics SDK to 0.4.2 (#21)
+Bump Iglu Client to 0.6.0 (#34)
+Bump Scala to 2.12.8 (#35)
+Add Snowplow BigQuery Repeater (#20)
+Integrate the storage transformation bad rows type (#33)
+
 Version 0.1.0 (2018-12-03)
 --------------------------
 Initial release

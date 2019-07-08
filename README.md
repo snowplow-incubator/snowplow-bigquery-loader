@@ -47,7 +47,7 @@ limitations under the License.
 [travis]: https://travis-ci.org/snowplow-incubator/snowplow-bigquery-loader
 [travis-image]: https://travis-ci.org/snowplow-incubator/snowplow-bigquery-loader.png?branch=master
 
-[release-image]: http://img.shields.io/badge/release-0.1.0-blue.svg?style=flat
+[release-image]: http://img.shields.io/badge/release-0.2.0-blue.svg?style=flat
 [releases]: https://github.com/snowplow-incubator/snowplow-bigquery-loader
 
 [techdocs-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/techdocs.png

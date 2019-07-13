@@ -12,6 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 
+import scala.concurrent.duration._
+
 import cats.syntax.all._
 import cats.effect._
 
@@ -27,11 +29,14 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.Resources
 /** Module responsible for reading PubSub */
 object PubSub {
   /** Read events from `failedInserts` topic */
-  def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](subscription: String, resources: Resources[F]) =
+  def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](subscription: String, resources: Resources[F], maxAckDeadlinePeriod: Int) =
     PubsubGoogleConsumer.subscribe[F, EventContainer](
       Model.ProjectId(resources.env.config.projectId),
       Model.Subscription(subscription),
       (msg, err, ack, _) => resources.logAbandoned *> resources.desperates.enqueue1(PubSubError(msg.toString, err.toString)) >> ack,
-      PubsubGoogleConsumerConfig[F](onFailedTerminate = t => Logger[F].error(s"Terminating consumer due $t"))
+      PubsubGoogleConsumerConfig[F](
+        onFailedTerminate = t => Logger[F].error(s"Terminating consumer due $t"),
+        maxAckExtensionPeriod = maxAckDeadlinePeriod.second
+      )
     )
 }

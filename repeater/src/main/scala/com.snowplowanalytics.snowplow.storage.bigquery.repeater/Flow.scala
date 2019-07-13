@@ -12,6 +12,7 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 import org.joda.time.DateTime
@@ -40,11 +41,17 @@ object Flow {
     * Attempts to insert a record into BigQuery. If insertion fails - turn it into a `Desperate`
     * and forward to a specific queue, which later will be sinked into GCS
     * @param resources all application resources
+    * @param maxConcurrent maximum number of concurrent thread for insertion
     * @param events stream of events from PubSub
     */
-  def process[F[_]: Logger: Timer: ConcurrentEffect](resources: Resources[F])(events: Stream[F, Model.Record[F, EventContainer]]): Stream[F, Unit] = {
+  def process[F[_]: Logger: Timer: ConcurrentEffect](resources: Resources[F], maxConcurrent: Int)(events: Stream[F, Model.Record[F, EventContainer]])(implicit cs: ContextShift[F]): Stream[F, Unit] = {
+    val blockingEC  = ExecutionContext.fromExecutor(resources.blockingThreadPool)
     val inserting = events
-      .evalMap(checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime))
+      .parEvalMapUnordered(maxConcurrent) { e =>
+          cs.evalOn(blockingEC) {
+            checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime)(e)
+          }
+      }
       .evalMap {
         case Right(_) => resources.logInserted
         case Left(d) => resources.logAbandoned *> resources.desperates.enqueue1(d)

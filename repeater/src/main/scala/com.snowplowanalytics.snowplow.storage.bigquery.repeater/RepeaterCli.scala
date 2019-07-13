@@ -25,6 +25,8 @@ object RepeaterCli {    // TODO: factor out into a common module
   val DefaultWindow = 30
   val DefaultBufferSize = 20
   val DefaultBackoffTime = 900
+  val DefaultMaxConcurrentInsertion = 5
+  val DefaultMaxAckDeadlinePeriod = 10
 
   case class GcsPath(bucket: String, path: String)
 
@@ -52,6 +54,13 @@ object RepeaterCli {    // TODO: factor out into a common module
   val backoffPeriod = Opts.option[Int]("backoffPeriod", "Amount of seconds to wait until re-insertion attempt will be made.")
     .validate("Time needs to be greater than 0") { _ > 0 }
     .withDefault(DefaultBackoffTime)
+  val maxConcurrentInsertion = Opts.option[Int]("maxConcurrentInsertion", "Maximum number of concurrency during insertion")
+    .validate("Maximum number of concurrency needs to be greater than 0") { _ > 0 }
+    .withDefault(DefaultMaxConcurrentInsertion)
+  val maxAckDeadlinePeriod = Opts.option[Int]("maxAckDeadlinePeriod", "Maximum PubSub ack message deadline period in second. " +
+    "Events will not be resent during this period even ack is lost")
+    .validate("Maximum ack deadline period needs to be greater than 10 second") { _ > 10 }
+    .withDefault(DefaultMaxAckDeadlinePeriod)
 
   val verbose = Opts.flag("verbose", "Provide debug output").orFalse
 
@@ -61,10 +70,12 @@ object RepeaterCli {    // TODO: factor out into a common module
                            verbose: Boolean,
                            bufferSize: Int,
                            window: Int,
-                           backoff: Int)
+                           backoff: Int,
+                           maxConcurrentInsertion: Int,
+                           maxAckDeadlinePeriod: Int)
 
   val command = Command(generated.BuildInfo.name, generated.BuildInfo.description) {
-    (options, failedInsertsSub, deadEndBucket, verbose, bufferSize, window, backoffPeriod).mapN(ListenCommand.apply)
+    (options, failedInsertsSub, deadEndBucket, verbose, bufferSize, window, backoffPeriod, maxConcurrentInsertion, maxAckDeadlinePeriod).mapN(ListenCommand.apply)
   }
 
   def parse(args: Seq[String]) = command.parse(args)

@@ -12,15 +12,18 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
+import scala.concurrent.ExecutionContext
+
+import java.util.concurrent.Executors
+
 import cats.effect.{IOApp, Resource, SyncIO}
 import org.slf4j.{Logger, LoggerFactory}
 
-import scala.concurrent.ExecutionContext
-
 trait SafeIOApp extends IOApp.WithContext {
 
+  private val bound = math.max(2, Runtime.getRuntime.availableProcessors)
   implicit val ec: ExecutionContext =
-    scala.concurrent.ExecutionContext.Implicits.global
+    ExecutionContext.fromExecutor(Executors.newFixedThreadPool(bound))
 
   private val log: Logger = LoggerFactory.getLogger(Repeater.getClass)
 

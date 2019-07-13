@@ -12,6 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
+import java.util.concurrent.{Executors, ExecutorService}
+
 import scala.concurrent.duration._
 
 import cats.{Monad, Show}
@@ -43,6 +45,7 @@ import RepeaterCli.GcsPath
 class Resources[F[_]](val bigQuery: BigQuery,
                       val bucket: GcsPath,
                       val env: Config.Environment,
+                      val blockingThreadPool: ExecutorService,
                       val desperates: Queue[F, BadRow],
                       val counter: Ref[F, Int],
                       val stop: SignallingRef[F, Boolean],
@@ -80,8 +83,9 @@ object Resources {
       counter     <- Ref[F].of[Int](0)
       stop        <- SignallingRef[F, Boolean](false)
       statistics  <- Ref[F].of[Statistics](Statistics.start)
+      blockingTP  <- Sync[F].delay(Executors.newCachedThreadPool())
       _           <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId}")
-    } yield new Resources(bigQuery, command.deadEndBucket, env, queue, counter, stop, statistics, command.bufferSize, command.window, command.backoff)
+    } yield new Resources(bigQuery, command.deadEndBucket, env, blockingTP, queue, counter, stop, statistics, command.bufferSize, command.window, command.backoff)
 
     Resource.make(environment)(release)
   }
@@ -108,7 +112,8 @@ object Resources {
       chunk = Chunk(desperates: _*)
       _ <- Flow.sinkChunk(env.counter, env.bucket)(chunk)
     } yield chunk.size
-    val graceful = (env.stop.set(true) *> flushDesperate).flatMap { count => Logger[F].warn(s"Terminating. Flushed $count desperates") }
+    val shutdownThreadPool = Sync[F].delay(env.blockingThreadPool.shutdown())
+    val graceful = (env.stop.set(true) *> shutdownThreadPool *> flushDesperate).flatMap { count => Logger[F].warn(s"Terminating. Flushed $count desperates") }
     val forceful = Timer[F].sleep(5.seconds) *> Logger[F].error("Terminated without flushing after 5 seconds")
     Concurrent[F].race(graceful, forceful).void
   }

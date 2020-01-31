@@ -22,7 +22,7 @@ object Dependencies {
     val schemaDdl          = "0.8.0"
     // Scala
     val cats          = "1.6.1"
-    val catsEffect    = "1.0.0"
+    val catsEffect    = "1.4.0"
     val circe         = "0.9.3"
     val decline       = "0.5.1"
     val fs2           = "1.0.0"

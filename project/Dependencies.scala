@@ -27,7 +27,7 @@ object Dependencies {
     val decline       = "1.0.0"
     val fs2           = "1.0.5"
     val json4sJackson = "3.6.7"
-    val scalaz7       = "7.0.9"
+    val scalaz7       = "7.2.30"
     val scio          = "0.8.0"
     // Java
     val beam        = "2.17.0"

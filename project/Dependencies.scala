@@ -23,7 +23,7 @@ object Dependencies {
     // Scala
     val cats          = "1.6.1"
     val catsEffect    = "1.4.0"
-    val circe         = "0.9.3"
+    val circe         = "0.11.1"
     val decline       = "0.5.1"
     val fs2           = "1.0.0"
     val json4sJackson = "3.2.11"

@@ -19,35 +19,29 @@ import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
 import sbtbuildinfo._
 import sbtbuildinfo.BuildInfoKeys._
 
-
 object BuildSettings {
   lazy val commonSettings = Seq(
-    organization          := "com.snowplowanalytics",
-    version               := "0.1.0",
-    scalaVersion          := "2.11.12",
-    scalacOptions         ++= Seq("-target:jvm-1.8",
-      "-deprecation",
-      "-feature",
-      "-unchecked"),
-    javacOptions          ++= Seq("-source", "1.8", "-target", "1.8"),
-    resolvers             += "Snowplow Bintray" at "https://snowplow.bintray.com/snowplow-maven/",
-    Global / cancelable   := true,
-
-    addCompilerPlugin("com.olegpy" %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
-    addCompilerPlugin("org.spire-math" %% "kind-projector" % Dependencies.V.kindProjector),
-
-    buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description,
-      BuildInfoKey.action("userAgent") { s"${name.value}/${version.value}" }
-    )
+    organization := "com.snowplowanalytics",
+    version := "0.1.0",
+    scalaVersion := "2.11.12",
+    scalacOptions ++= Seq("-target:jvm-1.8", "-deprecation", "-feature", "-unchecked"),
+    javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
+    resolvers += "Snowplow Bintray".at("https://snowplow.bintray.com/snowplow-maven/"),
+    Global / cancelable := true,
+    addCompilerPlugin("com.olegpy"     %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
+    addCompilerPlugin("org.spire-math" %% "kind-projector"     % Dependencies.V.kindProjector),
+    buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description, BuildInfoKey.action("userAgent") {
+      s"${name.value}/${version.value}"
+    })
   )
 
   lazy val buildInfo = Seq(
-    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.generated",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.generated"
   )
 
   lazy val macroSettings = Seq(
     libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-    addCompilerPlugin("org.scalamacros" % "paradise" % Dependencies.V.scalaMacrosVersion cross CrossVersion.full)
+    addCompilerPlugin(("org.scalamacros" % "paradise" % Dependencies.V.scalaMacrosVersion).cross(CrossVersion.full))
   )
 
   lazy val dockerSettings = Seq(
@@ -57,7 +51,7 @@ object BuildSettings {
     dockerUsername := Some("snowplow"),
     dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.1.0",
     Docker / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
-    Docker / daemonUser := "root",  // Will be gosu'ed by docker-entrypoint.sh
+    Docker / daemonUser := "root", // Will be gosu'ed by docker-entrypoint.sh
     dockerEnvVars := Map("SNOWPLOW_BIGQUERY_APP" -> name.value),
     dockerCommands += ExecCmd("RUN", "cp", "/opt/docker/bin/docker-entrypoint.sh", "/usr/local/bin/"),
     dockerEntrypoint := Seq("docker-entrypoint.sh"),

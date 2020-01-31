@@ -24,7 +24,7 @@ object Dependencies {
     val cats          = "1.6.1"
     val catsEffect    = "1.4.0"
     val circe         = "0.11.1"
-    val decline       = "0.5.1"
+    val decline       = "1.0.0"
     val fs2           = "1.0.0"
     val json4sJackson = "3.2.11"
     val scalaz7       = "7.0.9"

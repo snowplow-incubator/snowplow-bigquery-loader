@@ -28,7 +28,7 @@ object ForwarderCli {
   private implicit val privateIoClock: Clock[IO] =
     Clock.create[IO]
 
-  case class ForwarderEnvironment(common: Environment, failedInserts: String) {
+  case class ForwarderEnvironment(common: Environment, failedInserts: String, labels: Map[String, String]) {
     def getFullFailedInsertsSub: String = s"projects/${common.config.projectId}/subscriptions/$failedInserts"
   }
 
@@ -38,5 +38,6 @@ object ForwarderCli {
       r <- decodeBase64Json(args("resolver"))
       e <- transform[IO](EnvironmentConfig(r, c)).value.unsafeRunSync()
       s <- Either.catchNonFatal(args("failedInsertsSub"))
-    } yield ForwarderEnvironment(e, s)
+      l <- Either.catchNonFatal(args.optional("labels").map(s => parseLabels(s).right.getOrElse(Map.empty[String, String])))
+    } yield ForwarderEnvironment(e, s, l.getOrElse(Map.empty[String, String]))
 }

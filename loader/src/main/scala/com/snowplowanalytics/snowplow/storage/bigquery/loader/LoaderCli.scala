@@ -28,11 +28,14 @@ object LoaderCli {
   private implicit val privateIoClock: Clock[IO] =
     Clock.create[IO]
 
-  def parse(args: Args): Either[Throwable, Environment] =
+  case class LoaderEnvironment(common: Environment, labels: Map[String, String])
+
+  def parse(args: Args): Either[Throwable, LoaderEnvironment] =
     for {
       c <- decodeBase64Json(args("config"))
       r <- decodeBase64Json(args("resolver"))
       e <- transform[IO](EnvironmentConfig(r, c)).value.unsafeRunSync()
-    } yield e
+      l <- Either.catchNonFatal(args.optional("labels").map(s => parseLabels(s).right.getOrElse(Map.empty[String, String])))
+    } yield LoaderEnvironment(e, l.getOrElse(Map.empty[String, String]))
 }
 

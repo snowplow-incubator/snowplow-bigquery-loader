@@ -20,7 +20,7 @@ import cats.syntax.either._
 import cats.effect.{Clock, IO, Sync}
 
 import io.circe.{ Json, Decoder, DecodingFailure }
-import io.circe.parser.parse
+import io.circe.parser.{ parse, decode }
 import io.circe.generic.semiauto._
 
 import com.monovore.decline.Opts
@@ -36,14 +36,16 @@ import com.snowplowanalytics.iglu.client.validator.{ CirceValidator => Validator
   *
   * @param name Human-readable target name
   * @param id Unique target id
-  * @param input PubSub topic with TSV enriched events
+  * @param input Pub/Sub subscription to a topic with TSV enriched events
   * @param projectId Google Cloud project id
   * @param datasetId Google BigQuery dataset id
   * @param tableId Google BigQuery table id
-  * @param load BigQuery loading API
-  * @param typesTopic PubSub topic where Loader should **publish** new types
-  * @param typesSubscription PubSub subscription (associated with `typesTopic`),
-  *                 where Mutator pull types from
+  * @param load BigQuery loading mode
+  * @param typesTopic Pub/Sub topic where Loader should **publish** new types
+  * @param typesSubscription Pub/Sub subscription (to `typesTopic`),
+  *               for Mutator to pull new types from
+  * @param badRows Pub/Sub topic to which bad rows are sunk
+  * @param failedInserts Pub/Sub topic to which failed inserts are sunk
   */
 case class Config(name: String,
                   id: UUID,
@@ -127,4 +129,8 @@ object Config {
 
   private def toValidated[A, R](f: A => Either[Throwable, R])(a: A): ValidatedNel[String, R] =
     f(a).leftMap(_.getMessage).toValidatedNel
+
+  def parseLabels(input: String): Either[String, Map[String, String]] =
+    decode[Map[String, String]](input)
+      .leftMap(_ => s"Invalid `labels` format, expected json object, received: $input")
 }

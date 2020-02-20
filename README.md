@@ -15,6 +15,7 @@ $ git clone https://github.com/snowplow-incubator/snowplow-bigquery-loader
 $ cd snowplow-bigquery-loader
 $ sbt "project loader" test
 $ sbt "project mutator" test
+$ sbt "project repeater" test
 ```
 
 ## Find out more
@@ -26,7 +27,7 @@ $ sbt "project mutator" test
 
 ## Copyright and License
 
-Snowplow BigQuery Loader is copyright 2018 Snowplow Analytics Ltd.
+Snowplow BigQuery Loader is copyright 2018-2020 Snowplow Analytics Ltd.
 
 Licensed under the **[Apache License, Version 2.0][license]** (the "License");
 you may not use this software except in compliance with the License.

@@ -1,3 +1,13 @@
+Version 0.3.0 (2020-02-20)
+--------------------------
+Add support for GCP labels in dataflow launcher docker image (#41)
+Switch Forwarder to using subscription (#15)
+Use SerializeJsonRow as FormatFunction in Forwarder (#16)
+Bump cats-core to 1.6.1 (#49)
+Bump cats-effect to 1.4.0 (#50)
+Bump fs2-core to 1.0.5 (#52)
+Update README (#43)
+
 Version 0.2.0 (2020-02-11)
 --------------------------
 Add Snowplow BigQuery Repeater (#20)

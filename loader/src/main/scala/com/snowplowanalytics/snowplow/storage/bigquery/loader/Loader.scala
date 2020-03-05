@@ -15,8 +15,8 @@ package loader
 
 import com.google.api.services.bigquery.model.TableReference
 import io.circe.Json
-import org.joda.time.Duration
-import com.spotify.scio.ScioContext
+import org.joda.time.{Duration, Instant}
+import com.spotify.scio.{ScioContext, ScioMetrics}
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
 import com.spotify.scio.coders.Coder
 import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions
@@ -24,6 +24,7 @@ import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
+
 import scala.collection.JavaConverters._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
@@ -34,6 +35,9 @@ import common.Codecs.toPayload
 object Loader {
 
   implicit val coderBadRow: Coder[BadRow] = Coder.kryo[BadRow]
+
+  private val MetricsNamespace = "snowplow"
+  val latencyDistribution = ScioMetrics.distribution(MetricsNamespace, "latency")
 
   val OutputWindow: Duration =
     Duration.millis(10000)
@@ -67,6 +71,8 @@ object Loader {
       .flatMap {
         case (Right(row), ctx) =>
           ctx.output(ObservedTypesOutput, row.inventory)
+          val latency = (Instant.now().getMillis - row.collectorTstamp.getMillis) / 1000
+          latencyDistribution.update(latency)
           Some(row)
         case (Left(row), ctx) =>
           ctx.output(BadRowsOutput, row)

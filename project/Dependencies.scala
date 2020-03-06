@@ -36,9 +36,9 @@ object Dependencies {
     val pubsubFs2          = "0.12.0"
     val httpClient         = "0.20.0"
     val logging            = "0.3.0"
-    val scio               = "0.8.1"
+    val scio               = "0.8.2"
     // Java
-    val beam               = "2.18.0"
+    val beam               = "2.19.0"
     val googleCloud        = "1.51.0"
     val slf4j              = "1.7.25"
     // Scala (test only)

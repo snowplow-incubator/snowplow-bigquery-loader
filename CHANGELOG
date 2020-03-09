@@ -1,3 +1,11 @@
+Version 0.4.0 (2020-03-09)
+--------------------------
+Loader: add a custom metric to track latency distribution (#55)
+Mutator: replace decorateAsJava with JavaConverters in TableReference.scala (#51)
+Common: make pattern match in `Adapter.adaptType()` exhaustive (#59)
+Bump scio-core to 0.8.2 (#57)
+Bump Scala to 2.12.10 (#58)
+
 Version 0.3.0 (2020-02-20)
 --------------------------
 Add support for GCP labels in dataflow launcher docker image (#41)

@@ -19,7 +19,7 @@ import org.joda.time.DateTime
 import cats.syntax.all._
 import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.data.{EitherT, NonEmptyList}
+import cats.data.EitherT
 
 import fs2.{Chunk, Stream}
 
@@ -46,7 +46,7 @@ object Flow {
     */
   def process[F[_]: Logger: Timer: ConcurrentEffect](resources: Resources[F])(events: Stream[F, Model.Record[F, EventContainer]]): Stream[F, Unit] = {
     val inserting = events
-      .evalMap(checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime))
+      .parEvalMapUnordered(resources.concurrency)(checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime))
       .evalMap {
         case Right(_) => resources.logInserted
         case Left(d) => resources.logAbandoned *> resources.desperates.enqueue1(d)
@@ -81,8 +81,6 @@ object Flow {
                                         (event: Model.Record[F, EventContainer]): F[Either[BadRow, Unit]] = {
     val res = for {
       ready <- EitherT.right(event.value.isReady(backoffTime))
-      reconstructedEvent <- EitherT(event.value.parsePayload)
-        .leftFlatMap { e => EitherT(event.ack.as(e.asLeft[PayloadParser.ReconstructedEvent])) }
       result <- EitherT[F, BadRow, Unit] {
         if (ready)
           event.ack >>

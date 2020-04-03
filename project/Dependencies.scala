@@ -33,8 +33,8 @@ object Dependencies {
     val circe              = "0.11.1"
     val decline            = "0.6.2"
     val fs2                = "1.0.5"
-    val pubsubFs2          = "0.12.0"
-    val httpClient         = "0.20.0"
+    val pubsubFs2          = "0.13.2"
+    val httpClient         = "0.20.21"
     val logging            = "0.3.0"
     val scio               = "0.8.2"
     // Java

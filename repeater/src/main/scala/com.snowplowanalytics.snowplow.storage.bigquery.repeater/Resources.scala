@@ -41,6 +41,7 @@ import RepeaterCli.GcsPath
   * @param desperates queue of events that still could not be loaded into BQ
   * @param counter counter for batches of desperates
   * @param stop a signal to stop retreving items
+  * @param concurrency number of parallel streams, provided by CLI or equal to number of CPU cores
   */
 class Resources[F[_]](val bigQuery: BigQuery,
                       val bucket: GcsPath,
@@ -51,7 +52,8 @@ class Resources[F[_]](val bigQuery: BigQuery,
                       val statistics: Ref[F, Resources.Statistics],
                       val bufferSize: Int,
                       val windowTime: Int,
-                      val backoffTime: Int) {
+                      val backoffTime: Int,
+                      val concurrency: Int) {
   def logInserted: F[Unit] = statistics.update(s => s.copy(inserted = s.inserted + 1))
   def logAbandoned: F[Unit] = statistics.update(s => s.copy(desperates = s.desperates + 1))
 
@@ -62,6 +64,8 @@ class Resources[F[_]](val bigQuery: BigQuery,
 object Resources {
 
   val QueueSize = 100
+
+  val DefaultConcurrency = 4
 
   case class Statistics(inserted: Int, desperates: Int)
 
@@ -82,8 +86,9 @@ object Resources {
       counter     <- Ref[F].of[Int](0)
       stop        <- SignallingRef[F, Boolean](false)
       statistics  <- Ref[F].of[Statistics](Statistics.start)
-      _           <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId}")
-    } yield new Resources(bigQuery, command.deadEndBucket, env, queue, counter, stop, statistics, command.bufferSize, command.window, command.backoff)
+      concurrency <- Sync[F].delay(command.concurrency.getOrElse(math.max(Runtime.getRuntime.availableProcessors, DefaultConcurrency)))
+      _           <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId} with $concurrency streams")
+    } yield new Resources(bigQuery, command.deadEndBucket, env, queue, counter, stop, statistics, command.bufferSize, command.window, command.backoff, concurrency)
 
     Resource.make(environment)(release)
   }

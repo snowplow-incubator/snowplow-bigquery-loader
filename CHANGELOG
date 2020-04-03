@@ -1,3 +1,9 @@
+Version 0.4.1 (2020-04-14)
+--------------------------
+Repeater: change log messages ERROR level to INFO (#77)
+Repeater: improve CPU utilization (#78)
+Bump fs2-google-pubsub-http to 0.14.0 (#79)
+
 Version 0.4.0 (2020-03-09)
 --------------------------
 Loader: add a custom metric to track latency distribution (#55)

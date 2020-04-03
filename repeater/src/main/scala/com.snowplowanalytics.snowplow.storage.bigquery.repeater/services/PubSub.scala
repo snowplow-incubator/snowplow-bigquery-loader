@@ -15,6 +15,8 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 import cats.syntax.all._
 import cats.effect._
 
+import fs2.Stream
+
 import com.google.pubsub.v1.PubsubMessage
 
 import fs2.concurrent.Queue
@@ -30,7 +32,9 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer,
 /** Module responsible for reading PubSub */
 object PubSub {
   /** Read events from `failedInserts` topic */
-  def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](projectId: String, subscription: String, desperates: Queue[F, BadRow]) =
+  def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](projectId: String,
+                                                               subscription: String,
+                                                               desperates: Queue[F, BadRow]): Stream[F, Model.Record[F, EventContainer]] =
     PubsubGoogleConsumer.subscribe[F, EventContainer](
       Model.ProjectId(projectId),
       Model.Subscription(subscription),

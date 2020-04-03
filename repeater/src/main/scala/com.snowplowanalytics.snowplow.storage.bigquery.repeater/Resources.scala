@@ -12,6 +12,9 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
+import java.util.concurrent.Executors
+
+import scala.concurrent.{ ExecutionContext, ExecutionContextExecutorService }
 import scala.concurrent.duration._
 
 import cats.{Monad, Show}
@@ -41,6 +44,7 @@ import RepeaterCli.GcsPath
   * @param desperates queue of events that still could not be loaded into BQ
   * @param counter counter for batches of desperates
   * @param stop a signal to stop retreving items
+  * @param concurrency a number of streams to execute inserts
   */
 class Resources[F[_]](val bigQuery: BigQuery,
                       val bucket: GcsPath,
@@ -51,7 +55,9 @@ class Resources[F[_]](val bigQuery: BigQuery,
                       val statistics: Ref[F, Resources.Statistics],
                       val bufferSize: Int,
                       val windowTime: Int,
-                      val backoffTime: Int) {
+                      val backoffTime: Int,
+                      val concurrency: Int,
+                      val insertBlocker: Blocker) {
   def logInserted: F[Unit] = statistics.update(s => s.copy(inserted = s.inserted + 1))
   def logAbandoned: F[Unit] = statistics.update(s => s.copy(desperates = s.desperates + 1))
 
@@ -73,19 +79,26 @@ object Resources {
   }
 
   /** Allocate all resources for an application */
-  def acquire[F[_]: ConcurrentEffect: Timer: Logger](command: RepeaterCli.ListenCommand): Resource[F, Resources[F]] = {
-    val environment = for {
-      transformed <- Config.transform[F](command.config).value
-      env         <- Sync[F].fromEither(transformed)
-      bigQuery    <- services.Database.getClient[F]
-      queue       <- Queue.bounded[F, BadRow](QueueSize)
-      counter     <- Ref[F].of[Int](0)
-      stop        <- SignallingRef[F, Boolean](false)
-      statistics  <- Ref[F].of[Statistics](Statistics.start)
-      _           <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId}")
-    } yield new Resources(bigQuery, command.deadEndBucket, env, queue, counter, stop, statistics, command.bufferSize, command.window, command.backoff)
+  def acquire[F[_]: ConcurrentEffect: Timer: Logger](cmd: RepeaterCli.ListenCommand): Resource[F, Resources[F]] = {
+    // It's a function because blocker needs to be created as Resource
+    val initResources: F[Blocker => Resources[F]] = for {
+      transformed   <- Config.transform[F](cmd.config).value
+      env           <- Sync[F].fromEither(transformed)
+      bigQuery      <- services.Database.getClient[F]
+      queue         <- Queue.bounded[F, BadRow](QueueSize)
+      counter       <- Ref[F].of[Int](0)
+      stop          <- SignallingRef[F, Boolean](false)
+      statistics    <- Ref[F].of[Statistics](Statistics.start)
+      concurrency   <- Sync[F].delay(Runtime.getRuntime.availableProcessors * 16)
+      _             <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId} with $concurrency streams")
+    } yield (b: Blocker) => new Resources(bigQuery, cmd.deadEndBucket, env, queue, counter, stop, statistics, cmd.bufferSize, cmd.window, cmd.backoff, concurrency, b)
 
-    Resource.make(environment)(release)
+    val createBlocker = Sync[F].delay(Executors.newCachedThreadPool()).map(ExecutionContext.fromExecutorService)
+    for {
+      blocker <- Resource.make(createBlocker)(ec => Sync[F].delay(ec.shutdown())).map(Blocker.liftExecutionContext)
+      resources <- Resource.make(initResources.map(init => init.apply(blocker)))(release)
+    } yield resources
+
   }
 
   /**
@@ -94,7 +107,7 @@ object Resources {
     */
   def pullRemaining[F[_]: Sync](desperates: Queue[F, BadRow]): F[List[BadRow]] = {
     val last = Stream
-      .repeatEval(desperates.tryDequeueChunk1(10))
+      .repeatEval(desperates.tryDequeueChunk1(20))
       .takeWhile(_.isDefined)
       .flatMap {
         case Some(chunk) => Stream.chunk(chunk)
@@ -108,7 +121,7 @@ object Resources {
     val flushDesperate = for {
       desperates <- pullRemaining(env.desperates)
       chunk = Chunk(desperates: _*)
-      _ <- Flow.sinkChunk(env.counter, env.bucket)(chunk)
+      _ <- Flow.sinkBadChunk(env.counter, env.bucket)(chunk)
     } yield chunk.size
     val graceful = (env.stop.set(true) *> flushDesperate).flatMap { count => Logger[F].warn(s"Terminating. Flushed $count desperates") }
     val forceful = Timer[F].sleep(5.seconds) *> Logger[F].error("Terminated without flushing after 5 seconds")

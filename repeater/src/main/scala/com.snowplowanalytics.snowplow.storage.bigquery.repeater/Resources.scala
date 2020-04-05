@@ -12,10 +12,7 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import java.util.concurrent.Executors
-
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 
 import cats.{Monad, Show}
 import cats.syntax.all._
@@ -44,6 +41,7 @@ import RepeaterCli.GcsPath
   * @param desperates queue of events that still could not be loaded into BQ
   * @param counter counter for batches of desperates
   * @param stop a signal to stop retreving items
+  * @param concurrency number of parallel streams, provided by CLI or equal to number of CPU cores
   */
 class Resources[F[_]](val bigQuery: BigQuery,
                       val bucket: GcsPath,
@@ -55,7 +53,7 @@ class Resources[F[_]](val bigQuery: BigQuery,
                       val bufferSize: Int,
                       val windowTime: Int,
                       val backoffTime: Int,
-                      val pool: ExecutionContextExecutorService) {
+                      val concurrency: Int) {
   def logInserted: F[Unit] = statistics.update(s => s.copy(inserted = s.inserted + 1))
   def logAbandoned: F[Unit] = statistics.update(s => s.copy(desperates = s.desperates + 1))
 
@@ -88,10 +86,9 @@ object Resources {
       counter     <- Ref[F].of[Int](0)
       stop        <- SignallingRef[F, Boolean](false)
       statistics  <- Ref[F].of[Statistics](Statistics.start)
-
-      pool        <- Sync[F].delay(Executors.newCachedThreadPool()).map(ExecutionContext.fromExecutorService)
-      _           <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId}")
-    } yield new Resources[F](bigQuery, command.deadEndBucket, env, queue, counter, stop, statistics, command.bufferSize, command.window, command.backoff, pool)
+      concurrency <- Sync[F].delay(command.concurrency.getOrElse(math.max(Runtime.getRuntime.availableProcessors, DefaultConcurrency)))
+      _           <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId} with $concurrency streams")
+    } yield new Resources(bigQuery, command.deadEndBucket, env, queue, counter, stop, statistics, command.bufferSize, command.window, command.backoff, concurrency)
 
     Resource.make(environment)(release)
   }
@@ -117,7 +114,6 @@ object Resources {
       desperates <- pullRemaining(env.desperates)
       chunk = Chunk(desperates: _*)
       _ <- Flow.sinkChunk(env.counter, env.bucket)(chunk)
-      _ <- Sync[F].delay(env.pool.shutdown())
     } yield chunk.size
     val graceful = (env.stop.set(true) *> flushDesperate).flatMap { count => Logger[F].warn(s"Terminating. Flushed $count desperates") }
     val forceful = Timer[F].sleep(5.seconds) *> Logger[F].error("Terminated without flushing after 5 seconds")

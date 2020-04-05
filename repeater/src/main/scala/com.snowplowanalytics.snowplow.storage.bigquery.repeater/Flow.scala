@@ -13,6 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext
 
 import org.joda.time.DateTime
 
@@ -44,9 +45,10 @@ object Flow {
     * @param resources all application resources
     * @param events stream of events from PubSub
     */
-  def process[F[_]: Logger: Timer: ConcurrentEffect](resources: Resources[F])(events: Stream[F, Model.Record[F, EventContainer]]): Stream[F, Unit] = {
+  def process[F[_]: Logger: Timer: Concurrent: ContextShift](resources: Resources[F])(events: Stream[F, Model.Record[F, EventContainer]]): Stream[F, Unit] = {
+    val action = checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime) _
     val inserting = events
-      .parEvalMapUnordered(resources.concurrency)(checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime))
+      .evalMap(e => ContextShift[F].evalOn(resources.pool)(action(e)))
       .evalMap {
         case Right(_) => resources.logInserted
         case Left(d) => resources.logAbandoned *> resources.desperates.enqueue1(d)
@@ -74,11 +76,11 @@ object Flow {
       _  <- Storage.uploadChunk[F](bucket.bucket, file, chunk)
     } yield ()
 
-  def checkAndInsert[F[_]: Sync: Logger](client: BigQuery,
-                                         dataset: String,
-                                         table: String,
-                                         backoffTime: Int)
-                                        (event: Model.Record[F, EventContainer]): F[Either[BadRow, Unit]] = {
+  def checkAndInsert[F[_]: Sync: Logger: Timer](client: BigQuery,
+                                                dataset: String,
+                                                table: String,
+                                                backoffTime: Int)
+                                               (event: Model.Record[F, EventContainer]): F[Either[BadRow, Unit]] = {
     val res = for {
       ready <- EitherT.right(event.value.isReady(backoffTime))
       result <- EitherT[F, BadRow, Unit] {
@@ -86,7 +88,8 @@ object Flow {
           event.ack >>
             EitherT(services.Database.insert[F](client, dataset, table, event.value)).value
         else
-          Logger[F].debug(s"Event ${event.value.eventId}/${event.value.etlTstamp} is not ready yet. Nack") >>
+          Logger[F].debug(s"Event ${event.value.eventId}/${event.value.etlTstamp} is not ready yet. Nack and sleep 10 seconds") >>
+            Timer[F].sleep(10.seconds) >>
             event.nack.map(_.asRight)
       }
     } yield result

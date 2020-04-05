@@ -65,7 +65,7 @@ object Resources {
 
   val QueueSize = 100
 
-  val DefaultConcurrency = 4
+  val DefaultConcurrency = 16
 
   case class Statistics(inserted: Int, desperates: Int)
 

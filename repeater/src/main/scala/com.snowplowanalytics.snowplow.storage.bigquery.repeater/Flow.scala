@@ -43,16 +43,14 @@ object Flow {
     * @param resources all application resources
     * @param events stream of events from PubSub
     */
-  def sink[F[_]: Logger: Timer: ConcurrentEffect: ContextShift](resources: Resources[F])(events: EventQueue[F]): F[Unit] =
-    for {
-      event <- events.dequeue1
-      insert = checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime)(event)
-      result <- ContextShift[F].evalOn(resources.insertBlocker)(insert)
-      _ <- result match {
+  def sink[F[_]: Logger: Timer: ConcurrentEffect: ContextShift](resources: Resources[F])(events: EventQueue[F]): Stream[F, Unit] =
+    events.dequeue.parEvalMapUnordered(resources.concurrency) { event =>
+      val insert = checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime)(event)
+      ContextShift[F].evalOn(resources.insertBlocker)(insert).flatMap {
         case Right(_) => resources.logInserted
         case Left(d) => resources.logAbandoned *> resources.desperates.enqueue1(d)
       }
-    } yield ()
+    }
 
   /** Process dequeueing desperates and sinking them to GCS */
   def dequeueDesperates[F[_]: Timer: Concurrent: Logger](resources: Resources[F]): Stream[F, Unit] =

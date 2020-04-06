@@ -56,6 +56,7 @@ class Resources[F[_]](val bigQuery: BigQuery,
                       val bufferSize: Int,
                       val windowTime: Int,
                       val backoffTime: Int,
+                      val concurrency: Int,
                       val pubsubConcurrency: Int,
                       val insertBlocker: ExecutionContextExecutorService) {
   def logInserted: F[Unit] = statistics.update(s => s.copy(inserted = s.inserted + 1))
@@ -69,7 +70,7 @@ object Resources {
 
   val QueueSize = 100
 
-  val DefaultConcurrency = 16
+  val DefaultConcurrency = 32
 
   case class Statistics(inserted: Int, desperates: Int)
 
@@ -90,10 +91,10 @@ object Resources {
       counter       <- Ref[F].of[Int](0)
       stop          <- SignallingRef[F, Boolean](false)
       statistics    <- Ref[F].of[Statistics](Statistics.start)
-      concurrency   <- Sync[F].delay(cmd.concurrency.getOrElse(math.max(Runtime.getRuntime.availableProcessors, DefaultConcurrency)))
-      insertBlocker <- Sync[F].delay(Executors.newFixedThreadPool(concurrency)).map(ExecutionContext.fromExecutorService)
+      concurrency   <- Sync[F].delay(cmd.concurrency.getOrElse(math.max(Runtime.getRuntime.availableProcessors * 8, DefaultConcurrency)))
+      insertBlocker <- Sync[F].delay(Executors.newCachedThreadPool()).map(ExecutionContext.fromExecutorService)
       _             <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId} with $concurrency streams")
-    } yield new Resources(bigQuery, cmd.deadEndBucket, env, queue, counter, stop, statistics, cmd.bufferSize, cmd.window, cmd.backoff, cmd.pubsubConcurrency, insertBlocker)
+    } yield new Resources(bigQuery, cmd.deadEndBucket, env, queue, counter, stop, statistics, cmd.bufferSize, cmd.window, cmd.backoff, concurrency, cmd.pubsubConcurrency, insertBlocker)
 
     Resource.make(environment)(release)
   }

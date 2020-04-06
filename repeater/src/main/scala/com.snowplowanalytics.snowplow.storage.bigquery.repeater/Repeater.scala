@@ -41,17 +41,17 @@ object Repeater extends SafeIOApp {
     RepeaterCli.parse(args) match {
       case Right(command) =>
         val process = for {
-          resources <- Stream.resource(Resources.acquire[IO](command))
-          _         <- Stream.eval(resources.showStats)
-          recordQueue <- Stream.eval(fs2.concurrent.Queue.bounded[IO, EventRecord[IO]](QueueSize))
-          consumerSink = services.PubSub
+          resources     <- Stream.resource(Resources.acquire[IO](command))
+          _             <- Stream.eval(resources.showStats)
+          recordQueue   <- Stream.eval(fs2.concurrent.Queue.bounded[IO, EventRecord[IO]](QueueSize))
+          consumerSink   = services.PubSub
             .getEvents(resources.env.config.projectId, command.failedInsertsSub, command.pubsubConcurrency, resources.desperates)
             .interruptWhen(resources.stop)
             .through[IO, Unit](recordQueue.enqueue)
-          processing = Stream.eval(Flow.sink(resources)(recordQueue))
-          _         <- Flow.dequeueDesperates(resources)
-          logging    = Stream.awakeEvery[IO](5.minute).evalMap(_ => resources.showStats)
-          _         <- Stream(consumerSink, processing, logging).parJoin(StreamConcurrency)
+          processing     = Flow.sink(resources)(recordQueue)
+          desparatesSink = Flow.dequeueDesperates(resources)
+          logging        = Stream.awakeEvery[IO](5.minute).evalMap(_ => resources.showStats)
+          _             <- Stream(consumerSink, desparatesSink, processing, logging).parJoin(StreamConcurrency)
         } yield ()
 
 

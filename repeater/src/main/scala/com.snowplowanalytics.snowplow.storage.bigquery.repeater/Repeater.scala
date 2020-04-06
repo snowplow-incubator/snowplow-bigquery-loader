@@ -29,6 +29,10 @@ import com.snowplowanalytics.snowplow.badrows.Processor
 
 object Repeater extends SafeIOApp {
 
+  val QueueSize = 1024
+
+  val StreamConcurrency = 4
+
   val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
@@ -39,11 +43,18 @@ object Repeater extends SafeIOApp {
         val process = for {
           resources <- Stream.resource(Resources.acquire[IO](command))
           _         <- Stream.eval(resources.showStats)
-          events     = services.PubSub.getEvents(resources.env.config.projectId, command.failedInsertsSub, resources.desperates).interruptWhen(resources.stop)
-          processing = Flow.process(resources)(events)
+          recordQueue <- Stream.eval(fs2.concurrent.Queue.bounded[IO, EventRecord[IO]](QueueSize))
+          consumerSink = services.PubSub
+            .getEvents(resources.env.config.projectId, command.failedInsertsSub, command.pubsubConcurrency, resources.desperates)
+            .interruptWhen(resources.stop)
+            .through[IO, Unit](recordQueue.enqueue)
+          processing = Stream.eval(Flow.sink(resources)(recordQueue))
+          _         <- Flow.dequeueDesperates(resources)
           logging    = Stream.awakeEvery[IO](5.minute).evalMap(_ => resources.showStats)
-          _         <- processing.concurrently(logging)
+          _         <- Stream(consumerSink, processing, logging).parJoin(StreamConcurrency)
         } yield ()
+
+
 
         process
           .compile

@@ -15,6 +15,8 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 import cats.syntax.all._
 import cats.effect._
 
+import fs2.Stream
+
 import com.google.pubsub.v1.PubsubMessage
 
 import fs2.concurrent.Queue
@@ -30,12 +32,15 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer,
 /** Module responsible for reading PubSub */
 object PubSub {
   /** Read events from `failedInserts` topic */
-  def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](projectId: String, subscription: String, desperates: Queue[F, BadRow]) =
+  def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](projectId: String,
+                                                               subscription: String,
+                                                               threads: Int,
+                                                               desperates: Queue[F, BadRow]): Stream[F, Model.Record[F, EventContainer]] =
     PubsubGoogleConsumer.subscribe[F, EventContainer](
       Model.ProjectId(projectId),
       Model.Subscription(subscription),
       (msg, err, ack, _) => callback[F](msg, err, ack, desperates),
-      PubsubGoogleConsumerConfig[F](onFailedTerminate = t => Logger[F].error(s"Terminating consumer due $t"))
+      PubsubGoogleConsumerConfig[F](onFailedTerminate = t => Logger[F].error(s"Terminating consumer due $t"), parallelPullCount = threads)
     )
 
   private def callback[F[_]: Sync](msg: PubsubMessage, err: Throwable, ack: F[Unit], desperates: Queue[F, BadRow]) = {

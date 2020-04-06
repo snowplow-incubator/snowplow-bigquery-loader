@@ -12,6 +12,7 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 import org.joda.time.DateTime
@@ -26,8 +27,6 @@ import fs2.{Chunk, Stream}
 import io.chrisdavenport.log4cats.Logger
 
 import com.google.cloud.bigquery._
-
-import com.permutive.pubsub.consumer.Model
 
 import com.snowplowanalytics.snowplow.badrows.BadRow
 
@@ -44,15 +43,16 @@ object Flow {
     * @param resources all application resources
     * @param events stream of events from PubSub
     */
-  def process[F[_]: Logger: Timer: ConcurrentEffect](resources: Resources[F])(events: Stream[F, Model.Record[F, EventContainer]]): Stream[F, Unit] = {
-    val inserting = events
-      .parEvalMapUnordered(resources.concurrency)(checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime))
-      .evalMap {
+  def sink[F[_]: Logger: Timer: ConcurrentEffect: ContextShift](resources: Resources[F])(events: EventQueue[F]): F[Unit] =
+    for {
+      event <- events.dequeue1
+      insert = checkAndInsert[F](resources.bigQuery, resources.env.config.datasetId, resources.env.config.tableId, resources.backoffTime)(event)
+      result <- ContextShift[F].evalOn(resources.insertBlocker)(insert)
+      _ <- result match {
         case Right(_) => resources.logInserted
         case Left(d) => resources.logAbandoned *> resources.desperates.enqueue1(d)
       }
-    inserting.concurrently(dequeueDesperates(resources))
-  }
+    } yield ()
 
   /** Process dequeueing desperates and sinking them to GCS */
   def dequeueDesperates[F[_]: Timer: Concurrent: Logger](resources: Resources[F]): Stream[F, Unit] =
@@ -60,10 +60,10 @@ object Flow {
       .desperates
       .dequeueChunk(resources.bufferSize)
       .groupWithin(resources.bufferSize, resources.windowTime.seconds)
-      .evalMap(sinkChunk(resources.counter, resources.bucket))
+      .evalMap(sinkBadChunk(resources.counter, resources.bucket))
 
   /** Sink whole chunk of desperates into a filename, composed of time and chunk number */
-  def sinkChunk[F[_]: Timer: Sync: Logger](counter: Ref[F, Int], bucket: GcsPath)(chunk: Chunk[BadRow]): F[Unit] =
+  def sinkBadChunk[F[_]: Timer: Sync: Logger](counter: Ref[F, Int], bucket: GcsPath)(chunk: Chunk[BadRow]): F[Unit] =
     for {
       time <- getTime
       _ <- Logger[F].debug(s"Preparing for sinking a chunk, $time")
@@ -78,7 +78,7 @@ object Flow {
                                          dataset: String,
                                          table: String,
                                          backoffTime: Int)
-                                        (event: Model.Record[F, EventContainer]): F[Either[BadRow, Unit]] = {
+                                        (event: EventRecord[F]): F[Either[BadRow, Unit]] = {
     val res = for {
       ready <- EitherT.right(event.value.isReady(backoffTime))
       result <- EitherT[F, BadRow, Unit] {

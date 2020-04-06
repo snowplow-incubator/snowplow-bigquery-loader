@@ -55,6 +55,9 @@ object RepeaterCli {    // TODO: factor out into a common module
   val concurrency = Opts.option[Int]("concurrency", "Parallelism for BQ insert operation (default is number of CPU cores)")
     .validate("Concurrency to be greater than 0") { _ > 0 }
     .orNone
+  val pubsubConcurrency = Opts.option[Int]("pubsub-concurrency", "Parallelism for PubSub pull operation")
+    .withDefault(6)
+    .validate("Concurrency to be greater than 0") { _ > 0 }
 
   val verbose = Opts.flag("verbose", "Provide debug output").orFalse
 
@@ -65,10 +68,11 @@ object RepeaterCli {    // TODO: factor out into a common module
                            bufferSize: Int,
                            window: Int,
                            backoff: Int,
-                           concurrency: Option[Int])
+                           concurrency: Option[Int],
+                           pubsubConcurrency: Int)
 
   val command = Command(generated.BuildInfo.name, generated.BuildInfo.description) {
-    (options, failedInsertsSub, deadEndBucket, verbose, bufferSize, window, backoffPeriod, concurrency).mapN(ListenCommand.apply)
+    (options, failedInsertsSub, deadEndBucket, verbose, bufferSize, window, backoffPeriod, concurrency, pubsubConcurrency).mapN(ListenCommand.apply)
   }
 
   def parse(args: Seq[String]) = command.parse(args)

@@ -13,10 +13,11 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
+import org.slf4j.LoggerFactory
 import com.google.api.services.bigquery.model.TableReference
 import io.circe.Json
 import org.joda.time.{Duration, Instant}
-import com.spotify.scio.{ScioContext, ScioMetrics}
+import com.spotify.scio.ScioContext
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
 import com.spotify.scio.coders.Coder
 import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions
@@ -29,15 +30,13 @@ import scala.collection.JavaConverters._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderCli.LoaderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.loader.metrics._
 import common.Config._
 import common.Codecs.toPayload
 
 object Loader {
 
   implicit val coderBadRow: Coder[BadRow] = Coder.kryo[BadRow]
-
-  private val MetricsNamespace = "snowplow"
-  val latencyDistribution = ScioMetrics.distribution(MetricsNamespace, "latency_in_sec")
 
   val OutputWindow: Duration =
     Duration.millis(10000)
@@ -71,8 +70,12 @@ object Loader {
       .flatMap {
         case (Right(row), ctx) =>
           ctx.output(ObservedTypesOutput, row.inventory)
-          val latency = (Instant.now().getMillis - row.collectorTstamp.getMillis) / 1000
-          latencyDistribution.update(latency)
+          val diff = Instant.now().getMillis - row.collectorTstamp.getMillis
+          latency.update(diff) match {
+            case Right(upd) => upd
+            // We can get a Left if an exception is thrown.
+            case Left(e) => LoggerFactory.getLogger("non-fatal").debug("Non-fatal exception:\n", e)
+          }
           Some(row)
         case (Left(row), ctx) =>
           ctx.output(BadRowsOutput, row)

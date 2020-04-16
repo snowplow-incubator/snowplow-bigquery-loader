@@ -13,10 +13,14 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
+import java.util
+
+import io.micrometer.stackdriver._
+import io.micrometer.core.instrument.DistributionSummary
 import com.google.api.services.bigquery.model.TableReference
 import io.circe.Json
 import org.joda.time.{Duration, Instant}
-import com.spotify.scio.{ScioContext, ScioMetrics}
+import com.spotify.scio.ScioContext
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
 import com.spotify.scio.coders.Coder
 import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions
@@ -32,12 +36,10 @@ import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderCli.LoaderEn
 import common.Config._
 import common.Codecs.toPayload
 
+
 object Loader {
 
   implicit val coderBadRow: Coder[BadRow] = Coder.kryo[BadRow]
-
-  private val MetricsNamespace = "snowplow"
-  val latencyDistribution = ScioMetrics.distribution(MetricsNamespace, "latency_in_sec")
 
   val OutputWindow: Duration =
     Duration.millis(10000)
@@ -65,14 +67,26 @@ object Loader {
       sc.optionsAs[DataflowPipelineOptions].setLabels(env.labels.asJava)
     }
 
+    @transient
+    lazy val stackdriverConfig = new StackdriverConfig {
+      override def projectId(): String = env.common.config.projectId
+      override def get(key: String): String = null
+      override def resourceType(): String = "dataflow_job"
+      override def resourceLabels(): util.Map[String, String] = Map[String, String]("job_name" -> env.common.config.name, "region" -> "europe-west1").asJava
+    }
+    @transient
+    lazy val registry = StackdriverMeterRegistry.builder(stackdriverConfig).build()
+    @transient
+    lazy val summary = DistributionSummary.builder("dilyan.new.latency").baseUnit("milliseconds").tags("o11y", "test").register(registry)
+
     val (mainOutput, sideOutputs) = getData(env.common.resolverJson, sc, env.common.config.getFullInput)
       .withSideOutputs(ObservedTypesOutput, BadRowsOutput)
       .withName("splitGoodBad")
       .flatMap {
         case (Right(row), ctx) =>
           ctx.output(ObservedTypesOutput, row.inventory)
-          val latency = (Instant.now().getMillis - row.collectorTstamp.getMillis) / 1000
-          latencyDistribution.update(latency)
+          val latency = (Instant.now().getMillis - row.collectorTstamp.getMillis).toDouble
+          summary.record(latency)
           Some(row)
         case (Left(row), ctx) =>
           ctx.output(BadRowsOutput, row)

@@ -13,10 +13,12 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
+import io.micrometer.stackdriver._
+import io.micrometer.core.instrument.DistributionSummary
 import com.google.api.services.bigquery.model.TableReference
 import io.circe.Json
 import org.joda.time.{Duration, Instant}
-import com.spotify.scio.{ScioContext, ScioMetrics}
+import com.spotify.scio.ScioContext
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
 import com.spotify.scio.coders.Coder
 import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions
@@ -32,12 +34,10 @@ import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderCli.LoaderEn
 import common.Config._
 import common.Codecs.toPayload
 
+
 object Loader {
 
   implicit val coderBadRow: Coder[BadRow] = Coder.kryo[BadRow]
-
-  private val MetricsNamespace = "snowplow"
-  val latencyDistribution = ScioMetrics.distribution(MetricsNamespace, "latency_in_sec")
 
   val OutputWindow: Duration =
     Duration.millis(10000)
@@ -65,6 +65,14 @@ object Loader {
       sc.optionsAs[DataflowPipelineOptions].setLabels(env.labels.asJava)
     }
 
+    val stackdriverConfig = new StackdriverConfig {
+      override def get(key: String): String = env.common.config.projectId
+    }
+
+    val registry = StackdriverMeterRegistry.builder(stackdriverConfig).build()
+
+    val summary = DistributionSummary.builder("latency").baseUnit("seconds").tags("o11y", "test").register(registry)
+
     val (mainOutput, sideOutputs) = getData(env.common.resolverJson, sc, env.common.config.getFullInput)
       .withSideOutputs(ObservedTypesOutput, BadRowsOutput)
       .withName("splitGoodBad")
@@ -72,7 +80,7 @@ object Loader {
         case (Right(row), ctx) =>
           ctx.output(ObservedTypesOutput, row.inventory)
           val latency = (Instant.now().getMillis - row.collectorTstamp.getMillis) / 1000
-          latencyDistribution.update(latency)
+          summary.record(latency)
           Some(row)
         case (Left(row), ctx) =>
           ctx.output(BadRowsOutput, row)

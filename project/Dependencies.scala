@@ -41,6 +41,8 @@ object Dependencies {
     val beam               = "2.19.0"
     val googleCloud        = "1.51.0"
     val slf4j              = "1.7.25"
+    val micrometer         = "1.4.1"
+    val gaxJava            = "1.56.0"
     // Scala (test only)
     val specs2             = "4.3.6"
     val scalaCheck         = "1.14.0"
@@ -83,6 +85,9 @@ object Dependencies {
   val dataflowRunner     = "org.apache.beam"       % "beam-runners-google-cloud-dataflow-java" % V.beam
   val directRunner       = "org.apache.beam"       % "beam-runners-direct-java"                % V.beam
   val slf4j              = "org.slf4j"             % "slf4j-simple"                            % V.slf4j
+  val micrometer         = "io.micrometer"         % "micrometer-registry-stackdriver"         % V.micrometer
+  val gax                = "com.google.api"        % "gax"                                     % V.gaxJava
+  val gaxGrpc            = "com.google.api"        % "gax-grpc"                                % V.gaxJava
 
   // Scala (test only)
   val scalaCheck         = "org.scalacheck"        %% "scalacheck"                   % V.scalaCheck     % "test"

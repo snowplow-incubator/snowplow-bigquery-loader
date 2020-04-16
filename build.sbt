@@ -45,6 +45,9 @@ lazy val loader = project.in(file("loader"))
       Dependencies.slf4j,
       Dependencies.directRunner,
       Dependencies.dataflowRunner,
+      Dependencies.micrometer,
+      Dependencies.gax,
+      Dependencies.gaxGrpc,
 
       Dependencies.circeLiteral,
       Dependencies.circeJawn,

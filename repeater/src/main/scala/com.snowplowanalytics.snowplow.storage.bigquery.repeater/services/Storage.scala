@@ -35,13 +35,12 @@ object Storage {
   private val storage = StorageOptions.getDefaultInstance.getService
 
   val TimestampFormat = DateTimeFormat.forPattern("YYYY-MM-dd-HHmmssSSS")
-  val DefaultAcl = new JArrayList(JArrays.asList(Acl.of(User.ofAllUsers, Role.READER)))
 
   def getFileName(base: String, n: Int, tstamp: DateTime): String =
     base ++ DateTime.now(DateTimeZone.UTC).toString(TimestampFormat) ++ n.toString
 
   def uploadChunk[F[_]: Sync: Logger](bucketName: String, fileName: String, rows: Chunk[BadRow]): F[Unit] = {
-    val blobInfo = BlobInfo.newBuilder(bucketName, fileName).setAcl(DefaultAcl).build()
+    val blobInfo = BlobInfo.newBuilder(bucketName, fileName).build()
     val content = Stream.chunk(rows)
       .map(_.compact)
       .intersperse("\n")

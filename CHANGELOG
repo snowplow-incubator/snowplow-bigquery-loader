@@ -1,3 +1,7 @@
+Version 0.4.2 (2020-04-27)
+--------------------------
+Repeater: do not set ACL for GCS files (#89)
+
 Version 0.4.1 (2020-04-14)
 --------------------------
 Repeater: change log messages ERROR level to INFO (#77)

@@ -16,13 +16,11 @@ package forwarder
 import org.joda.time.Duration
 import com.spotify.scio.values.WindowOptions
 import com.spotify.scio.ScioContext
-import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO
 import org.apache.beam.sdk.transforms.windowing.{AfterProcessingTime, Repeatedly}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
-import scala.collection.JavaConverters._
 import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.ForwarderCli.ForwarderEnvironment
 
 object Forwarder {
@@ -36,10 +34,6 @@ object Forwarder {
     Duration.ZERO)
 
   def run(env: ForwarderEnvironment, sc: ScioContext): Unit = {
-    if (env.labels.nonEmpty) {
-      sc.optionsAs[DataflowPipelineOptions].setLabels(env.labels.asJava)
-    }
-
     val input = PubsubIO.readStrings().fromSubscription(env.getFullFailedInsertsSub)
     sc.customInput("failedInserts", input)
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)

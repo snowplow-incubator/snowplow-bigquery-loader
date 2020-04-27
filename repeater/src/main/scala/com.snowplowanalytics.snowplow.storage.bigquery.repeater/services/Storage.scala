@@ -35,7 +35,7 @@ object Storage {
   private val storage = StorageOptions.getDefaultInstance.getService
 
   val TimestampFormat = DateTimeFormat.forPattern("YYYY-MM-dd-HHmmssSSS")
-  val DefaultAcl = new JArrayList(JArrays.asList(Acl.of(User.ofAllUsers, Role.READER)))
+  val DefaultAcl: JArrayList[Acl] = new JArrayList(JArrays.asList(Acl.of(User.ofAllAuthenticatedUsers, Role.READER)))
 
   def getFileName(base: String, n: Int, tstamp: DateTime): String =
     base ++ DateTime.now(DateTimeZone.UTC).toString(TimestampFormat) ++ n.toString

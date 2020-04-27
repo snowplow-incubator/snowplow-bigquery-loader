@@ -20,16 +20,13 @@ import org.joda.time.{Duration, Instant}
 import com.spotify.scio.ScioContext
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
 import com.spotify.scio.coders.Coder
-import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions
 import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 
-import scala.collection.JavaConverters._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
-import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderCli.LoaderEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.metrics._
 import common.Config._
 import common.Codecs.toPayload
@@ -50,7 +47,7 @@ object Loader {
   val ObservedTypesOutput: SideOutput[Set[ShreddedType]] =
     SideOutput[Set[ShreddedType]]()
 
-  /** Emit observed types every 10 minutes / workers */
+  /** Emit observed types every 1 minute */
   val TypesWindow: Duration =
     Duration.millis(60000)
 
@@ -59,12 +56,8 @@ object Loader {
     SideOutput[BadRow]()
 
   /** Run whole pipeline */
-  def run(env: LoaderEnvironment, sc: ScioContext): Unit = {
-    if (env.labels.nonEmpty) {
-      sc.optionsAs[DataflowPipelineOptions].setLabels(env.labels.asJava)
-    }
-
-    val (mainOutput, sideOutputs) = getData(env.common.resolverJson, sc, env.common.config.getFullInput)
+  def run(env: Environment, sc: ScioContext): Unit = {
+    val (mainOutput, sideOutputs) = getData(env.resolverJson, sc, env.config.getFullInput)
       .withSideOutputs(ObservedTypesOutput, BadRowsOutput)
       .withName("splitGoodBad")
       .flatMap {
@@ -84,23 +77,23 @@ object Loader {
 
     // Emit all types observed in 1 minute
     aggregateTypes(sideOutputs(ObservedTypesOutput))
-      .saveAsPubsub(env.common.config.getFullTypesTopic)
+      .saveAsPubsub(env.config.getFullTypesTopic)
 
     // Sink bad rows
     sideOutputs(BadRowsOutput)
       .map(_.compact)
-      .saveAsPubsub(env.common.config.getFullBadRowsTopic)
+      .saveAsPubsub(env.config.getFullBadRowsTopic)
 
     // Unwrap LoaderRow collection to get failed inserts
     val mainOutputInternal = mainOutput.internal
-    val remaining = getOutput(env.common.config.load)
-      .to(getTableReference(env.common))
+    val remaining = getOutput(env.config.load)
+      .to(getTableReference(env))
       .expand(mainOutputInternal).getFailedInserts
 
     // Sink good rows and forward failed inserts to PubSub
     sc.wrap(remaining)
       .withName("failedInsertsSink")
-      .saveAsPubsub(env.common.config.getFullFailedInsertsTopic)
+      .saveAsPubsub(env.config.getFullFailedInsertsTopic)
   }
 
   /** Default BigQuery output options */

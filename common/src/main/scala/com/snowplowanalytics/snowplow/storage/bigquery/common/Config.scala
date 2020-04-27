@@ -20,7 +20,7 @@ import cats.syntax.either._
 import cats.effect.{Clock, IO, Sync}
 
 import io.circe.{ Json, Decoder, DecodingFailure }
-import io.circe.parser.{ parse, decode }
+import io.circe.parser.parse
 import io.circe.generic.semiauto._
 
 import com.monovore.decline.Opts
@@ -129,8 +129,4 @@ object Config {
 
   private def toValidated[A, R](f: A => Either[Throwable, R])(a: A): ValidatedNel[String, R] =
     f(a).leftMap(_.getMessage).toValidatedNel
-
-  def parseLabels(input: String): Either[String, Map[String, String]] =
-    decode[Map[String, String]](input)
-      .leftMap(_ => s"Invalid `labels` format, expected json object, received: $input")
 }

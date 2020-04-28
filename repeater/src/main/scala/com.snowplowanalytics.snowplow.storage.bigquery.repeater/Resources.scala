@@ -12,27 +12,21 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
+import org.joda.time.Instant
 import java.util.concurrent.Executors
 
-import scala.concurrent.{ ExecutionContext, ExecutionContextExecutorService }
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 import scala.concurrent.duration._
-
 import cats.{Monad, Show}
 import cats.syntax.all._
 import cats.effect._
 import cats.effect.concurrent.Ref
-
 import fs2.{Chunk, Stream}
 import fs2.concurrent.{Queue, SignallingRef}
-
 import io.chrisdavenport.log4cats.Logger
-
 import com.google.cloud.bigquery._
-
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
-
 import com.snowplowanalytics.snowplow.badrows.BadRow
-
 import RepeaterCli.GcsPath
 
 
@@ -57,9 +51,11 @@ class Resources[F[_]](val bigQuery: BigQuery,
                       val windowTime: Int,
                       val backoffTime: Int,
                       val concurrency: Int,
-                      val insertBlocker: Blocker) {
-  def logInserted: F[Unit] = statistics.update(s => s.copy(inserted = s.inserted + 1))
-  def logAbandoned: F[Unit] = statistics.update(s => s.copy(desperates = s.desperates + 1))
+                      val insertBlocker: Blocker,
+                      val jobStartTime: Instant) {
+  def logInserted: F[Unit] = statistics.update(s => s.copy(inserted = s.inserted + 1, lifetime = updateLifetime(jobStartTime)))
+  def logAbandoned: F[Unit] = statistics.update(s => s.copy(desperates = s.desperates + 1, lifetime = updateLifetime(jobStartTime)))
+  def updateLifetime(startTime: Instant): Duration = Duration(Instant.now().getMillis - startTime.getMillis, "millis")
 
   def showStats(implicit L: Logger[F], M: Monad[F]): F[Unit] =
     statistics.get.flatMap(statistics => L.info(statistics.show))
@@ -69,13 +65,13 @@ object Resources {
 
   val QueueSize = 100
 
-  case class Statistics(inserted: Int, desperates: Int)
+  case class Statistics(inserted: Int, desperates: Int, lifetime: Duration)
 
   object Statistics {
-    val start = Statistics(0, 0)
+    val start = Statistics(0, 0, Duration(0, "millis"))
 
     implicit val showRepeaterStatistics: Show[Statistics] =
-      s => s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected"
+      s => s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected in ${s.lifetime.toHours} hours."
   }
 
   /** Allocate all resources for an application */
@@ -91,7 +87,8 @@ object Resources {
       statistics    <- Ref[F].of[Statistics](Statistics.start)
       concurrency   <- Sync[F].delay(Runtime.getRuntime.availableProcessors * 16)
       _             <- Logger[F].info(s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId} with $concurrency streams")
-    } yield (b: Blocker) => new Resources(bigQuery, cmd.deadEndBucket, env, queue, counter, stop, statistics, cmd.bufferSize, cmd.window, cmd.backoff, concurrency, b)
+      jobStartTime  = Instant.now()
+    } yield (b: Blocker) => new Resources(bigQuery, cmd.deadEndBucket, env, queue, counter, stop, statistics, cmd.bufferSize, cmd.window, cmd.backoff, concurrency, b, jobStartTime)
 
     val createBlocker = Sync[F].delay(Executors.newCachedThreadPool()).map(ExecutionContext.fromExecutorService)
     for {

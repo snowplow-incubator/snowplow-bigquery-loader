@@ -88,7 +88,7 @@ lazy val mutator = project.in(file("mutator"))
 lazy val forwarder = project.in(file("forwarder"))
   .settings(Seq(
     name := "snowplow-bigquery-forwarder",
-    description := "Snowplow BigQuery Dataflow Job for replaying events from failed inserts subscription",
+    description := "This component is deprecated from version 0.5.0 on. Use BigQuery Repeater instead.",
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.forwarder.generated"
   ))
   .settings(BuildSettings.dockerSettings)

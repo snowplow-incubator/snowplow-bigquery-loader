@@ -14,30 +14,25 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
 import org.joda.time.Instant
-
 import cats.Id
 import cats.data.{NonEmptyList, ValidatedNel}
 import cats.implicits._
-
-import io.circe.{ Json, Encoder }
+import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import io.circe.generic.semiauto._
-
 import com.spotify.scio.bigquery.TableRow
-
-import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData, SchemaVer}
+import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{Schema => DdlSchema}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError, Field, Mode, Row, Type}
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
-
-import com.snowplowanalytics.snowplow.badrows.{ Payload, Processor, Failure, FailureDetails, BadRow }
-
+import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload, Processor}
 import common.{Adapter, Schema}
 import IdInstances._
+import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderCache
+
 
 /** Row ready to be passed into Loader stream and Mutator topic */
 case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])
@@ -139,10 +134,7 @@ object LoaderRow {
     */
   def transformJson(resolver: Resolver[Id], schemaKey: SchemaKey)
                    (data: Json): ValidatedNel[FailureDetails.LoaderIgluError, Row] =
-    resolver.lookupSchema(schemaKey)
-      .leftMap { e => NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(schemaKey, e)) }
-      .flatMap(schema => DdlSchema.parse(schema).toRight(invalidSchema(schemaKey)))
-      .map(schema => Field.build("", schema, false))
+    LoaderCache.getOrLookup(schemaKey)(lookup(resolver, schemaKey))
       .flatMap(field => Row.cast(field)(data).leftMap(e => e.map(castError(schemaKey))).toEither)
       .toValidated
 
@@ -168,4 +160,9 @@ object LoaderRow {
     NonEmptyList.one(error)
   }
 
+  private def lookup(resolver: Resolver[Id], schemaKey: SchemaKey): Either[NonEmptyList[FailureDetails.LoaderIgluError], Field] =
+    resolver.lookupSchema(schemaKey)
+      .leftMap { e => NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(schemaKey, e)) }
+      .flatMap(schema => DdlSchema.parse(schema).toRight(invalidSchema(schemaKey)))
+      .map(schema => Field.build("", schema, false))
 }

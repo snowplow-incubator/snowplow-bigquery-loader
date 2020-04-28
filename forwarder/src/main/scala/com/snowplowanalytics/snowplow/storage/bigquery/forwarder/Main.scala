@@ -16,6 +16,7 @@ package forwarder
 import scala.concurrent.duration.Duration
 import com.spotify.scio._
 
+@deprecated("This component is no longer supported", "Forwarder 0.5.0")
 object Main {
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)

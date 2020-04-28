@@ -16,6 +16,7 @@ import com.spotify.scio.bigquery.TableRow
 import org.apache.beam.sdk.transforms.SerializableFunction
 import org.apache.beam.sdk.extensions.gcp.util.Transport
 
+@deprecated("This component is no longer supported", "Forwarder 0.5.0")
 /** Extract TableRow from Json string*/
 object SerializeJsonRow extends SerializableFunction[String, TableRow] {
   def apply(input: String): TableRow =

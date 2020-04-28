@@ -33,7 +33,8 @@ object Repeater extends SafeIOApp {
 
   val StreamConcurrency = 4
 
-  val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
+  val processor =
+    Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
 
@@ -41,26 +42,36 @@ object Repeater extends SafeIOApp {
     RepeaterCli.parse(args) match {
       case Right(command) =>
         val process = for {
-          resources     <- Stream.resource(Resources.acquire[IO](command))
-          _             <- Stream.eval(resources.showStats)
-          bqSink         = services.PubSub
-            .getEvents(resources.env.config.projectId, command.failedInsertsSub, resources.desperates)
+          resources <- Stream.resource(Resources.acquire[IO](command))
+          _ <- Stream.eval(resources.showStats)
+          bqSink = services.PubSub
+            .getEvents(
+              resources.env.config.projectId,
+              command.failedInsertsSub,
+              resources.desperates
+            )
             .interruptWhen(resources.stop)
             .through[IO, Unit](Flow.sink(resources))
           desparatesSink = Flow.dequeueDesperates(resources)
-          logging        = Stream.awakeEvery[IO](5.minute).evalMap(_ => resources.showStats)
-          _             <- Stream(bqSink, desparatesSink, logging).parJoin(StreamConcurrency)
+          logging = Stream
+            .awakeEvery[IO](5.minute)
+            .evalMap(_ => resources.updateLifetime *> resources.showStats)
+          _ <- Stream(bqSink, desparatesSink, logging).parJoin(
+            StreamConcurrency
+          )
         } yield ()
 
-        process
-          .compile
-          .drain
-          .attempt
+        process.compile.drain.attempt
           .flatMap {
             case Right(_) =>
-              IO.delay(println("Closing Snowplow BigQuery Repeater")) *> IO.pure(ExitCode.Success)
+              IO.delay(println("Closing Snowplow BigQuery Repeater")) *> IO
+                .pure(ExitCode.Success)
             case Left(Config.InitializationError(message)) =>
-              IO(System.err.println(s"Snowplow BigQuery Repeater failed to start. $message")) >> IO.pure(ExitCode.Error)
+              IO(
+                System.err.println(
+                  s"Snowplow BigQuery Repeater failed to start. $message"
+                )
+              ) >> IO.pure(ExitCode.Error)
             case Left(e: java.util.concurrent.TimeoutException) =>
               System.out.println(e.toString)
               IO.raiseError(e) >> IO.pure(ExitCode.Error)

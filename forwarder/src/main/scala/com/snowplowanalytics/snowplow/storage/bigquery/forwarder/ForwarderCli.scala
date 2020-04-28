@@ -24,6 +24,7 @@ import common.Config._
   * Unlike Mutator, required --key=value format and ignores unknown options (for Dataflow)
   * Unlike Loader, also required `--failedInsertsSub`
   */
+@deprecated("This component is no longer supported", "Forwarder 0.5.0")
 object ForwarderCli {
   private implicit val privateIoClock: Clock[IO] =
     Clock.create[IO]

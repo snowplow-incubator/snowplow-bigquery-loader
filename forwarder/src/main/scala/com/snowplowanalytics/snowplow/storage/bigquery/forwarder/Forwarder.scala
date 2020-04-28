@@ -23,6 +23,7 @@ import org.apache.beam.sdk.transforms.windowing.{AfterProcessingTime, Repeatedly
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 import com.snowplowanalytics.snowplow.storage.bigquery.forwarder.ForwarderCli.ForwarderEnvironment
 
+@deprecated("This component is no longer supported", "Forwarder 0.5.0")
 object Forwarder {
 
   val OutputWindow: Duration =

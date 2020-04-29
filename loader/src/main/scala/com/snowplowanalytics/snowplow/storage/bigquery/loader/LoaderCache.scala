@@ -25,8 +25,8 @@ import scala.collection.mutable.{Map => MMap}
   * resulting JSON into a [[Field]].
   */
 object LoaderCache {
-  type Key = SchemaKey
-  type Value = EitherNel[FailureDetails.LoaderIgluError, Field]
+  type Key      = SchemaKey
+  type Value    = EitherNel[FailureDetails.LoaderIgluError, Field]
   type Deadline = Long
 
   val Ttl = 5 * 60 * 1000 // 5 mins

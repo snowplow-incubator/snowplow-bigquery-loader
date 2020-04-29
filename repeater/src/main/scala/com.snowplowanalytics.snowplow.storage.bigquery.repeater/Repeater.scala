@@ -14,18 +14,14 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
-
-import cats.syntax.all._
 import cats.effect._
-
-import fs2.Stream
-
+import cats.syntax.all._
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
-
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
+import fs2.Stream
 
 import com.snowplowanalytics.snowplow.badrows.Processor
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 
 object Repeater extends SafeIOApp {
   val QueueSize = 1024

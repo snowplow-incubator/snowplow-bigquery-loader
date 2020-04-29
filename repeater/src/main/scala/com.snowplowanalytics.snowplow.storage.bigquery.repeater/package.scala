@@ -13,8 +13,8 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 
 import com.permutive.pubsub.consumer.Model
-import fs2.Stream
 import fs2.concurrent.Queue
+import fs2.Stream
 
 package object repeater {
   type EventRecord[F[_]] = Model.Record[F, EventContainer]

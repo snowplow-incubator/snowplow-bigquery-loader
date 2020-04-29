@@ -14,7 +14,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
 import cats.syntax.either._
-import cats.effect.{ IO, Clock }
+import cats.effect.{Clock, IO}
 
 import com.spotify.scio.Args
 
@@ -25,7 +25,7 @@ import common.Config._
   * Unlike Mutator, required --key=value format and ignores unknown options (for Dataflow)
   */
 object LoaderCli {
-  private implicit val privateIoClock: Clock[IO] =
+  implicit private val privateIoClock: Clock[IO] =
     Clock.create[IO]
 
   def parse(args: Args): Either[Throwable, Environment] =

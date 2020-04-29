@@ -31,10 +31,13 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer,
 
 /** Module responsible for reading PubSub */
 object PubSub {
+
   /** Read events from `failedInserts` topic */
-  def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](projectId: String,
-                                                               subscription: String,
-                                                               desperates: Queue[F, BadRow]): Stream[F, Model.Record[F, EventContainer]] =
+  def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](
+    projectId: String,
+    subscription: String,
+    desperates: Queue[F, BadRow]
+  ): Stream[F, Model.Record[F, EventContainer]] =
     PubsubGoogleConsumer.subscribe[F, EventContainer](
       Model.ProjectId(projectId),
       Model.Subscription(subscription),
@@ -43,9 +46,9 @@ object PubSub {
     )
 
   private def callback[F[_]: Sync](msg: PubsubMessage, err: Throwable, ack: F[Unit], desperates: Queue[F, BadRow]) = {
-    val info = FailureDetails.LoaderRecoveryError.ParsingError(err.toString, Nil)
+    val info    = FailureDetails.LoaderRecoveryError.ParsingError(err.toString, Nil)
     val failure = Failure.LoaderRecoveryFailure(info)
-    val badRow = BadRow.LoaderRecoveryError(Repeater.processor, failure, Payload.RawPayload(msg.toString))
+    val badRow  = BadRow.LoaderRecoveryError(Repeater.processor, failure, Payload.RawPayload(msg.toString))
     desperates.enqueue1(badRow) >> ack
   }
 }

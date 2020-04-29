@@ -39,19 +39,21 @@ import RepeaterCli.GcsPath
   * @param stop a signal to stop retreving items
   * @param concurrency a number of streams to execute inserts
   */
-class Resources[F[_]](val bigQuery: BigQuery,
-                      val bucket: GcsPath,
-                      val env: Config.Environment,
-                      val desperates: Queue[F, BadRow],
-                      val counter: Ref[F, Int],
-                      val stop: SignallingRef[F, Boolean],
-                      val statistics: Ref[F, Resources.Statistics],
-                      val bufferSize: Int,
-                      val windowTime: Int,
-                      val backoffTime: Int,
-                      val concurrency: Int,
-                      val insertBlocker: Blocker,
-                      val jobStartTime: Instant) {
+class Resources[F[_]](
+  val bigQuery: BigQuery,
+  val bucket: GcsPath,
+  val env: Config.Environment,
+  val desperates: Queue[F, BadRow],
+  val counter: Ref[F, Int],
+  val stop: SignallingRef[F, Boolean],
+  val statistics: Ref[F, Resources.Statistics],
+  val bufferSize: Int,
+  val windowTime: Int,
+  val backoffTime: Int,
+  val concurrency: Int,
+  val insertBlocker: Blocker,
+  val jobStartTime: Instant
+) {
   def logInserted: F[Unit] =
     statistics.update(s => s.copy(inserted = s.inserted + 1))
   def logAbandoned: F[Unit] =
@@ -76,8 +78,7 @@ object Resources {
     val start = Statistics(0, 0, Duration(0, "millis"))
 
     implicit val showRepeaterStatistics: Show[Statistics] =
-      s =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected in ${s.lifetime.toHours} hours."
+      s => s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected in ${s.lifetime.toHours} hours."
   }
 
   /** Allocate all resources for an application */
@@ -87,47 +88,39 @@ object Resources {
     // It's a function because blocker needs to be created as Resource
     val initResources: F[Blocker => Resources[F]] = for {
       transformed <- Config.transform[F](cmd.config).value
-      env <- Sync[F].fromEither(transformed)
-      bigQuery <- services.Database.getClient[F]
-      queue <- Queue.bounded[F, BadRow](QueueSize)
-      counter <- Ref[F].of[Int](0)
-      stop <- SignallingRef[F, Boolean](false)
-      statistics <- Ref[F].of[Statistics](Statistics.start)
+      env         <- Sync[F].fromEither(transformed)
+      bigQuery    <- services.Database.getClient[F]
+      queue       <- Queue.bounded[F, BadRow](QueueSize)
+      counter     <- Ref[F].of[Int](0)
+      stop        <- SignallingRef[F, Boolean](false)
+      statistics  <- Ref[F].of[Statistics](Statistics.start)
       concurrency <- Sync[F].delay(Runtime.getRuntime.availableProcessors * 16)
       _ <- Logger[F].info(
         s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId} with $concurrency streams"
       )
       jobStartTime = Instant.now()
-    } yield
-      (b: Blocker) =>
-        new Resources(
-          bigQuery,
-          cmd.deadEndBucket,
-          env,
-          queue,
-          counter,
-          stop,
-          statistics,
-          cmd.bufferSize,
-          cmd.window,
-          cmd.backoff,
-          concurrency,
-          b,
-          jobStartTime
+    } yield (b: Blocker) =>
+      new Resources(
+        bigQuery,
+        cmd.deadEndBucket,
+        env,
+        queue,
+        counter,
+        stop,
+        statistics,
+        cmd.bufferSize,
+        cmd.window,
+        cmd.backoff,
+        concurrency,
+        b,
+        jobStartTime
       )
 
-    val createBlocker = Sync[F]
-      .delay(Executors.newCachedThreadPool())
-      .map(ExecutionContext.fromExecutorService)
+    val createBlocker = Sync[F].delay(Executors.newCachedThreadPool()).map(ExecutionContext.fromExecutorService)
     for {
-      blocker <- Resource
-        .make(createBlocker)(ec => Sync[F].delay(ec.shutdown()))
-        .map(Blocker.liftExecutionContext)
-      resources <- Resource.make(
-        initResources.map(init => init.apply(blocker))
-      )(release)
+      blocker   <- Resource.make(createBlocker)(ec      => Sync[F].delay(ec.shutdown())).map(Blocker.liftExecutionContext)
+      resources <- Resource.make(initResources.map(init => init.apply(blocker)))(release)
     } yield resources
-
   }
 
   /**
@@ -137,13 +130,10 @@ object Resources {
   def pullRemaining[F[_]: Sync](
     desperates: Queue[F, BadRow]
   ): F[List[BadRow]] = {
-    val last = Stream
-      .repeatEval(desperates.tryDequeueChunk1(20))
-      .takeWhile(_.isDefined)
-      .flatMap {
-        case Some(chunk) => Stream.chunk(chunk)
-        case None        => Stream.empty
-      }
+    val last = Stream.repeatEval(desperates.tryDequeueChunk1(20)).takeWhile(_.isDefined).flatMap {
+      case Some(chunk) => Stream.chunk(chunk)
+      case None        => Stream.empty
+    }
     last.compile.toList
   }
 

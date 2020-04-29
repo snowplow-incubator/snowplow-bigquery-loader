@@ -65,7 +65,8 @@ object Flow {
   def dequeueDesperates[F[_]: Timer: Concurrent: Logger](
     resources: Resources[F]
   ): Stream[F, Unit] =
-    resources.desperates
+    resources
+      .desperates
       .dequeueChunk(resources.bufferSize)
       .groupWithin(resources.bufferSize, resources.windowTime.seconds)
       .evalMap(sinkBadChunk(resources.counter, resources.bucket))
@@ -77,9 +78,9 @@ object Flow {
   )(chunk: Chunk[BadRow]): F[Unit] =
     for {
       time <- getTime
-      _ <- Logger[F].debug(s"Preparing for sinking a chunk, $time")
-      _ <- counter.update(_ + 1)
-      i <- counter.get
+      _    <- Logger[F].debug(s"Preparing for sinking a chunk, $time")
+      _    <- counter.update(_ + 1)
+      i    <- counter.get
       file = Storage.getFileName(bucket.path, i, time)
       _ <- Logger[F].debug(s"Filename will be $file")
       _ <- Storage.uploadChunk[F](bucket.bucket, file, chunk)

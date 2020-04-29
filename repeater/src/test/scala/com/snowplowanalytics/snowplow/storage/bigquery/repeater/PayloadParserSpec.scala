@@ -17,19 +17,20 @@ import io.circe.Json
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 
-import PayloadParser.{SelfDescribingEntity, ReconstructedEvent}
+import PayloadParser.{ReconstructedEvent, SelfDescribingEntity}
 
-import com.snowplowanalytics.snowplow.badrows.{ BadRow, Payload, Failure, FailureDetails }
+import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
 
 import org.specs2.Specification
 
 object PayloadParserSpec {
-  val flattenSchemaKeyContexts = "contexts_com_snowplowanalytics_snowplow_web_page_1_0_0"
-  val flattenSchemaKeyRandomPrefix = "random_contexts_com_snowplowanalytics_snowplow_web_page_1_0_0"
+  val flattenSchemaKeyContexts      = "contexts_com_snowplowanalytics_snowplow_web_page_1_0_0"
+  val flattenSchemaKeyRandomPrefix  = "random_contexts_com_snowplowanalytics_snowplow_web_page_1_0_0"
   val flattenSchemaKeyUnstructEvent = "unstruct_event_com_snowplowanalytics_snowplow_web_page_1_0_0"
 }
 
-class PayloadParserSpec extends Specification { def is= s2"""
+class PayloadParserSpec extends Specification {
+  def is = s2"""
   minimal payload without any context or unstruct event can be parsed successfully $e1
   parse payload with context array which has flatten schema key prefixed with "contexts" $e2
   parse payload with context array which has flatten schema key prefixed randomly $e3
@@ -41,7 +42,7 @@ class PayloadParserSpec extends Specification { def is= s2"""
   import PayloadParserSpec._
 
   def e1 = {
-    val event = SpecHelpers.exampleMinimalEvent
+    val event    = SpecHelpers.exampleMinimalEvent
     val expected = Right(ReconstructedEvent(event, List()))
     PayloadParser.parse(event.asJsonObject) mustEqual expected
   }
@@ -54,7 +55,6 @@ class PayloadParserSpec extends Specification { def is= s2"""
     )
     res mustEqual expected
   }
-
 
   def e3 = {
     val event = SpecHelpers.exampleMinimalEvent
@@ -90,31 +90,39 @@ class PayloadParserSpec extends Specification { def is= s2"""
     val event = SpecHelpers.exampleMinimalEvent
     val (res, expected) = parseEventWithContext(
       event,
-      contextFlattenSchemaKeys = List(flattenSchemaKeyContexts),
+      contextFlattenSchemaKeys       = List(flattenSchemaKeyContexts),
       unstructEventFlattenSchemaKeys = List(flattenSchemaKeyUnstructEvent)
     )
     res mustEqual expected
   }
 
   def e7 = {
-    val eventJson = SpecHelpers.requiredFieldMissingEventJson
+    val eventJson    = SpecHelpers.requiredFieldMissingEventJson
     val eventJsonStr = Payload.RawPayload(eventJson.noSpaces)
-    val info = FailureDetails.LoaderRecoveryError.ParsingError("Attempt to decode value on failed cursor", List("DownField(v_etl)"))
+    val info = FailureDetails
+      .LoaderRecoveryError
+      .ParsingError("Attempt to decode value on failed cursor", List("DownField(v_etl)"))
     val failure = Failure.LoaderRecoveryFailure(info)
     PayloadParser.parse(eventJson.asObject.get) match {
       case Left(BadRow.LoaderRecoveryError(_, `failure`, `eventJsonStr`)) => ok
-      case _ => ko("Unexpected parsing result")
+      case _                                                              => ko("Unexpected parsing result")
     }
   }
 
-  private def parseEventWithContext(event: Event, contextFlattenSchemaKeys: List[String] = List(), unstructEventFlattenSchemaKeys: List[String] = List()) = {
+  private def parseEventWithContext(
+    event: Event,
+    contextFlattenSchemaKeys: List[String]       = List(),
+    unstructEventFlattenSchemaKeys: List[String] = List()
+  ) = {
     val contexts = createJsonAndSelfDescribingEntityPair(SpecHelpers.createContexts, contextFlattenSchemaKeys)
-    val unstructEvents = createJsonAndSelfDescribingEntityPair(SpecHelpers.createUnstructEvent, unstructEventFlattenSchemaKeys)
+    val unstructEvents =
+      createJsonAndSelfDescribingEntityPair(SpecHelpers.createUnstructEvent, unstructEventFlattenSchemaKeys)
     val unifiedEventJsonObject = (contexts ++ unstructEvents)
       .map(_._1)
       .foldLeft(event.asJsonObject.toMap - "unstruct_event" - "contexts" - "derived_contexts") { (c, i) =>
         c ++ i.asObject.get.toMap
-      }.asJsonObject
+      }
+      .asJsonObject
     val jsonsWithFlattenSchemaKey = (contexts ++ unstructEvents).map(_._2)
     val expected = Right(
       ReconstructedEvent(
@@ -126,19 +134,16 @@ class PayloadParserSpec extends Specification { def is= s2"""
     (res, expected)
   }
 
-  private def createJsonAndSelfDescribingEntityPair(f: String => Json, flattenSchemaKeys: List[String]): List[(Json, SelfDescribingEntity)] =
+  private def createJsonAndSelfDescribingEntityPair(
+    f: String => Json,
+    flattenSchemaKeys: List[String]
+  ): List[(Json, SelfDescribingEntity)] =
     flattenSchemaKeys.map { key =>
       val json = f(key)
       val selfDescribingEntity = SelfDescribingEntity(
         key,
-        json
-          .hcursor
-          .downField(key)
-          .as[Json]
-          .getOrElse(throw new RuntimeException("Value with schema key not found"))
+        json.hcursor.downField(key).as[Json].getOrElse(throw new RuntimeException("Value with schema key not found"))
       )
       (json, selfDescribingEntity)
     }
 }
-
-

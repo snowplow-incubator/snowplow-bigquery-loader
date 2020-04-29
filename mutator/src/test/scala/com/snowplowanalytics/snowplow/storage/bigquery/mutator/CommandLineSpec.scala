@@ -21,23 +21,24 @@ import CommandLine._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.EnvironmentConfig
 
-class CommandLineSpec extends org.specs2.Specification { def is = s2"""
+class CommandLineSpec extends org.specs2.Specification {
+  def is = s2"""
   parse extracts valid configuration for listen subcommand $e1
   parse extracts valid configuration for create subcommand $e2
   getEnv validates end extracts configuration $e3
   """
 
-
   def e1 = {
     val expected = ListenCommand(EnvironmentConfig(SpecHelpers.jsonResolver, SpecHelpers.jsonConfig), false)
-    val result = CommandLine.parse(Seq("listen", "--resolver", SpecHelpers.base64Resolver, "--config", SpecHelpers.base64Config))
+    val result =
+      CommandLine.parse(Seq("listen", "--resolver", SpecHelpers.base64Resolver, "--config", SpecHelpers.base64Config))
     result must beRight(expected)
   }
 
-
   def e2 = {
     val expected = CreateCommand(EnvironmentConfig(SpecHelpers.jsonResolver, SpecHelpers.jsonConfig))
-    val result = CommandLine.parse(Seq("create", "--resolver", SpecHelpers.base64Resolver, "--config", SpecHelpers.base64Config))
+    val result =
+      CommandLine.parse(Seq("create", "--resolver", SpecHelpers.base64Resolver, "--config", SpecHelpers.base64Config))
     result must beRight(expected)
   }
 
@@ -53,10 +54,11 @@ class CommandLineSpec extends org.specs2.Specification { def is = s2"""
       "types-topic",
       "types-sub",
       "bad-rows-topic",
-      "failed-inserts-topic")
+      "failed-inserts-topic"
+    )
 
-    val result = CommandLine
-      .parse(Seq("create", "--resolver", SpecHelpers.base64Resolver, "--config", SpecHelpers.base64Config))
+    val result =
+      CommandLine.parse(Seq("create", "--resolver", SpecHelpers.base64Resolver, "--config", SpecHelpers.base64Config))
 //      .map(_.getEnv.unsafeRunSync().config)
     result must beRight(expected)
 

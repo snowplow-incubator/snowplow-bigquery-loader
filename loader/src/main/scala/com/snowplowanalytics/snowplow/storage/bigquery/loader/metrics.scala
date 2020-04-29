@@ -21,8 +21,8 @@ import cats.syntax.either._
 
 object metrics {
   private val metrics = new MetricRegistry()
-  val latency = new MetricRegistryOps(metrics)
-  private val logger = LoggerFactory.getLogger("bigquery.loader.metrics")
+  val latency         = new MetricRegistryOps(metrics)
+  private val logger  = LoggerFactory.getLogger("bigquery.loader.metrics")
   // Take the latest value every 1 second.
   private val reporter = Slf4jReporter.forRegistry(metrics).outputTo(logger).build().start(1, TimeUnit.SECONDS)
 
@@ -39,7 +39,8 @@ object metrics {
     }
 
     // `getValue` can throw an exception.
-    def update(diff: Long): Either[Throwable, Long] = Either.catchNonFatal(this.gauge("bigquery.loader.latency", diff).getValue)
+    def update(diff: Long): Either[Throwable, Long] =
+      Either.catchNonFatal(this.gauge("bigquery.loader.latency", diff).getValue)
   }
 
   /** The default `Gauge` has no way to pass in a value. */

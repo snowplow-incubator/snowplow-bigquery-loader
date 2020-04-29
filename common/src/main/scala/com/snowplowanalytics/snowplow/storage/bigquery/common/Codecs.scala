@@ -25,25 +25,27 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 
 object Codecs {
   def toPayload(item: ShreddedType): Json =
-    Json.fromFields(List(
-      "schema" -> Json.fromString(item.schemaKey.toSchemaUri),
-      "type" -> Json.fromString(item.shredProperty.name.toUpperCase)
-    ))
+    Json.fromFields(
+      List(
+        "schema" -> Json.fromString(item.schemaKey.toSchemaUri),
+        "type"   -> Json.fromString(item.shredProperty.name.toUpperCase)
+      )
+    )
 
   def toPayload(items: Set[ShreddedType]): Json =
     Json.fromValues(items.toList.map(toPayload))
 
-  private val ContextsName = "CONTEXTS"
+  private val ContextsName        = "CONTEXTS"
   private val DerivedContextsName = "DERIVED_CONTEXTS"
-  private val UnstructEventName = "UNSTRUCT_EVENT"
+  private val UnstructEventName   = "UNSTRUCT_EVENT"
 
   val ValidProperties = List(ContextsName, DerivedContextsName, UnstructEventName).mkString(", ")
 
   def decodeShredProperty(string: String): Either[String, ShredProperty] = string match {
-    case ContextsName => Contexts(CustomContexts).asRight
+    case ContextsName        => Contexts(CustomContexts).asRight
     case DerivedContextsName => Contexts(DerivedContexts).asRight
-    case UnstructEventName => UnstructEvent.asRight
-    case other => Left(s"[$other] is not a valid shred property; valid are: $ValidProperties")
+    case UnstructEventName   => UnstructEvent.asRight
+    case other               => Left(s"[$other] is not a valid shred property; valid are: $ValidProperties")
   }
 
   implicit val shredPropertyDecoder: Decoder[ShredProperty] =
@@ -58,9 +60,9 @@ object Codecs {
   implicit val shredPropertyEncoder: Encoder[ShredProperty] =
     new Encoder[ShredProperty] {
       def apply(a: ShredProperty): Json = a match {
-        case Contexts(CustomContexts) => Json.fromString(ContextsName)
+        case Contexts(CustomContexts)  => Json.fromString(ContextsName)
         case Contexts(DerivedContexts) => Json.fromString(DerivedContextsName)
-        case UnstructEvent => Json.fromString(UnstructEventName)
+        case UnstructEvent             => Json.fromString(UnstructEventName)
       }
     }
 
@@ -71,14 +73,18 @@ object Codecs {
           case Some(obj) =>
             val map = obj.toMap
             for {
-              schema <- map.get("schema")
+              schema <- map
+                .get("schema")
                 .liftTo[Decoder.Result](DecodingFailure("Property \"schema\" is not present", c.history))
-              schemaStr <- schema.asString
-                .liftTo[Decoder.Result](DecodingFailure("Property \"schema\" is not a string", c.history)).flatMap {
-                x => SchemaKey.fromUri(x).leftMap(e => DecodingFailure(e.code, Nil))
-              }
+              schemaStr <- schema
+                .asString
+                .liftTo[Decoder.Result](DecodingFailure("Property \"schema\" is not a string", c.history))
+                .flatMap { x =>
+                  SchemaKey.fromUri(x).leftMap(e => DecodingFailure(e.code, Nil))
+                }
               shredPropertyStr <- map
-                .get("type").liftTo[Decoder.Result](DecodingFailure("Property \"type\" is not present", c.history))
+                .get("type")
+                .liftTo[Decoder.Result](DecodingFailure("Property \"type\" is not present", c.history))
               shredProperty <- shredPropertyStr.as[ShredProperty]
             } yield ShreddedType(shredProperty, schemaStr)
           case None =>
@@ -91,7 +97,7 @@ object Codecs {
       def apply(a: ShreddedType): Json = {
         val items = List(
           "schema" -> Json.fromString(a.schemaKey.toSchemaUri),
-          "type" -> shredPropertyEncoder(a.shredProperty)
+          "type"   -> shredPropertyEncoder(a.shredProperty)
         )
 
         Json.fromJsonObject(JsonObject.fromFoldable(items))

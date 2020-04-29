@@ -20,7 +20,6 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
 
 object SpecHelpers {
-
   val reconstructableEvent = json"""
     {
       "page_urlhost":"snowplowanalytics.com",
@@ -186,6 +185,7 @@ object SpecHelpers {
     }
     """
 
+  // format: off
   def minimalEvent(id: UUID, collectorTstamp: Instant, vCollector: String, vTstamp: String): Event =
     Event(None, None, None, collectorTstamp, None, None, id, None, None, None, vCollector, vTstamp, None, None, None,
       None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
@@ -195,6 +195,7 @@ object SpecHelpers {
       None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
       None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
       Contexts(Nil), None, None, None, None, None, None, None, None)
+  // format: on
 
   val exampleMinimalEvent = minimalEvent(
     UUID.fromString("ba553b7f-63d5-47ad-8697-06016b472c34"),
@@ -210,5 +211,4 @@ object SpecHelpers {
       "v_collector": "bq-loader-test"
     }
     """
-
 }

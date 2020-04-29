@@ -13,7 +13,6 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
 import cats.Id
-
 import io.circe.Json
 
 import com.snowplowanalytics.iglu.client.Resolver

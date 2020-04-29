@@ -13,26 +13,21 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import java.util.concurrent.TimeUnit
-
 import com.google.api.gax.rpc.FixedHeaderProvider
-
-import io.circe.{Decoder, DecodingFailure, Error, Json}
-import io.circe.jawn.parse
+import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver, Subscriber}
+import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
 
 import cats.effect.{ContextShift, IO}
 import cats.syntax.either._
 import cats.syntax.show._
 import cats.syntax.apply._
-
+import io.circe.{Decoder, DecodingFailure, Error, Json}
+import io.circe.jawn.parse
 import fs2.concurrent.Queue
-
-import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver, Subscriber}
-import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
 
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.iglu.core.circe.implicits._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
 

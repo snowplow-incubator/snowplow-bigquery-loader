@@ -14,8 +14,10 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import java.time.Instant
 import java.util.UUID
+
 import io.circe.literal._
 import io.circe.Json
+
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
 

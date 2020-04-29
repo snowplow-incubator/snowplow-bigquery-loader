@@ -13,12 +13,10 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
-import cats.syntax.either._
 import cats.effect.{Clock, IO}
-
 import com.spotify.scio.Args
 
-import common.Config._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
 
 /**
   * Loader specific CLI configuration

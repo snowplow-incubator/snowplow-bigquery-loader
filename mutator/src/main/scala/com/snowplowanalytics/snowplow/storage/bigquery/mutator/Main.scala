@@ -12,8 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import cats.implicits._
 import cats.effect.{ExitCode, IO, IOApp}
+import cats.implicits._
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 

@@ -12,18 +12,16 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import java.util.UUID
 import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import cats.Id
 import cats.effect.Clock
-
 import io.circe.literal._
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
-
 import com.snowplowanalytics.iglu.core.{SchemaMap, SchemaVer, SelfDescribingSchema}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.Registry

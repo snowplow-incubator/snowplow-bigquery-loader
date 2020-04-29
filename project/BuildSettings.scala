@@ -20,30 +20,122 @@ import sbtbuildinfo._
 import sbtbuildinfo.BuildInfoKeys._
 
 object BuildSettings {
-  lazy val commonSettings = Seq(
+  lazy val projectSettings = Seq(
     organization := "com.snowplowanalytics",
     version := "0.5.0-rc16",
     scalaVersion := "2.12.10",
-    scalacOptions ++= Seq(
-      "-target:jvm-1.8",
-      "-language:existentials",
-      "-language:higherKinds",
-      "-deprecation",
-      "-feature",
-      "-unchecked"
-    ),
-    javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
-    resolvers += "Snowplow Bintray".at("https://snowplow.bintray.com/snowplow-maven/"),
-    Global / cancelable := true,
-    addCompilerPlugin("com.olegpy"     %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
-    addCompilerPlugin("org.spire-math" %% "kind-projector"     % Dependencies.V.kindProjector),
     buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description, BuildInfoKey.action("userAgent") {
       s"${name.value}/${version.value}"
     })
   )
 
-  lazy val buildInfo = Seq(
+  lazy val commonProjectSettings = projectSettings ++ Seq(
+    name := "snowplow-bigquery-common",
+    description := "Snowplow BigQuery Loader Common Utils",
+    crossScalaVersions := Seq("2.12.8", "2.11.12")
+  )
+
+  lazy val loaderProjectSettings = projectSettings ++ Seq(
+    name := "snowplow-bigquery-loader",
+    description := "Snowplow BigQuery Loader Dataflow Job",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.loader.generated"
+  )
+
+  lazy val mutatorProjectSettings = projectSettings ++ Seq(
+    name := "snowplow-bigquery-mutator",
+    description := "Snowplow BigQuery Table Mutator",
+    mainClass := Some("com.snowplowanalytics.snowplow.storage.bigquery.mutator.Main"),
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.mutator.generated"
+  )
+
+  lazy val repeaterProjectSettings = projectSettings ++ Seq(
+    name := "snowplow-bigquery-repeater",
+    description := "Snowplow BigQuery Java app for replaying events from failed inserts subscription",
+    scalaVersion := "2.12.8",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.repeater.generated"
+  )
+
+  lazy val forwarderProjectSettings = projectSettings ++ Seq(
+    name := "snowplow-bigquery-forwarder",
+    description := "This component is deprecated from version 0.5.0 on. Use BigQuery Repeater instead.",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.forwarder.generated"
+  )
+
+  // TODO: remove?
+  lazy val buildInfoSettings = Seq(
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.generated"
+  )
+
+  // Make package (build) metadata available within source code.
+  lazy val scalifiedSettings = Seq(
+    sourceGenerators in Compile += Def.task {
+      val file = (sourceManaged in Compile).value / "settings.scala"
+      IO.write(
+        file,
+        """package %s
+          |object ProjectMetadata {
+          |  val organization = "%s"
+          |  val name = "%s"
+          |  val version = "%s"          
+          |  val scalaVersion = "%s"
+          |  val description = "%s"
+          |}
+          |"""
+          .stripMargin
+          .format(
+            buildInfoPackage.value,
+            organization.value,
+            name.value,
+            version.value,
+            scalaVersion.value,
+            description.value
+          )
+      )
+      Seq(file)
+    }.taskValue
+  )
+
+  lazy val compilerSettings = Seq(
+    scalacOptions := Seq(
+      "-target:jvm-1.8",
+      "-deprecation",
+      "-encoding",
+      "UTF-8",
+      "-explaintypes",
+      "-feature",
+      "-language:existentials",
+      "-language:experimental.macros",
+      "-language:higherKinds",
+      "-language:implicitConversions",
+      "-unchecked",
+      "-Xcheckinit",
+      "-Xfuture",
+      "-Yno-adapted-args",
+      "-Ypartial-unification",
+      "-Ywarn-dead-code",
+      "-Ywarn-extra-implicit",
+      "-Ywarn-inaccessible",
+      "-Ywarn-infer-any",
+      "-Ywarn-nullary-override",
+      "-Ywarn-nullary-unit",
+      "-Ywarn-numeric-widen",
+      "-Ywarn-unused",
+      "-Ywarn-value-discard"
+    ),
+    javacOptions := Seq(
+      "-source",
+      "1.8",
+      "-target",
+      "1.8",
+      "-Xlint"
+    )
+  )
+
+  lazy val resolverSettings = Seq(
+    resolvers ++= Seq(
+      "Sonatype OSS Snapshots".at("https://oss.sonatype.org/content/repositories/snapshots/"),
+      "Snowplow Bintray".at("https://snowplow.bintray.com/snowplow-maven/")
+    )
   )
 
   lazy val macroSettings = Seq(
@@ -65,24 +157,15 @@ object BuildSettings {
     dockerCmd := Seq("--help")
   )
 
-  // Makes package (build) metadata available withing source code
-  lazy val scalifySettings = Seq(
-    sourceGenerators in Compile += Def.task {
-      val file = (sourceManaged in Compile).value / "settings.scala"
-      IO.write(
-        file,
-        """package %s
-          |object ProjectMetadata {
-          |  val version = "%s"
-          |  val name = "%s"
-          |  val organization = "%s"
-          |  val scalaVersion = "%s"
-          |}
-          |"""
-          .stripMargin
-          .format(buildInfoPackage.value, version.value, name.value, organization.value, scalaVersion.value)
-      )
-      Seq(file)
-    }.taskValue
-  )
+  lazy val buildSettings = Seq(
+    Global / cancelable := true,
+    addCompilerPlugin("com.olegpy"     %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
+    addCompilerPlugin("org.spire-math" %% "kind-projector"     % Dependencies.V.kindProjector)
+  ) ++ compilerSettings ++ resolverSettings ++ dockerSettings
+
+  lazy val commonBuildSettings    = (commonProjectSettings ++ buildSettings).diff(dockerSettings)
+  lazy val loaderBuildSettings    = loaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
+  lazy val mutatorBuildSettings   = mutatorProjectSettings ++ buildSettings
+  lazy val repeaterBuildSettings  = repeaterProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
+  lazy val forwarderBuildSettings = forwarderProjectSettings ++ buildSettings ++ macroSettings
 }

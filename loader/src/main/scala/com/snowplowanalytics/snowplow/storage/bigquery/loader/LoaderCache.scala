@@ -14,12 +14,13 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
 import org.joda.time.Instant
+
+import scala.collection.mutable.{Map => MMap}
 import cats.data.EitherNel
+
 import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
 import com.snowplowanalytics.snowplow.badrows.FailureDetails
-
-import scala.collection.mutable.{Map => MMap}
 
 /** Singleton used to cache the results of looking up a SchemaKey and transforming the
   * resulting JSON into a [[Field]].

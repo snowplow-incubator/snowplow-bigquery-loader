@@ -12,19 +12,15 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 
-import scala.collection.JavaConverters._
-
-import cats.syntax.all._
-import cats.effect.Sync
-
-import io.circe.syntax._
-
 import com.google.cloud.bigquery.{Option => _, _}
 
+import scala.collection.JavaConverters._
+import cats.effect.Sync
+import cats.syntax.all._
 import io.chrisdavenport.log4cats.Logger
+import io.circe.syntax._
 
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
-
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer, Repeater}
 
 /** Module responsible for communication with BigQuery */

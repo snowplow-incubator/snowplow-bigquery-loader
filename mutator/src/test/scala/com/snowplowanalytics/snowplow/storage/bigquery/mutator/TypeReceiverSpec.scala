@@ -17,29 +17,38 @@ import io.circe.Json
 import org.specs2.Specification
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
-import com.snowplowanalytics.iglu.core.{ SchemaKey, SchemaVer }
+import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
 
-
-class TypeReceiverSpec extends Specification { def is = s2"""
+class TypeReceiverSpec extends Specification {
+  def is = s2"""
   TypeReceiver decodes legacy inventory items $e1
   """
 
   def e1 = {
-    val input = Json.fromValues(List(
-      Json.fromFields(List(
-        "schema" -> Json.fromString("iglu:com.snowplowanalytics/event/jsonschema/1-0-0"),
-        "type" -> Json.fromString("UNSTRUCT_EVENT")
-      )),
-      Json.fromFields(List(
-        "schema" -> Json.fromString("iglu:com.snowplowanalytics/context/jsonschema/1-0-0"),
-        "type" -> Json.fromString("CONTEXTS")
-      ))
-    ))
+    val input = Json.fromValues(
+      List(
+        Json.fromFields(
+          List(
+            "schema" -> Json.fromString("iglu:com.snowplowanalytics/event/jsonschema/1-0-0"),
+            "type"   -> Json.fromString("UNSTRUCT_EVENT")
+          )
+        ),
+        Json.fromFields(
+          List(
+            "schema" -> Json.fromString("iglu:com.snowplowanalytics/context/jsonschema/1-0-0"),
+            "type"   -> Json.fromString("CONTEXTS")
+          )
+        )
+      )
+    )
 
     val result = TypeReceiver.decodeItems(input)
     val expected = List(
-      ShreddedType(UnstructEvent, SchemaKey("com.snowplowanalytics","event","jsonschema",SchemaVer.Full(1,0,0))),
-      ShreddedType(Contexts(CustomContexts), SchemaKey("com.snowplowanalytics","context","jsonschema",SchemaVer.Full(1,0,0)))
+      ShreddedType(UnstructEvent, SchemaKey("com.snowplowanalytics", "event", "jsonschema", SchemaVer.Full(1, 0, 0))),
+      ShreddedType(
+        Contexts(CustomContexts),
+        SchemaKey("com.snowplowanalytics", "context", "jsonschema", SchemaVer.Full(1, 0, 0))
+      )
     )
 
     result must beRight(expected)

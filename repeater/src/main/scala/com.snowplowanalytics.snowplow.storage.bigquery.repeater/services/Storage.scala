@@ -20,7 +20,7 @@ import cats.effect.Sync
 import com.google.cloud.storage.Acl.{Role, User}
 import com.google.cloud.storage.{Acl, BlobInfo, StorageOptions}
 
-import fs2.{ Chunk, Stream, text }
+import fs2.{Chunk, Stream, text}
 
 import io.chrisdavenport.log4cats.Logger
 
@@ -30,7 +30,6 @@ import org.joda.time.{DateTime, DateTimeZone}
 import com.snowplowanalytics.snowplow.badrows.BadRow
 
 object Storage {
-
   // TODO: this is certainly non-RT
   private val storage = StorageOptions.getDefaultInstance.getService
 
@@ -41,12 +40,7 @@ object Storage {
 
   def uploadChunk[F[_]: Sync: Logger](bucketName: String, fileName: String, rows: Chunk[BadRow]): F[Unit] = {
     val blobInfo = BlobInfo.newBuilder(bucketName, fileName).build()
-    val content = Stream.chunk(rows)
-      .map(_.compact)
-      .intersperse("\n")
-      .through(text.utf8Encode)
-      .compile
-      .to[Array]
+    val content  = Stream.chunk(rows).map(_.compact).intersperse("\n").through(text.utf8Encode).compile.to[Array]
 
     Logger[F].info(s"Preparing write to a $fileName with ${rows.size} items") *>
       Sync[F].delay(storage.create(blobInfo, content)) *>

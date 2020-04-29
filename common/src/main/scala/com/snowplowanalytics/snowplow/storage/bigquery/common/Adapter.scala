@@ -19,12 +19,10 @@ import com.google.cloud.bigquery.{Field, FieldList, LegacySQLTypeName}
 
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field => DdlField, _}
 
-
 /** Transform dependency-free schema-ddl AST into Google Cloud Java definitions */
 object Adapter {
-
   def adaptRow(row: Row): AnyRef = row match {
-    case Row.Null => null
+    case Row.Null             => null
     case Row.Primitive(value) => value.asInstanceOf[AnyRef]
     case Row.Repeated(rows) =>
       rows.map(adaptRow).asJava
@@ -37,15 +35,11 @@ object Adapter {
   def adaptField(bigQueryField: DdlField): Field =
     bigQueryField match {
       case DdlField(name, record @ Type.Record(fields), mode) =>
-        val subFields = fields.map(adaptField)
+        val subFields  = fields.map(adaptField)
         val fieldsList = FieldList.of(subFields.asJava)
-        Field.newBuilder(name, adaptType(record), fieldsList)
-          .setMode(adaptMode(mode))
-          .build()
+        Field.newBuilder(name, adaptType(record), fieldsList).setMode(adaptMode(mode)).build()
       case DdlField(name, fieldType, mode) =>
-        Field.newBuilder(name, adaptType(fieldType))
-          .setMode(adaptMode(mode))
-          .build()
+        Field.newBuilder(name, adaptType(fieldType)).setMode(adaptMode(mode)).build()
     }
 
   def adaptMode(fieldMode: Mode): Field.Mode =
@@ -58,14 +52,14 @@ object Adapter {
   def adaptType(fieldType: Type): LegacySQLTypeName =
     fieldType match {
       case Type.Timestamp => LegacySQLTypeName.TIMESTAMP
-      case Type.Integer => LegacySQLTypeName.INTEGER
-      case Type.Boolean => LegacySQLTypeName.BOOLEAN
-      case Type.String => LegacySQLTypeName.STRING
-      case Type.Float => LegacySQLTypeName.FLOAT
-      case Type.Numeric => LegacySQLTypeName.NUMERIC
-      case Type.Bytes => LegacySQLTypeName.BYTES
-      case Type.Date => LegacySQLTypeName.DATE
-      case Type.DateTime => LegacySQLTypeName.DATETIME
+      case Type.Integer   => LegacySQLTypeName.INTEGER
+      case Type.Boolean   => LegacySQLTypeName.BOOLEAN
+      case Type.String    => LegacySQLTypeName.STRING
+      case Type.Float     => LegacySQLTypeName.FLOAT
+      case Type.Numeric   => LegacySQLTypeName.NUMERIC
+      case Type.Bytes     => LegacySQLTypeName.BYTES
+      case Type.Date      => LegacySQLTypeName.DATE
+      case Type.DateTime  => LegacySQLTypeName.DATETIME
       case Type.Record(_) => LegacySQLTypeName.RECORD
     }
 }

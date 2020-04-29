@@ -14,7 +14,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package mutator
 
 import cats.implicits._
-import cats.effect.{ IO, Clock }
+import cats.effect.{Clock, IO}
 import com.monovore.decline._
 
 import com.snowplowanalytics.iglu.core.SchemaKey
@@ -26,22 +26,24 @@ import common.Config._
 /** Mutator-specific CLI configuration */
 object CommandLine {
 
-  private implicit val privateIoClock: Clock[IO] =
+  implicit private val privateIoClock: Clock[IO] =
     Clock.create[IO]
 
-  private val options = (resolverOpt, configOpt)
-    .mapN { (resolver, config) => EnvironmentConfig(resolver, config) }
+  private val options = (resolverOpt, configOpt).mapN { (resolver, config) =>
+    EnvironmentConfig(resolver, config)
+  }
 
   val schema: Opts[SchemaKey] = Opts.option[String]("schema", "Iglu URI to add to the table").mapValidated { schema =>
     SchemaKey.fromUri(schema) match {
       case Right(schemaKey) => schemaKey.validNel
-      case Left(error) => s"$schema is not a valid Iglu URI, ${error.code}".invalidNel
+      case Left(error)      => s"$schema is not a valid Iglu URI, ${error.code}".invalidNel
     }
   }
 
-  val property: Opts[ShredProperty] = Opts.option[String]("shred-property", s"Snowplow shred property (${Codecs.ValidProperties})").mapValidated {
-    prop => Codecs.decodeShredProperty(prop).toValidatedNel
-  }
+  val property: Opts[ShredProperty] =
+    Opts.option[String]("shred-property", s"Snowplow shred property (${Codecs.ValidProperties})").mapValidated { prop =>
+      Codecs.decodeShredProperty(prop).toValidatedNel
+    }
 
   val verbose = Opts.flag("verbose", "Provide debug output").orFalse
 
@@ -51,13 +53,18 @@ object CommandLine {
   }
   case class CreateCommand(config: EnvironmentConfig) extends MutatorCommand
   case class ListenCommand(config: EnvironmentConfig, verbose: Boolean) extends MutatorCommand
-  case class AddColumnCommand(config: EnvironmentConfig, schema: SchemaKey, property: ShredProperty) extends MutatorCommand
+  case class AddColumnCommand(config: EnvironmentConfig, schema: SchemaKey, property: ShredProperty)
+      extends MutatorCommand
 
   val createCmd = Opts.subcommand("create", "Create empty table and exit")(options.map(CreateCommand.apply))
-  val listenCmd = Opts.subcommand("listen", "Run mutator and listen for new types")((options, verbose).mapN(ListenCommand.apply))
-  val addColumn = Opts.subcommand("add-column", "Add column to the BigQuery table")((options, schema, property).mapN(AddColumnCommand.apply))
+  val listenCmd =
+    Opts.subcommand("listen", "Run mutator and listen for new types")((options, verbose).mapN(ListenCommand.apply))
+  val addColumn = Opts.subcommand("add-column", "Add column to the BigQuery table")(
+    (options, schema, property).mapN(AddColumnCommand.apply)
+  )
 
-  val command = Command(generated.BuildInfo.name, generated.BuildInfo.description)(createCmd.orElse(listenCmd).orElse(addColumn))
+  val command =
+    Command(generated.BuildInfo.name, generated.BuildInfo.description)(createCmd.orElse(listenCmd).orElse(addColumn))
 
   def parse(args: Seq[String]): Either[Help, MutatorCommand] = command.parse(args)
 }

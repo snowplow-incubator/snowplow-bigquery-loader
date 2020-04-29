@@ -23,12 +23,12 @@ import scala.collection.mutable.{Map => MMap}
   * resulting JSON into a [[Field]].
   */
 object LoaderCache {
-  type Key = SchemaKey
+  type Key   = SchemaKey
   type Value = Either[NonEmptyList[FailureDetails.LoaderIgluError], Field]
 
   private var underlying = MMap[Key, Value]().empty
 
-  def get(key: Key): Option[Value] = underlying.get(key)
+  def get(key: Key): Option[Value]      = underlying.get(key)
   def put(key: Key, value: Value): Unit = underlying += (key -> value)
   def getOrLookup(key: Key)(f: => Value): Value =
     get(key) match {

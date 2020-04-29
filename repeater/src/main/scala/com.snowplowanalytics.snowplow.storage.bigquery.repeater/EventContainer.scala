@@ -21,7 +21,7 @@ import scala.collection.JavaConverters._
 import cats.syntax.either._
 import cats.effect.Sync
 
-import io.circe.{Encoder, Decoder, Json, JsonObject}
+import io.circe.{Decoder, Encoder, Json, JsonObject}
 import io.circe.generic.semiauto._
 import io.circe.parser.parse
 
@@ -36,6 +36,7 @@ import PayloadParser.ReconstructedEvent
   * (which should be an enriched event)
   */
 case class EventContainer(eventId: UUID, etlTstamp: Instant, payload: JsonObject) {
+
   /** Transform the scala class into Java Map, understandable by BigQuery client */
   def decompose: JMap[String, Any] = EventContainer.decomposeObject(payload)
 
@@ -48,7 +49,6 @@ case class EventContainer(eventId: UUID, etlTstamp: Instant, payload: JsonObject
 }
 
 object EventContainer {
-
   implicit val circeEventDecoder: Decoder[EventContainer] = Decoder.instance { cursor =>
     for {
       jsonObject <- cursor.as[JsonObject]
@@ -73,13 +73,14 @@ object EventContainer {
 
   private def decomposeObject(json: JsonObject): JMap[String, Any] = {
     val map = new util.HashMap[String, Any]()
-    json.toMap.foreach { case (k, v) =>
-      map.put(k, decomposeJson(v))
+    json.toMap.foreach {
+      case (k, v) =>
+        map.put(k, decomposeJson(v))
     }
     map
   }
 
-  private def decomposeJson(json: Json): Any = {
+  private def decomposeJson(json: Json): Any =
     json.fold(
       null,
       b => b,
@@ -88,6 +89,4 @@ object EventContainer {
       a => decomposeArray(a),
       o => decomposeObject(o)
     )
-  }
-
 }

@@ -12,19 +12,15 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 
-import cats.syntax.all._
-import cats.effect._
-
-import fs2.Stream
-
 import com.google.pubsub.v1.PubsubMessage
 
-import fs2.concurrent.Queue
-
-import io.chrisdavenport.log4cats.Logger
-
-import com.permutive.pubsub.consumer.Model
+import cats.effect._
+import cats.syntax.all._
 import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
+import com.permutive.pubsub.consumer.Model
+import io.chrisdavenport.log4cats.Logger
+import fs2.concurrent.Queue
+import fs2.Stream
 
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer, Repeater}

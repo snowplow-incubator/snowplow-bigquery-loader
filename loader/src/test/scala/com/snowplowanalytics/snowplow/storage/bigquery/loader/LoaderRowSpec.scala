@@ -23,7 +23,8 @@ import com.google.api.services.bigquery.model.TableRow
 
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 
-class LoaderRowSpec extends org.specs2.Specification { def is = s2"""
+class LoaderRowSpec extends org.specs2.Specification {
+  def is = s2"""
   groupContexts groups contexts with same version $e1
   fromEvent transforms all JSON types into its AnyRef counterparts $e4
   """
@@ -47,16 +48,18 @@ class LoaderRowSpec extends org.specs2.Specification { def is = s2"""
     val result = LoaderRow
       .groupContexts(SpecHelpers.resolver, contexts)
       .toEither
-      .map(x => x.map { case (k, v) => (k, v.asInstanceOf[java.util.List[String]].size())} toMap)
+      .map(x => x.map { case (k, v) => (k, v.asInstanceOf[java.util.List[String]].size()) } toMap)
 
-      result must beRight(Map(
+    result must beRight(
+      Map(
         "contexts_com_snowplowanalytics_snowplow_geolocation_context_1_0_0" -> 2,
         "contexts_com_snowplowanalytics_snowplow_geolocation_context_1_1_0" -> 1
-      ))
+      )
+    )
   }
 
   def e4 = {
-    val input = SpecHelpers.ExampleEvent.copy(br_cookies = Some(false), domain_sessionidx = Some(3))
+    val input  = SpecHelpers.ExampleEvent.copy(br_cookies = Some(false), domain_sessionidx = Some(3))
     val result = LoaderRow.fromEvent(SpecHelpers.resolver)(input)
     val tableRow = new TableRow()
       .set("v_collector", "bq-loader-test")
@@ -69,5 +72,4 @@ class LoaderRowSpec extends org.specs2.Specification { def is = s2"""
     val expected = (tableRow, new Instant(SpecHelpers.ExampleEvent.collector_tstamp.toEpochMilli))
     result must beRight(expected)
   }
-
 }

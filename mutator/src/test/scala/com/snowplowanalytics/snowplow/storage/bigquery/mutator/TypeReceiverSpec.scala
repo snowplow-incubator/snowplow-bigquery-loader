@@ -12,9 +12,9 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import io.circe.Json
-
 import org.specs2.Specification
+
+import io.circe.Json
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}

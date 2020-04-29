@@ -17,19 +17,15 @@ import java.util
 import java.util.{UUID, List => JList, Map => JMap}
 
 import scala.collection.JavaConverters._
-
-import cats.syntax.either._
 import cats.effect.Sync
-
+import cats.syntax.either._
+import com.permutive.pubsub.consumer.decoder.MessageDecoder
 import io.circe.{Decoder, Encoder, Json, JsonObject}
 import io.circe.generic.semiauto._
 import io.circe.parser.parse
 
-import com.permutive.pubsub.consumer.decoder.MessageDecoder
-
 import com.snowplowanalytics.snowplow.badrows.BadRow
-
-import PayloadParser.ReconstructedEvent
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.PayloadParser.ReconstructedEvent
 
 /**
   * Primary data type for events parsed from `failedInserts` PubSub subscription

@@ -33,13 +33,11 @@ import common.{Adapter, Schema}
 import IdInstances._
 
 
-
 /** Row ready to be passed into Loader stream and Mutator topic */
 case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])
 
 object LoaderRow {
-
-  val Atomic = SchemaKey("com.snowplowanalytics.snowplow", "atomic", "jsonschema", SchemaVer.Full(1,0,0))
+  val Atomic = SchemaKey("com.snowplowanalytics.snowplow", "atomic", "jsonschema", SchemaVer.Full(1, 0, 0))
 
   val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
@@ -55,36 +53,45 @@ object LoaderRow {
     */
   def parse(resolver: Json)(record: String): Either[BadRow, LoaderRow] =
     for {
-      event         <- Event.parse(record).toEither.leftMap { e =>
+      event <- Event.parse(record).toEither.leftMap { e =>
         BadRow.LoaderParsingError(processor, e, Payload.RawPayload(record))
       }
       rowWithTstamp <- fromEvent(singleton.ResolverSingleton.get(resolver))(event)
-      (row, tstamp)  = rowWithTstamp
+      (row, tstamp) = rowWithTstamp
     } yield LoaderRow(tstamp, row, event.inventory)
 
   type Transformed[A] = ValidatedNel[FailureDetails.LoaderIgluError, A]
 
   /** Parse JSON object provided by Snowplow Analytics SDK */
   def fromEvent(resolver: Resolver[Id])(event: Event): Either[BadRow, (TableRow, Instant)] = {
-    val atomic = transformAtomic(event)
+    val atomic                                     = transformAtomic(event)
     val contexts: Transformed[List[(String, Any)]] = groupContexts(resolver, event.contexts.data.toVector)
-    val derivedContexts: Transformed[List[(String, Any)]] = groupContexts(resolver, event.derived_contexts.data.toVector)
-    val selfDescribingEvent: Transformed[List[(String, Any)]] = event.unstruct_event.data.map {
-      case SelfDescribingData(schema, data) =>
-        val columnName = Schema.getColumnName(ShreddedType(UnstructEvent, schema))
-        transformJson(resolver, schema)(data).map { row => List((columnName, Adapter.adaptRow(row))) }
-    }.getOrElse(List.empty[(String, Any)].validNel)
+    val derivedContexts: Transformed[List[(String, Any)]] =
+      groupContexts(resolver, event.derived_contexts.data.toVector)
+    val selfDescribingEvent: Transformed[List[(String, Any)]] = event
+      .unstruct_event
+      .data
+      .map {
+        case SelfDescribingData(schema, data) =>
+          val columnName = Schema.getColumnName(ShreddedType(UnstructEvent, schema))
+          transformJson(resolver, schema)(data).map { row =>
+            List((columnName, Adapter.adaptRow(row)))
+          }
+      }
+      .getOrElse(List.empty[(String, Any)].validNel)
 
     val payload: Payload.LoaderPayload = Payload.LoaderPayload(event)
 
     val transformedJsons = (contexts, derivedContexts, selfDescribingEvent)
-      .mapN { (c, dc, e) => c ++ dc ++ e }
+      .mapN { (c, dc, e) =>
+        c ++ dc ++ e
+      }
       .leftMap(details => Failure.LoaderIgluErrors(details))
       .leftMap(failure => BadRow.LoaderIgluError(processor, failure, payload))
       .toEither
 
     for {
-      jsons <- transformedJsons
+      jsons  <- transformedJsons
       atomic <- atomic.leftMap(failure => BadRow.LoaderRuntimeError(processor, failure, payload))
       timestamp = new Instant(event.collector_tstamp.toEpochMilli)
     } yield (TableRow(atomic ++ jsons: _*), timestamp)
@@ -92,52 +99,55 @@ object LoaderRow {
 
   /** Extract all set canonical properties in BQ-compatible format */
   def transformAtomic(event: Event): Either[String, List[(String, Any)]] = {
-    val aggregated = event
-      .atomic
-      .filter { case (_, value) => !value.isNull }
-      .toList
-      .traverse[ValidatedNel[String, ?], (String, Any)] { case (key, value) =>
-        value.fold(
-          s"null in $key".invalidNel,
-          b => b.validNel,
-          i => i.toInt.orElse(i.toBigDecimal).getOrElse(i.toDouble).validNel,
-          s => s.validNel,
-          _ => s"array ${value.noSpaces} in $key".invalidNel,
-          _ => s"object ${value.noSpaces} in $key".invalidNel
-        ).map { v => (key, v) }
+    val aggregated =
+      event.atomic.filter { case (_, value) => !value.isNull }.toList.traverse[ValidatedNel[String, ?], (String, Any)] {
+        case (key, value) =>
+          value
+            .fold(
+              s"null in $key".invalidNel,
+              b => b.validNel,
+              i => i.toInt.orElse(i.toBigDecimal).getOrElse(i.toDouble).validNel,
+              s => s.validNel,
+              _ => s"array ${value.noSpaces} in $key".invalidNel,
+              _ => s"object ${value.noSpaces} in $key".invalidNel
+            )
+            .map { v =>
+              (key, v)
+            }
       }
 
-    aggregated
-      .leftMap(errors => s"Unexpected types in transformed event: ${errors.mkString_(",")}")
-      .toEither
+    aggregated.leftMap(errors => s"Unexpected types in transformed event: ${errors.mkString_(",")}").toEither
   }
 
   /** Group list of contexts by their full URI and transform values into ready to load rows */
-  def groupContexts(resolver: Resolver[Id], contexts: Vector[SelfDescribingData[Json]]): ValidatedNel[FailureDetails.LoaderIgluError, List[(String, Any)]] = {
-    val grouped = contexts.groupBy(_.schema).map { case (key, groupedContexts) =>
-      val contexts = groupedContexts.map(_.data)    // Strip away URI
-      val columnName = Schema.getColumnName(ShreddedType(Contexts(CustomContexts), key))
-      val getRow = transformJson(resolver, key)(_)
-      contexts
-        .toList
-        .traverse[ValidatedNel[FailureDetails.LoaderIgluError, ?], Row](getRow)
-        .map(rows => (columnName, Adapter.adaptRow(Row.Repeated(rows))))
+  def groupContexts(
+    resolver: Resolver[Id],
+    contexts: Vector[SelfDescribingData[Json]]
+  ): ValidatedNel[FailureDetails.LoaderIgluError, List[(String, Any)]] = {
+    val grouped = contexts.groupBy(_.schema).map {
+      case (key, groupedContexts) =>
+        val contexts   = groupedContexts.map(_.data) // Strip away URI
+        val columnName = Schema.getColumnName(ShreddedType(Contexts(CustomContexts), key))
+        val getRow     = transformJson(resolver, key)(_)
+        contexts
+          .toList
+          .traverse[ValidatedNel[FailureDetails.LoaderIgluError, ?], Row](getRow)
+          .map(rows => (columnName, Adapter.adaptRow(Row.Repeated(rows))))
     }
-    grouped
-      .toList
-      .sequence[ValidatedNel[FailureDetails.LoaderIgluError, ?], (String, AnyRef)]
+    grouped.toList.sequence[ValidatedNel[FailureDetails.LoaderIgluError, ?], (String, AnyRef)]
   }
 
   /**
     * Get BigQuery-compatible table rows from data-only JSON payload
     * Can be transformed to contexts (via Repeated) later only remain ue-compatible
     */
-  def transformJson(resolver: Resolver[Id], schemaKey: SchemaKey)
-                   (data: Json): ValidatedNel[FailureDetails.LoaderIgluError, Row] =
-    LoaderCache.getOrLookup(schemaKey)(lookup(resolver, schemaKey))
+  def transformJson(resolver: Resolver[Id], schemaKey: SchemaKey)(
+    data: Json
+  ): ValidatedNel[FailureDetails.LoaderIgluError, Row] =
+    LoaderCache
+      .getOrLookup(schemaKey)(lookup(resolver, schemaKey))
       .flatMap(field => Row.cast(field)(data).leftMap(e => e.map(castError(schemaKey))).toEither)
       .toValidated
-
 
   def castError(schemaKey: SchemaKey)(error: CastError): FailureDetails.LoaderIgluError =
     error match {
@@ -160,9 +170,15 @@ object LoaderRow {
     NonEmptyList.one(error)
   }
 
-  private def lookup(resolver: Resolver[Id], schemaKey: SchemaKey): Either[NonEmptyList[FailureDetails.LoaderIgluError], Field] =
-    resolver.lookupSchema(schemaKey)
-      .leftMap { e => NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(schemaKey, e)) }
+  private def lookup(
+    resolver: Resolver[Id],
+    schemaKey: SchemaKey
+  ): Either[NonEmptyList[FailureDetails.LoaderIgluError], Field] =
+    resolver
+      .lookupSchema(schemaKey)
+      .leftMap { e =>
+        NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(schemaKey, e))
+      }
       .flatMap(schema => DdlSchema.parse(schema).toRight(invalidSchema(schemaKey)))
       .map(schema => Field.build("", schema, false))
 }

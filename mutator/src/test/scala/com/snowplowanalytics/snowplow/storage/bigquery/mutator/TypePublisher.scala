@@ -23,7 +23,7 @@ import com.google.pubsub.v1.PubsubMessage
 import com.google.protobuf.ByteString
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
-import com.snowplowanalytics.iglu.core.{ SchemaKey, SchemaVer }
+import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
 
 import fs2._
 
@@ -42,16 +42,30 @@ import common.Codecs._
   * }}}
   */
 object TypePublisher {
-
-  implicit val cs = IO.contextShift(global)
+  implicit val cs    = IO.contextShift(global)
   implicit val timer = IO.timer(global)
 
   val inventoryItems = List(
-    ShreddedType(Contexts(CustomContexts), SchemaKey("com.mparticle.snowplow","appstatetransition_event","jsonschema",SchemaVer.Full(1,0,0))),
-    ShreddedType(Contexts(DerivedContexts),SchemaKey("com.snowplowanalytics.snowplow","application_background","jsonschema",SchemaVer.Full(1,0,0))),
-    ShreddedType(Contexts(CustomContexts), SchemaKey("com.snowplowanalytics.snowplow","ad_click","jsonschema",SchemaVer.Full(1,0,0))),
-    ShreddedType(Contexts(CustomContexts), SchemaKey("com.snowplowanalytics.snowplow","ua_parser_context","jsonschema",SchemaVer.Full(1,0,0))),
-    ShreddedType(UnstructEvent, SchemaKey("com.snowplowanalytics.snowplow","payload_data","jsonschema",SchemaVer.Full(1,0,3)))
+    ShreddedType(
+      Contexts(CustomContexts),
+      SchemaKey("com.mparticle.snowplow", "appstatetransition_event", "jsonschema", SchemaVer.Full(1, 0, 0))
+    ),
+    ShreddedType(
+      Contexts(DerivedContexts),
+      SchemaKey("com.snowplowanalytics.snowplow", "application_background", "jsonschema", SchemaVer.Full(1, 0, 0))
+    ),
+    ShreddedType(
+      Contexts(CustomContexts),
+      SchemaKey("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))
+    ),
+    ShreddedType(
+      Contexts(CustomContexts),
+      SchemaKey("com.snowplowanalytics.snowplow", "ua_parser_context", "jsonschema", SchemaVer.Full(1, 0, 0))
+    ),
+    ShreddedType(
+      UnstructEvent,
+      SchemaKey("com.snowplowanalytics.snowplow", "payload_data", "jsonschema", SchemaVer.Full(1, 0, 3))
+    )
   )
 
   def run(topic: String, items: List[ShreddedType]): Unit = {
@@ -60,8 +74,8 @@ object TypePublisher {
 
     val appStream = for {
       publisher <- bracket
-      item <- Stream.emits(items)
-      _ <- Stream.eval(publish(publisher, item))
+      item      <- Stream.emits(items)
+      _         <- Stream.eval(publish(publisher, item))
     } yield ()
 
     val ticks = Stream.awakeEvery[IO](5.seconds)

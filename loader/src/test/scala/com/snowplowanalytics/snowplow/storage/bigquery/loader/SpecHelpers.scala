@@ -24,13 +24,12 @@ import io.circe.literal._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
 
-import com.snowplowanalytics.iglu.core.{SchemaVer, SchemaMap, SelfDescribingSchema}
+import com.snowplowanalytics.iglu.core.{SchemaMap, SchemaVer, SelfDescribingSchema}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.Registry
 
 object SpecHelpers {
-
-  private val adClick = json"""{
+  private val adClick        = json"""{
     	"$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
     	"description": "Schema for an ad click event",
     	"type": "object",
@@ -87,11 +86,12 @@ object SpecHelpers {
     """
 
   val schemas = Map(
-    SchemaMap("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1,0,0)) -> adClick,
-    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1,0,0)) -> geolocation100,
-    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1,1,0)) -> geolocation110
+    SchemaMap("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))            -> adClick,
+    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0)) -> geolocation100,
+    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 1, 0)) -> geolocation110
   )
 
+  // format: off
   def emptyEvent(id: UUID, collectorTstamp: Instant, vCollector: String, vTstamp: String): Event =
     Event(None, None, None, collectorTstamp, None, None, id, None, None, None, vCollector, vTstamp, None, None, None,
       None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
@@ -101,12 +101,14 @@ object SpecHelpers {
       None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
       None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
       Contexts(Nil), None, None, None, None, None, None, None, None)
+  // format: on
 
   val ExampleEvent = emptyEvent(
     UUID.fromString("ba553b7f-63d5-47ad-8697-06016b472c34"),
     Instant.ofEpochMilli(1550477167580L),
     "bq-loader-test",
-    "bq-loader-test")
+    "bq-loader-test"
+  )
 
   object IdInstances {
     implicit val idClock: Clock[Id] = new Clock[Id] {
@@ -118,9 +120,9 @@ object SpecHelpers {
     }
   }
 
-  val StaticRegistry: Registry = Registry.InMemory(
-    Registry.Config("InMemory", 1, List.empty),
-    schemas.toList.map { case (k, v) => SelfDescribingSchema(k, v)})
+  val StaticRegistry: Registry = Registry.InMemory(Registry.Config("InMemory", 1, List.empty), schemas.toList.map {
+    case (k, v) => SelfDescribingSchema(k, v)
+  })
 
   val resolver = Resolver[Id](List(StaticRegistry), None)
 }

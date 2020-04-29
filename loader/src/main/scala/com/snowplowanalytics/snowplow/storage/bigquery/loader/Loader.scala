@@ -32,7 +32,6 @@ import common.Config._
 import common.Codecs.toPayload
 
 object Loader {
-
   implicit val coderBadRow: Coder[BadRow] = Coder.kryo[BadRow]
 
   val OutputWindow: Duration =
@@ -41,7 +40,8 @@ object Loader {
   val OutputWindowOptions = WindowOptions(
     Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane()),
     AccumulationMode.DISCARDING_FIRED_PANES,
-    Duration.ZERO)
+    Duration.ZERO
+  )
 
   /** Side output for shredded types */
   val ObservedTypesOutput: SideOutput[Set[ShreddedType]] =
@@ -76,30 +76,24 @@ object Loader {
       }
 
     // Emit all types observed in 1 minute
-    aggregateTypes(sideOutputs(ObservedTypesOutput))
-      .saveAsPubsub(env.config.getFullTypesTopic)
+    aggregateTypes(sideOutputs(ObservedTypesOutput)).saveAsPubsub(env.config.getFullTypesTopic)
 
     // Sink bad rows
-    sideOutputs(BadRowsOutput)
-      .map(_.compact)
-      .saveAsPubsub(env.config.getFullBadRowsTopic)
+    sideOutputs(BadRowsOutput).map(_.compact).saveAsPubsub(env.config.getFullBadRowsTopic)
 
     // Unwrap LoaderRow collection to get failed inserts
     val mainOutputInternal = mainOutput.internal
-    val remaining = getOutput(env.config.load)
-      .to(getTableReference(env))
-      .expand(mainOutputInternal).getFailedInserts
+    val remaining          = getOutput(env.config.load).to(getTableReference(env)).expand(mainOutputInternal).getFailedInserts
 
     // Sink good rows and forward failed inserts to PubSub
-    sc.wrap(remaining)
-      .withName("failedInsertsSink")
-      .saveAsPubsub(env.config.getFullFailedInsertsTopic)
+    sc.wrap(remaining).withName("failedInsertsSink").saveAsPubsub(env.config.getFullFailedInsertsTopic)
   }
 
   /** Default BigQuery output options */
   def getOutput(loadMode: LoadMode): BigQueryIO.Write[LoaderRow] = {
     val common =
-      BigQueryIO.write()
+      BigQueryIO
+        .write()
         .withFormatFunction(SerializeLoaderRow)
         .withCreateDisposition(CreateDisposition.CREATE_NEVER)
         .withWriteDisposition(WriteDisposition.WRITE_APPEND)
@@ -133,12 +127,12 @@ object Loader {
       .map { case (_, groupedSets) => groupedSets.toSet.flatten }
       .withName("filterNonEmpty")
       .filter(_.nonEmpty)
-      .map { types => toPayload(types).noSpaces }
+      .map { types =>
+        toPayload(types).noSpaces
+      }
 
   /** Read data from PubSub topic and transform to ready to load rows */
-  def getData(resolver: Json,
-              sc: ScioContext,
-              input: String): SCollection[Either[BadRow, LoaderRow]] =
+  def getData(resolver: Json, sc: ScioContext, input: String): SCollection[Either[BadRow, LoaderRow]] =
     sc.pubsubSubscription[String](input)
       .map(LoaderRow.parse(resolver))
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)

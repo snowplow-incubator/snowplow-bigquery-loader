@@ -1,26 +1,19 @@
 lazy val common = project
   .in(file("common"))
-  .settings(BuildSettings.commonSettings)
-  .settings(
-    Seq(
-      name := "snowplow-bigquery-common",
-      crossScalaVersions := Seq("2.12.8", "2.11.12"),
-      description := "Snowplow BigQuery Loader Common Utils"
-    )
-  )
+  .settings(BuildSettings.commonBuildSettings)
   .settings(
     libraryDependencies ++= Seq(
-      Dependencies.decline,
+      Dependencies.bigQuery,
       Dependencies.cats,
-      Dependencies.analyticsSdk,
-      Dependencies.schemaDdl,
-      Dependencies.igluClient,
-      Dependencies.igluCoreCirce,
-      Dependencies.badrows,
       Dependencies.circe,
       Dependencies.circeJavaTime,
       Dependencies.circeParser,
-      Dependencies.bigQuery,
+      Dependencies.decline,
+      Dependencies.analyticsSdk,
+      Dependencies.badrows,
+      Dependencies.igluClient,
+      Dependencies.igluCoreCirce,
+      Dependencies.schemaDdl,
       Dependencies.specs2,
       Dependencies.scalaCheck
     )
@@ -28,123 +21,84 @@ lazy val common = project
 
 lazy val loader = project
   .in(file("loader"))
-  .settings(
-    Seq(
-      name := "snowplow-bigquery-loader",
-      description := "Snowplow BigQuery Loader Dataflow Job",
-      buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.loader.generated"
-    )
-  )
   .enablePlugins(BuildInfoPlugin)
-  .settings(BuildSettings.dockerSettings)
-  .settings(BuildSettings.scalifySettings)
+  .enablePlugins(JavaAppPackaging)
+  .settings(BuildSettings.loaderBuildSettings)
   .settings(
-    BuildSettings.commonSettings,
-    BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
+      Dependencies.dataflowRunner,
+      Dependencies.directRunner,
+      Dependencies.metrics,
+      Dependencies.slf4j,
+      Dependencies.circeJawn,
+      Dependencies.circeLiteral,
       Dependencies.scioCore,
       Dependencies.scioBigQuery,
-      Dependencies.slf4j,
-      Dependencies.directRunner,
-      Dependencies.dataflowRunner,
-      Dependencies.metrics,
-      Dependencies.circeLiteral,
-      Dependencies.circeJawn,
       Dependencies.specs2,
-      Dependencies.scioTest,
       Dependencies.scalaCheck,
-      Dependencies.specs2ScalaCheck
+      Dependencies.specs2ScalaCheck,
+      Dependencies.scioTest
     )
   )
-  .enablePlugins(JavaAppPackaging)
   .dependsOn(common)
 
 lazy val mutator = project
   .in(file("mutator"))
-  .settings(
-    Seq(
-      name := "snowplow-bigquery-mutator",
-      description := "Snowplow BigQuery Table Mutator",
-      mainClass := Some("com.snowplowanalytics.snowplow.storage.bigquery.mutator.Main"),
-      buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.mutator.generated"
-    )
-  )
-  .settings(BuildSettings.dockerSettings)
-  .settings(
-    BuildSettings.commonSettings,
-    libraryDependencies ++= Seq(
-      Dependencies.pubsub,
-      Dependencies.bigQuery,
-      Dependencies.igluClient,
-      Dependencies.fs2,
-      Dependencies.catsEffect,
-      Dependencies.specs2,
-      Dependencies.scalaCheck,
-      Dependencies.circeLiteral
-    )
-  )
   .enablePlugins(BuildInfoPlugin)
   .enablePlugins(JavaAppPackaging)
-  .dependsOn(common)
-
-lazy val forwarder = project
-  .in(file("forwarder"))
+  .settings(BuildSettings.mutatorBuildSettings)
   .settings(
-    Seq(
-      name := "snowplow-bigquery-forwarder",
-      description := "This component is deprecated from version 0.5.0 on",
-      buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.forwarder.generated"
-    )
-  )
-  .settings(BuildSettings.dockerSettings)
-  .settings(
-    BuildSettings.commonSettings,
-    BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
-      Dependencies.scioCore,
-      Dependencies.scioBigQuery,
-      Dependencies.slf4j,
-      Dependencies.directRunner,
-      Dependencies.dataflowRunner,
+      Dependencies.bigQuery,
+      Dependencies.pubsub,
+      Dependencies.catsEffect,
+      Dependencies.circeLiteral,
+      Dependencies.fs2,
+      Dependencies.igluClient,
       Dependencies.specs2,
       Dependencies.scalaCheck
     )
   )
-  .enablePlugins(JavaAppPackaging)
-  .enablePlugins(BuildInfoPlugin)
   .dependsOn(common)
 
 lazy val repeater = project
   .in(file("repeater"))
-  .settings(BuildSettings.commonSettings)
+  .enablePlugins(BuildInfoPlugin)
+  .enablePlugins(JavaAppPackaging)
+  .settings(BuildSettings.repeaterBuildSettings)
   .settings(
-    Seq(
-      name := "snowplow-bigquery-repeater",
-      scalaVersion := "2.12.8",
-      description := "Snowplow BigQuery Java app for replaying events from failed inserts subscription",
-      buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.repeater.generated"
-    )
-  )
-  .settings(BuildSettings.dockerSettings)
-  .settings(BuildSettings.scalifySettings)
-  .settings(
-    BuildSettings.macroSettings,
     libraryDependencies ++= Seq(
-      Dependencies.pubsub,
       Dependencies.bigQuery,
       Dependencies.gcs,
-      Dependencies.fs2,
+      Dependencies.pubsub,
       Dependencies.pubsubFs2Grpc,
+      Dependencies.slf4j,
       Dependencies.catsEffect,
+      Dependencies.circeLiteral,
       Dependencies.httpClient,
       Dependencies.logging,
-      Dependencies.slf4j,
-      Dependencies.circeLiteral,
+      Dependencies.fs2,
       Dependencies.specs2,
       Dependencies.scalaCheck,
       Dependencies.specs2ScalaCheck
     )
   )
-  .enablePlugins(JavaAppPackaging)
+  .dependsOn(common)
+
+lazy val forwarder = project
+  .in(file("forwarder"))
   .enablePlugins(BuildInfoPlugin)
+  .enablePlugins(JavaAppPackaging)
+  .settings(BuildSettings.forwarderBuildSettings)
+  .settings(
+    libraryDependencies ++= Seq(
+      Dependencies.dataflowRunner,
+      Dependencies.directRunner,
+      Dependencies.slf4j,
+      Dependencies.scioCore,
+      Dependencies.scioBigQuery,
+      Dependencies.specs2,
+      Dependencies.scalaCheck
+    )
+  )
   .dependsOn(common)

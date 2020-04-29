@@ -12,16 +12,14 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import io.circe.syntax._
+import org.specs2.Specification
+
 import io.circe.Json
+import io.circe.syntax._
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
-
-import PayloadParser.{ReconstructedEvent, SelfDescribingEntity}
-
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
-
-import org.specs2.Specification
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.PayloadParser.{ReconstructedEvent, SelfDescribingEntity}
 
 object PayloadParserSpec {
   val flattenSchemaKeyContexts      = "contexts_com_snowplowanalytics_snowplow_web_page_1_0_0"

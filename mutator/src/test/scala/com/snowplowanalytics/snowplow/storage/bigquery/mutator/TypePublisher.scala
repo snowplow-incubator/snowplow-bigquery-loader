@@ -13,23 +13,19 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package mutator
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
-
-import io.circe.syntax._
-
 import com.google.cloud.pubsub.v1.Publisher
 import com.google.pubsub.v1.PubsubMessage
 import com.google.protobuf.ByteString
 
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
-import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
-
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
+import cats.effect.{IO, Resource}
+import io.circe.syntax._
 import fs2._
 
-import cats.effect.{IO, Resource}
-
-import common.Codecs._
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
+import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
 
 /**
   * Example publisher that submits Inventory items to specified topic.

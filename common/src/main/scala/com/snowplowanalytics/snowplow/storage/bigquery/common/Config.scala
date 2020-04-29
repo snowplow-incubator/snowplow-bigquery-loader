@@ -18,18 +18,15 @@ import cats.data.{EitherT, ValidatedNel}
 import cats.syntax.show._
 import cats.syntax.either._
 import cats.effect.{Clock, IO, Sync}
-
+import com.monovore.decline.Opts
 import io.circe.{Decoder, DecodingFailure, Json}
 import io.circe.parser.parse
 import io.circe.generic.semiauto._
 
-import com.monovore.decline.Opts
-
 import com.snowplowanalytics.iglu.core.SelfDescribingData
 import com.snowplowanalytics.iglu.core.circe.implicits._
-
-import com.snowplowanalytics.iglu.client.{Client, ClientError, Resolver}
-import com.snowplowanalytics.iglu.client.validator.{CirceValidator => Validator, ValidatorError}
+import com.snowplowanalytics.iglu.client.{Client, Resolver}
+import com.snowplowanalytics.iglu.client.validator.{CirceValidator => Validator}
 
 /**
   * Main storage target configuration file

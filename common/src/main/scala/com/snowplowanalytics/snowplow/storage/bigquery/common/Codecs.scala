@@ -12,15 +12,13 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
-import io.circe._
-
 import cats.instances.either._
 import cats.instances.list._
 import cats.syntax.either._
 import cats.syntax.option._
+import io.circe._
 
 import com.snowplowanalytics.iglu.core.SchemaKey
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 
 object Codecs {

@@ -30,17 +30,17 @@ class LoaderCacheSpec extends Specification {
 
   "get should" >> {
     "return None if the key is not in the cache" >> {
-      val __ = underlying.clear()
+      val __  = underlying.clear()
       val key = SchemaKey("com.acme", "missing_key", "jsonschema", SchemaVer.Full(1, 0, 0))
 
       get(key) shouldEqual None
     }
 
     "return the value if the key is in the cache" >> {
-      val __ = underlying.clear()
-      val key = SchemaKey("com.acme", "available_key", "jsonschema", SchemaVer.Full(1, 0, 0))
-      val value = Right(Field("com_acme_available_key_1", Type.String, Mode.Nullable))
-      val _ = put(key, value)
+      val __     = underlying.clear()
+      val key    = SchemaKey("com.acme", "available_key", "jsonschema", SchemaVer.Full(1, 0, 0))
+      val value  = Right(Field("com_acme_available_key_1", Type.String, Mode.Nullable))
+      val _      = put(key, value)
       val result = get(key)
 
       result.get._1 shouldEqual value
@@ -57,11 +57,11 @@ class LoaderCacheSpec extends Specification {
     }
 
     "override an existing key in the cache" >> {
-      val __ = underlying.clear()
-      val key = SchemaKey("com.acme", "existing_key", "jsonschema", SchemaVer.Full(1, 0, 0))
-      val oldValue = Right(Field("com_acme_existing_key_1", Type.String, Mode.Nullable))
-      val newValue = Right(Field("com_acme_existing_key_1", Type.String, Mode.Repeated))
-      val _ = put(key, oldValue)
+      val __        = underlying.clear()
+      val key       = SchemaKey("com.acme", "existing_key", "jsonschema", SchemaVer.Full(1, 0, 0))
+      val oldValue  = Right(Field("com_acme_existing_key_1", Type.String, Mode.Nullable))
+      val newValue  = Right(Field("com_acme_existing_key_1", Type.String, Mode.Repeated))
+      val _         = put(key, oldValue)
       val cacheSize = underlying.size
 
       get(key).get._1 shouldNotEqual { put(key, newValue); get(key).get._1 }
@@ -70,20 +70,26 @@ class LoaderCacheSpec extends Specification {
   }
 
   "getOrLookup should" >> {
-    val key = SchemaKey("com.acme", "existing_key", "jsonschema", SchemaVer.Full(1, 0, 0))
+    val key   = SchemaKey("com.acme", "existing_key", "jsonschema", SchemaVer.Full(1, 0, 0))
     val value = Right(Field("com_acme_existing_key_1", Type.String, Mode.Nullable))
-    val error = Left(NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(key, ClientError.ResolutionError(Map("1" -> LookupHistory(Set(), 1, Instant.now))))))
+    val error = Left(
+      NonEmptyList.one(
+        FailureDetails
+          .LoaderIgluError
+          .IgluError(key, ClientError.ResolutionError(Map("1" -> LookupHistory(Set(), 1, Instant.now))))
+      )
+    )
 
     "get the value from cache if it's there" >> {
       val __ = underlying.clear()
-      val _ = put(key, value)
+      val _  = put(key, value)
 
       getOrLookup(key)(error) shouldEqual value
     }
 
     "not add the result of f to cache if a value is already there" >> {
       val __ = underlying.clear()
-      val _ = put(key, value)
+      val _  = put(key, value)
 
       get(key).get._1 shouldEqual getOrLookup(key)(error)
     }

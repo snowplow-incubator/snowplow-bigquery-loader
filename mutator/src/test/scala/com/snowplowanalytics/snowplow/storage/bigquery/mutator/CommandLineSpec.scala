@@ -14,12 +14,9 @@ package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import java.util.UUID
 
-import cats.syntax.either._
-
-import CommandLine._
-
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.EnvironmentConfig
+import com.snowplowanalytics.snowplow.storage.bigquery.mutator.CommandLine._
 
 class CommandLineSpec extends org.specs2.Specification {
   def is = s2"""

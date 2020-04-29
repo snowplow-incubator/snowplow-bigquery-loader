@@ -13,15 +13,14 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package mutator
 
-import cats.implicits._
 import cats.effect.{Clock, IO}
+import cats.implicits._
 import com.monovore.decline._
 
 import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
-
-import common.Codecs
-import common.Config._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
 
 /** Mutator-specific CLI configuration */
 object CommandLine {

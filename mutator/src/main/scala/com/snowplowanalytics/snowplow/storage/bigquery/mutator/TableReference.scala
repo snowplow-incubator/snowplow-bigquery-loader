@@ -12,10 +12,10 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import scala.collection.JavaConverters._
-
-import cats.effect.IO
 import com.google.cloud.bigquery.{Schema => BqSchema, _}
+
+import scala.collection.JavaConverters._
+import cats.effect.IO
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter
 

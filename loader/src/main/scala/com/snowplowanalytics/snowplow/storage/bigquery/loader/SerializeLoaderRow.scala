@@ -21,4 +21,3 @@ object SerializeLoaderRow extends SerializableFunction[LoaderRow, TableRow] {
   def apply(input: LoaderRow): TableRow =
     input.data
 }
-

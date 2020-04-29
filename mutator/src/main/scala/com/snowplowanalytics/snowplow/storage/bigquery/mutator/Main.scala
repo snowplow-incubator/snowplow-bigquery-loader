@@ -23,7 +23,7 @@ object Main extends IOApp {
   def sink(mutator: Mutator): fs2.Pipe[IO, List[ShreddedType], Unit] =
     _.parEvalMap(MaxConcurrency)(items => mutator.updateTable(items))
 
-  def run(args: List[String]): IO[ExitCode] = {
+  def run(args: List[String]): IO[ExitCode] =
     CommandLine.parse(args) match {
       case Right(c: CommandLine.ListenCommand) =>
         val appStream = for {
@@ -54,5 +54,4 @@ object Main extends IOApp {
       case Left(help) =>
         IO(System.err.println(help.toString)).as(ExitCode.Error)
     }
-  }
 }

@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 
 import com.google.api.gax.rpc.FixedHeaderProvider
 
-import io.circe.{ Error, Json, Decoder, DecodingFailure }
+import io.circe.{Decoder, DecodingFailure, Error, Json}
 import io.circe.jawn.parse
 
 import cats.effect.{ContextShift, IO}
@@ -29,7 +29,7 @@ import fs2.concurrent.Queue
 import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver, Subscriber}
 import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
 
-import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData, SchemaVer}
+import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.iglu.core.circe.implicits._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
@@ -41,22 +41,26 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
   * enqueing them into common type queue
   */
 class TypeReceiver(queue: Queue[IO, List[ShreddedType]], verbose: Boolean) extends MessageReceiver {
-
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
     val items: Either[Error, List[ShreddedType]] = for {
-      json <- parse(message.getData.toStringUtf8)
+      json          <- parse(message.getData.toStringUtf8)
       invetoryItems <- TypeReceiver.decodeItems(json)
     } yield invetoryItems
 
-    if (verbose) { log(message.getData.toStringUtf8) }
+    if (verbose) {
+      log(message.getData.toStringUtf8)
+    }
 
     items match {
       case Right(Nil) =>
         consumer.ack()
       case Right(inventoryItems) =>
-        queue.enqueue1(inventoryItems).runAsync {
-          callback => notificationCallback(consumer)(callback)
-        }.unsafeRunSync()
+        queue
+          .enqueue1(inventoryItems)
+          .runAsync { callback =>
+            notificationCallback(consumer)(callback)
+          }
+          .unsafeRunSync()
       case Left(_) =>
         notificationCallback(consumer)(items).unsafeRunSync()
     }
@@ -81,16 +85,22 @@ object TypeReceiver {
     FixedHeaderProvider.create("User-Agent", generated.BuildInfo.userAgent)
 
   /** Decode inventory items either in legacy (non-self-describing) format or as `shredded_types` schema'ed */
-  def decodeItems(json: Json): Decoder.Result[List[ShreddedType]] = {
-    json.as[List[ShreddedType]].orElse { SelfDescribingData.parse(json) match {
-      case Left(error) =>
-        DecodingFailure(s"JSON payload is not legacy format neither self-describing, ${error.code}", Nil).asLeft
-      case Right(SelfDescribingData(SchemaKey("com.snowplowanalytics.snowplow", "shredded_type", "jsonschema", SchemaVer.Full(1, _, _)), data)) =>
-        data.as[ShreddedType].map(item => List(item))
-      case Right(SelfDescribingData(key, _)) =>
-        DecodingFailure(s"JSON payload has type ${key.toSchemaUri}, which is unknown", Nil).asLeft
-    } }
-  }
+  def decodeItems(json: Json): Decoder.Result[List[ShreddedType]] =
+    json.as[List[ShreddedType]].orElse {
+      SelfDescribingData.parse(json) match {
+        case Left(error) =>
+          DecodingFailure(s"JSON payload is not legacy format neither self-describing, ${error.code}", Nil).asLeft
+        case Right(
+            SelfDescribingData(
+              SchemaKey("com.snowplowanalytics.snowplow", "shredded_type", "jsonschema", SchemaVer.Full(1, _, _)),
+              data
+            )
+            ) =>
+          data.as[ShreddedType].map(item => List(item))
+        case Right(SelfDescribingData(key, _)) =>
+          DecodingFailure(s"JSON payload has type ${key.toSchemaUri}, which is unknown", Nil).asLeft
+      }
+    }
 
   def initQueue(size: Int)(implicit cs: ContextShift[IO]): IO[Queue[IO, List[ShreddedType]]] =
     Queue.bounded[IO, List[ShreddedType]](size)
@@ -98,11 +108,10 @@ object TypeReceiver {
   def apply(queue: Queue[IO, List[ShreddedType]], verbose: Boolean): TypeReceiver =
     new TypeReceiver(queue, verbose)
 
-  def startSubscription(config: Config, listener: TypeReceiver): IO[Unit] = {
+  def startSubscription(config: Config, listener: TypeReceiver): IO[Unit] =
     IO {
       val subscription = ProjectSubscriptionName.of(config.projectId, config.typesSubscription)
-      val subscriber = Subscriber.newBuilder(subscription, listener).setHeaderProvider(UserAgent).build()
+      val subscriber   = Subscriber.newBuilder(subscription, listener).setHeaderProvider(UserAgent).build()
       subscriber.startAsync().awaitRunning(10L, TimeUnit.SECONDS)
     }
-  }
 }

@@ -16,18 +16,16 @@ import com.snowplowanalytics.iglu.core.SchemaVer
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
 object Schema {
+
   /** Convert SchemaKey into BigQuery-compatible column name */
   def getColumnName(item: ShreddedType): String = {
     val SchemaVer.Full(m, r, a) = item.schemaKey.version
-    val vendor_ = item.schemaKey.vendor.replaceAll("""[\.\-]""", "_").toLowerCase
-    val name_ = normalizeCase(item.schemaKey.name)
-    val version = s"${m}_${r}_$a"
+    val vendor_                 = item.schemaKey.vendor.replaceAll("""[\.\-]""", "_").toLowerCase
+    val name_                   = normalizeCase(item.schemaKey.name)
+    val version                 = s"${m}_${r}_$a"
     s"${item.shredProperty.prefix}${vendor_}_${name_}_$version"
   }
 
   def normalizeCase(string: String): String =
-    string
-      .replaceAll("""[\.\-]""", "_")
-      .replaceAll("([^A-Z_])([A-Z])", "$1_$2")
-      .toLowerCase
+    string.replaceAll("""[\.\-]""", "_").replaceAll("([^A-Z_])([A-Z])", "$1_$2").toLowerCase
 }

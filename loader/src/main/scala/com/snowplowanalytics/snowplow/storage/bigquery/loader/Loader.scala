@@ -13,23 +13,24 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
-import org.slf4j.LoggerFactory
 import com.google.api.services.bigquery.model.TableReference
-import io.circe.Json
-import org.joda.time.{Duration, Instant}
-import com.spotify.scio.ScioContext
-import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
-import com.spotify.scio.coders.Coder
 import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
+import org.joda.time.{Duration, Instant}
+import org.slf4j.LoggerFactory
+
+import com.spotify.scio.ScioContext
+import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
+import com.spotify.scio.coders.Coder
+import io.circe.Json
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.metrics._
-import common.Config._
-import common.Codecs.toPayload
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
 
 object Loader {
   implicit val coderBadRow: Coder[BadRow] = Coder.kryo[BadRow]

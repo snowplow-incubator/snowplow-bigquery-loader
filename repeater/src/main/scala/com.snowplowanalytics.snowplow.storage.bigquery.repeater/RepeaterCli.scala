@@ -16,7 +16,7 @@ package repeater
 import cats.implicits._
 import com.monovore.decline._
 
-import common.Config._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
 
 /** Repeater-specific CLI configuration (actually copy of Mutator's) */
 object RepeaterCli { // TODO: factor out into a common module

@@ -14,13 +14,15 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
 import org.joda.time.Instant
+
 import cats.Id
 import cats.data.{NonEmptyList, ValidatedNel}
 import cats.implicits._
+import com.spotify.scio.bigquery.TableRow
 import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import io.circe.generic.semiauto._
-import com.spotify.scio.bigquery.TableRow
+
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{Schema => DdlSchema}
@@ -29,9 +31,8 @@ import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError, Field, Mode, Ro
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload, Processor}
-import common.{Adapter, Schema}
-import IdInstances._
-
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema}
+import com.snowplowanalytics.snowplow.storage.bigquery.loader.IdInstances._
 
 /** Row ready to be passed into Loader stream and Mutator topic */
 case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])

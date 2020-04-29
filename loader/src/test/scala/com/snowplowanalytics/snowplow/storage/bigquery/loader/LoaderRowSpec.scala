@@ -13,13 +13,11 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
-import io.circe.literal._
-
-import cats.syntax.either._
-
+import com.google.api.services.bigquery.model.TableRow
 import org.joda.time.Instant
 
-import com.google.api.services.bigquery.model.TableRow
+import cats.syntax.either._
+import io.circe.literal._
 
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 

@@ -12,20 +12,14 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 
-import java.util.{ArrayList => JArrayList, Arrays => JArrays}
-
-import cats.implicits._
-import cats.effect.Sync
-
-import com.google.cloud.storage.Acl.{Role, User}
-import com.google.cloud.storage.{Acl, BlobInfo, StorageOptions}
-
-import fs2.{Chunk, Stream, text}
-
-import io.chrisdavenport.log4cats.Logger
-
-import org.joda.time.format.DateTimeFormat
 import org.joda.time.{DateTime, DateTimeZone}
+import org.joda.time.format.DateTimeFormat
+import com.google.cloud.storage.{BlobInfo, StorageOptions}
+
+import cats.effect.Sync
+import cats.implicits._
+import io.chrisdavenport.log4cats.Logger
+import fs2.{Chunk, Stream, text}
 
 import com.snowplowanalytics.snowplow.badrows.BadRow
 

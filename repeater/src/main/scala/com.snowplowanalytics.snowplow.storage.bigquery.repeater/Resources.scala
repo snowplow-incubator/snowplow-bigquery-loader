@@ -12,22 +12,23 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import org.joda.time.Instant
 import java.util.concurrent.Executors
+import org.joda.time.Instant
+import com.google.cloud.bigquery._
 
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext
 import cats.{Monad, Show}
-import cats.syntax.all._
 import cats.effect._
 import cats.effect.concurrent.Ref
+import cats.syntax.all._
+import io.chrisdavenport.log4cats.Logger
 import fs2.{Chunk, Stream}
 import fs2.concurrent.{Queue, SignallingRef}
-import io.chrisdavenport.log4cats.Logger
-import com.google.cloud.bigquery._
+
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 import com.snowplowanalytics.snowplow.badrows.BadRow
-import RepeaterCli.GcsPath
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.GcsPath
 
 /**
   * Resources container, allowing to manipulate all acquired entities

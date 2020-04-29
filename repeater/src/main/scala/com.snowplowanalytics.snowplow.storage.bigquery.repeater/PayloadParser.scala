@@ -13,13 +13,11 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import cats.syntax.either._
-
 import io.circe._
-import io.circe.syntax._
 import io.circe.generic.semiauto._
+import io.circe.syntax._
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
-
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
 
 /**

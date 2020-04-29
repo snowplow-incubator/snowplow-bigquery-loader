@@ -20,7 +20,7 @@ import io.circe.generic.semiauto._
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 
-import com.snowplowanalytics.snowplow.badrows.{ BadRow, Failure, FailureDetails, Payload }
+import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
 
 /**
   * Parser which is used for reconverting failedInsert payload into
@@ -34,11 +34,14 @@ object PayloadParser {
       .add("contexts", Json.obj())
       .add("derived_contexts", Json.obj())
       .add("unstruct_event", Json.obj())
-      .asJson.as[Event]
+      .asJson
+      .as[Event]
       .leftMap { e =>
         BadRow.LoaderRecoveryError(
           Repeater.processor,
-          Failure.LoaderRecoveryFailure(FailureDetails.LoaderRecoveryError.ParsingError(e.message, e.history.map(_.toString).reverse)),
+          Failure.LoaderRecoveryFailure(
+            FailureDetails.LoaderRecoveryError.ParsingError(e.message, e.history.map(_.toString).reverse)
+          ),
           Payload.RawPayload(payload.asJson.noSpaces)
         )
       }
@@ -50,12 +53,14 @@ object PayloadParser {
   }
 
   private def getSelfDescribingEntitiesWithPrefix(payload: JsonObject, prefix: String): List[SelfDescribingEntity] =
-    payload.filter {
-      case (key, value) => key.startsWith(prefix) && value != Json.obj() && value != Json.Null
-    }
-    .toList.map {
-      case (shreddedType, data) => SelfDescribingEntity(shreddedType, data)
-    }
+    payload
+      .filter {
+        case (key, value) => key.startsWith(prefix) && value != Json.obj() && value != Json.Null
+      }
+      .toList
+      .map {
+        case (shreddedType, data) => SelfDescribingEntity(shreddedType, data)
+      }
 
   /**
     * Represents event which is reconstructed from payload of the failed insert

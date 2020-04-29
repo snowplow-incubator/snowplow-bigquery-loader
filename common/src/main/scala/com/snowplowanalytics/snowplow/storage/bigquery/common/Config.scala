@@ -12,14 +12,14 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
-import java.util.{ Base64, UUID }
+import java.util.{Base64, UUID}
 
-import cats.data.{ ValidatedNel, EitherT }
+import cats.data.{EitherT, ValidatedNel}
 import cats.syntax.show._
 import cats.syntax.either._
 import cats.effect.{Clock, IO, Sync}
 
-import io.circe.{ Json, Decoder, DecodingFailure }
+import io.circe.{Decoder, DecodingFailure, Json}
 import io.circe.parser.parse
 import io.circe.generic.semiauto._
 
@@ -28,8 +28,8 @@ import com.monovore.decline.Opts
 import com.snowplowanalytics.iglu.core.SelfDescribingData
 import com.snowplowanalytics.iglu.core.circe.implicits._
 
-import com.snowplowanalytics.iglu.client.{ Client, Resolver, ClientError }
-import com.snowplowanalytics.iglu.client.validator.{ CirceValidator => Validator, ValidatorError }
+import com.snowplowanalytics.iglu.client.{Client, ClientError, Resolver}
+import com.snowplowanalytics.iglu.client.validator.{CirceValidator => Validator, ValidatorError}
 
 /**
   * Main storage target configuration file
@@ -47,21 +47,23 @@ import com.snowplowanalytics.iglu.client.validator.{ CirceValidator => Validator
   * @param badRows Pub/Sub topic to which bad rows are sunk
   * @param failedInserts Pub/Sub topic to which failed inserts are sunk
   */
-case class Config(name: String,
-                  id: UUID,
-                  input: String,
-                  projectId: String,
-                  datasetId: String,
-                  tableId: String,
-                  load: Config.LoadMode,
-                  typesTopic: String,
-                  typesSubscription: String,
-                  badRows: String,
-                  failedInserts: String) {
-  def getFullInput: String = s"projects/$projectId/subscriptions/$input"
+case class Config(
+  name: String,
+  id: UUID,
+  input: String,
+  projectId: String,
+  datasetId: String,
+  tableId: String,
+  load: Config.LoadMode,
+  typesTopic: String,
+  typesSubscription: String,
+  badRows: String,
+  failedInserts: String
+) {
+  def getFullInput: String      = s"projects/$projectId/subscriptions/$input"
   def getFullTypesTopic: String = s"projects/$projectId/topics/$typesTopic"
 
-  def getFullBadRowsTopic: String = s"projects/$projectId/topics/$badRows"
+  def getFullBadRowsTopic: String       = s"projects/$projectId/topics/$badRows"
   def getFullFailedInsertsTopic: String = s"projects/$projectId/topics/$failedInserts"
 }
 
@@ -76,8 +78,7 @@ object Config {
   case class EnvironmentConfig(resolver: Json, config: Json)
 
   /** Parsed common environment (resolver is a stateful object) */
-  class Environment private[Config](val config: Config,
-                                    val resolverJson: Json) extends Serializable
+  class Environment private[Config] (val config: Config, val resolverJson: Json) extends Serializable
 
   sealed trait LoadMode
   object LoadMode {
@@ -101,25 +102,32 @@ object Config {
 
   implicit val configCirceDecoder: Decoder[Config] = deriveDecoder[Config]
 
-  private implicit val clock: Clock[IO] = Clock.create[IO]
+  implicit private val clock: Clock[IO] = Clock.create[IO]
 
   def transform[F[_]: Sync: Clock](config: EnvironmentConfig): EitherT[F, InitializationError, Environment] =
     for {
-      resolver   <- EitherT[F, DecodingFailure, Resolver[F]](Resolver.parse(config.resolver)).leftMap(err => InitializationError(err.show))
-      jsonConfig <- EitherT.fromEither[F](SelfDescribingData.parse(config.config)).leftMap(err => InitializationError(s"Configuration is not self-describing, ${err.code}"))
-      client      = Client(resolver, Validator)
-      _          <- client.check(jsonConfig).leftMap(err => InitializationError(err.show))
-      result     <- EitherT.fromEither[F](jsonConfig.data.as[Config]).leftMap(err => InitializationError(s"Decoding failure: ${err.show}"))
+      resolver <- EitherT[F, DecodingFailure, Resolver[F]](Resolver.parse(config.resolver)).leftMap(err =>
+        InitializationError(err.show)
+      )
+      jsonConfig <- EitherT
+        .fromEither[F](SelfDescribingData.parse(config.config))
+        .leftMap(err => InitializationError(s"Configuration is not self-describing, ${err.code}"))
+      client = Client(resolver, Validator)
+      _ <- client.check(jsonConfig).leftMap(err => InitializationError(err.show))
+      result <- EitherT
+        .fromEither[F](jsonConfig.data.as[Config])
+        .leftMap(err => InitializationError(s"Decoding failure: ${err.show}"))
 
     } yield new Environment(result, config.resolver)
 
   /** CLI option to parse base64-encoded resolver into JSON */
-  val resolverOpt: Opts[Json] = Opts.option[String]("resolver", "Base64-encoded Iglu Resolver configuration")
+  val resolverOpt: Opts[Json] = Opts
+    .option[String]("resolver", "Base64-encoded Iglu Resolver configuration")
     .mapValidated(toValidated(decodeBase64Json))
 
   /** CLI option to parse base64-encoded config into JSON */
-  val configOpt: Opts[Json] = Opts.option[String]("config", "Base64-encoded BigQuery configuration")
-    .mapValidated(toValidated(decodeBase64Json))
+  val configOpt: Opts[Json] =
+    Opts.option[String]("config", "Base64-encoded BigQuery configuration").mapValidated(toValidated(decodeBase64Json))
 
   def decodeBase64Json(base64: String): Either[Throwable, Json] =
     for {

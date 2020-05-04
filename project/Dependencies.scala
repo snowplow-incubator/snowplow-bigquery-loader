@@ -26,7 +26,7 @@ object Dependencies {
     val googleCloudPubSub   = "1.105.0"
     val googleCloudStorage  = "1.107.0"
     val metrics             = "3.1.0"
-    val slf4j               = "1.7.25"
+    val slf4j               = "1.7.30"
 
     // Scala third-party
     val cats       = "1.6.1"

@@ -21,7 +21,7 @@ object Dependencies {
 
   object V {
     // Java
-    val beam        = "2.19.0"
+    val beam        = "2.20.0"
     val googleCloud = "1.51.0"
     val metrics     = "3.1.0"
     val slf4j       = "1.7.25"
@@ -35,7 +35,7 @@ object Dependencies {
     val httpClient = "0.20.21"
     val logging    = "0.3.0"
     val pubsubFs2  = "0.14.0"
-    val scio       = "0.8.2"
+    val scio       = "0.9.0"
 
     // Scala Snowplow
     val analyticsSdk       = "0.4.2"

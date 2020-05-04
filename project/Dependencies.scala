@@ -24,7 +24,7 @@ object Dependencies {
     val beam        = "2.19.0"
     val googleCloud = "1.51.0"
     val metrics     = "3.1.0"
-    val slf4j       = "1.7.25"
+    val slf4j       = "1.7.30"
 
     // Scala third-party
     val cats       = "1.6.1"

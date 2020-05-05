@@ -21,10 +21,12 @@ object Dependencies {
 
   object V {
     // Java
-    val beam        = "2.19.0"
-    val googleCloud = "1.51.0"
-    val metrics     = "3.1.0"
-    val slf4j       = "1.7.30"
+    val beam                = "2.19.0"
+    val googleCloudBigQuery = "1.111.2"
+    val googleCloudPubSub   = "1.105.0"
+    val googleCloudStorage  = "1.107.0"
+    val metrics             = "3.1.0"
+    val slf4j               = "1.7.30"
 
     // Scala third-party
     val cats       = "1.6.1"
@@ -56,9 +58,9 @@ object Dependencies {
   }
 
   // GCP
-  val bigQuery = "com.google.cloud" % "google-cloud-bigquery" % V.googleCloud
-  val pubsub   = "com.google.cloud" % "google-cloud-pubsub"   % V.googleCloud
-  val gcs      = "com.google.cloud" % "google-cloud-storage"  % V.googleCloud
+  val bigQuery = "com.google.cloud" % "google-cloud-bigquery" % V.googleCloudBigQuery
+  val pubsub   = "com.google.cloud" % "google-cloud-pubsub"   % V.googleCloudPubSub
+  val gcs      = "com.google.cloud" % "google-cloud-storage"  % V.googleCloudStorage
 
   // Java
   val dataflowRunner = "org.apache.beam"       % "beam-runners-google-cloud-dataflow-java" % V.beam

@@ -58,8 +58,8 @@ object TableReference {
     def getClient: IO[BigQuery] =
       IO(BigQueryOptions.getDefaultInstance.getService)
 
-    def create(client: BigQuery, datasetId: String, tableId: String): IO[Table] = IO {
-      val id         = TableId.of(datasetId, tableId)
+    def create(client: BigQuery, projectId: String, datasetId: String, tableId: String): IO[Table] = IO {
+      val id         = TableId.of(projectId, datasetId, tableId)
       val schema     = BqSchema.of(Atomic.table.map(Adapter.adaptField).asJava)
       val definition = StandardTableDefinition.newBuilder().setSchema(schema).build()
       val tableInfo  = TableInfo.newBuilder(id, definition).build()

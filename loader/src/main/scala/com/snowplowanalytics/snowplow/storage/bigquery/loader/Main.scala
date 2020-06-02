@@ -9,14 +9,14 @@
  * software distributed under the Apache License Version 2.0 is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
- */
+
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
 import scala.concurrent.duration.Duration
 import com.spotify.scio._
 
-object Main {
+object OldMain {
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
     LoaderCli.parse(args) match {
@@ -29,3 +29,4 @@ object Main {
     }
   }
 }
+ */

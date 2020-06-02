@@ -9,28 +9,20 @@
  * software distributed under the Apache License Version 2.0 is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
-
+ */
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
-import cats.effect.{Clock, IO}
-import com.spotify.scio.Args
+import cats.effect._
+import cats.syntax.all._
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
-
-/**
-  * Loader specific CLI configuration
-  * Unlike Mutator, required --key=value format and ignores unknown options (for Dataflow)
-  */
-object LoaderCli {
-  implicit private val privateIoClock: Clock[IO] =
-    Clock.create[IO]
-
-  def parse(args: Args): Either[Throwable, Environment] =
-    for {
-      c <- decodeBase64Json(args("config"))
-      r <- decodeBase64Json(args("resolver"))
-      e <- transform[IO](EnvironmentConfig(r, c)).value.unsafeRunSync()
-    } yield e
+object IOMain extends IOApp {
+  override def run(args: List[String]): IO[ExitCode] =
+    IOLoaderCli.parse(args) match {
+      case Right(conf) =>
+        val env = IOLoaderCli.getEnv(conf)
+        IOLoader.run(env)
+      case Left(help) =>
+        IO(System.err.println(help.toString)) >> IO.pure(ExitCode.Error)
+    }
 }
- */

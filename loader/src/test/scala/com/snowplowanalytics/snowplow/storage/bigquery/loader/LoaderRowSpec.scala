@@ -15,10 +15,8 @@ package loader
 
 import com.google.api.services.bigquery.model.TableRow
 import org.joda.time.Instant
-
 import cats.syntax.either._
 import io.circe.literal._
-
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 
 class LoaderRowSpec extends org.specs2.Specification {
@@ -44,7 +42,7 @@ class LoaderRowSpec extends org.specs2.Specification {
     )
 
     val result = LoaderRow
-      .groupContexts(SpecHelpers.resolver, contexts)
+      .groupContexts(poc.events.resolver, contexts)
       .toEither
       .map(x => x.map { case (k, v) => (k, v.asInstanceOf[java.util.List[String]].size()) } toMap)
 
@@ -57,8 +55,8 @@ class LoaderRowSpec extends org.specs2.Specification {
   }
 
   def e4 = {
-    val input  = SpecHelpers.ExampleEvent.copy(br_cookies = Some(false), domain_sessionidx = Some(3))
-    val result = LoaderRow.fromEvent(SpecHelpers.resolver)(input)
+    val input  = poc.events.ExampleEvent.copy(br_cookies = Some(false), domain_sessionidx = Some(3))
+    val result = LoaderRow.fromEvent(poc.events.resolver)(input)
     val tableRow = new TableRow()
       .set("v_collector", "bq-loader-test")
       .set("collector_tstamp", "2019-02-18T08:06:07.580Z")
@@ -67,7 +65,7 @@ class LoaderRowSpec extends org.specs2.Specification {
       .set("event_id", "ba553b7f-63d5-47ad-8697-06016b472c34")
       .set("v_etl", "bq-loader-test")
 
-    val expected = (tableRow, new Instant(SpecHelpers.ExampleEvent.collector_tstamp.toEpochMilli))
+    val expected = (tableRow, new Instant(poc.events.ExampleEvent.collector_tstamp.toEpochMilli))
     result must beRight(expected)
   }
 }

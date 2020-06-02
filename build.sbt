@@ -37,7 +37,9 @@ lazy val loader = project
       Dependencies.specs2,
       Dependencies.scalaCheck,
       Dependencies.specs2ScalaCheck,
-      Dependencies.scioTest
+      Dependencies.scioTest,
+      Dependencies.fs2,
+      Dependencies.pubsubFs2Grpc
     )
   )
   .dependsOn(common)

@@ -72,17 +72,18 @@ object IOLoader {
 
     parsedData.observeEither[BadRow, LoaderRow](
       badRows =>
-        badRows.parEvalMapUnordered(MaxConcurrency) { badRow =>
+        badRows.evalMap { badRow =>
           PubSub.sink(env.config.projectId, env.config.badRows)(WriteBadRow(badRow))
         },
       loaderRows =>
-        aggregateTypes(loaderRows.map(loaderRow => loaderRow.inventory)).parEvalMapUnordered(MaxConcurrency) {
-          aggregate =>
+        Stream(
+          aggregateTypes(loaderRows.map(loaderRow => loaderRow.inventory)).evalMap { aggregate =>
             PubSub.sink(env.config.projectId, env.config.typesTopic)(WriteObservedTypes(aggregate))
-        } *>
-          loaderRows.parEvalMapUnordered(MaxConcurrency) { loaderRow =>
+          },
+          loaderRows.evalMap { loaderRow =>
             IO(sink(loaderRow.toString)("good"))
           }
+        ).parJoin(Int.MaxValue)
     )
   }.compile.drain.as(ExitCode.Success)
 }

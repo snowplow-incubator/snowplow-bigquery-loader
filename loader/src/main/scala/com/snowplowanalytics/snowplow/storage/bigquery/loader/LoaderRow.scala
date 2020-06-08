@@ -145,8 +145,13 @@ object LoaderRow {
   def transformJson(resolver: Resolver[Id], schemaKey: SchemaKey)(
     data: Json
   ): ValidatedNel[FailureDetails.LoaderIgluError, Row] =
-    LoaderCache
-      .getOrLookup(schemaKey)(lookup(resolver, schemaKey))
+    resolver
+      .lookupSchema(schemaKey)
+      .leftMap { e =>
+        NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(schemaKey, e))
+      }
+      .flatMap(schema => DdlSchema.parse(schema).toRight(invalidSchema(schemaKey)))
+      .map(schema => Field.build("", schema, false))
       .flatMap(field => Row.cast(field)(data).leftMap(e => e.map(castError(schemaKey))).toEither)
       .toValidated
 
@@ -170,16 +175,4 @@ object LoaderRow {
     val error = FailureDetails.LoaderIgluError.InvalidSchema(schemaKey, "Cannot be parsed as JSON Schema AST")
     NonEmptyList.one(error)
   }
-
-  private def lookup(
-    resolver: Resolver[Id],
-    schemaKey: SchemaKey
-  ): Either[NonEmptyList[FailureDetails.LoaderIgluError], Field] =
-    resolver
-      .lookupSchema(schemaKey)
-      .leftMap { e =>
-        NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(schemaKey, e))
-      }
-      .flatMap(schema => DdlSchema.parse(schema).toRight(invalidSchema(schemaKey)))
-      .map(schema => Field.build("", schema, false))
 }

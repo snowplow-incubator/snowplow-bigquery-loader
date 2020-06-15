@@ -37,12 +37,20 @@ lazy val loader = project
       Dependencies.specs2,
       Dependencies.scalaCheck,
       Dependencies.specs2ScalaCheck,
-      Dependencies.scioTest,
-      Dependencies.fs2,
-      Dependencies.pubsubFs2Grpc
+      Dependencies.scioTest
     )
   )
   .dependsOn(common)
+
+lazy val fs2loader = project
+  .in(file("fs2loader"))
+  .enablePlugins(BuildInfoPlugin)
+  .enablePlugins(JavaAppPackaging)
+  .settings(BuildSettings.fs2loaderBuildSettings)
+  .settings(
+    libraryDependencies ++= Seq(Dependencies.fs2, Dependencies.pubsubFs2Grpc)
+  )
+  .dependsOn(common, loader)
 
 lazy val mutator = project
   .in(file("mutator"))

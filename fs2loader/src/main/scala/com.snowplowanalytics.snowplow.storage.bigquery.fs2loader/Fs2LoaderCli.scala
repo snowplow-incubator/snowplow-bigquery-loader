@@ -10,15 +10,14 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery
-package loader
+package com.snowplowanalytics.snowplow.storage.bigquery.fs2loader
 
 import cats.effect.{Clock, IO}
 import cats.implicits._
 import com.monovore.decline._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
 
-object IOLoaderCli {
+object Fs2LoaderCli {
   implicit private val privateIoClock: Clock[IO] =
     Clock.create[IO]
 

@@ -10,18 +10,17 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery
-package loader
+package com.snowplowanalytics.snowplow.storage.bigquery.fs2loader
 
 import cats.effect._
 import cats.syntax.all._
 
-object IOMain extends IOApp {
+object Main extends IOApp {
   override def run(args: List[String]): IO[ExitCode] =
-    IOLoaderCli.parse(args) match {
+    Fs2LoaderCli.parse(args) match {
       case Right(conf) =>
-        val env = IOLoaderCli.getEnv(conf)
-        IOLoader.run(env)
+        val env = Fs2LoaderCli.getEnv(conf)
+        Fs2Loader.run(env)(true)
       case Left(help) =>
         IO(System.err.println(help.toString)) >> IO.pure(ExitCode.Error)
     }

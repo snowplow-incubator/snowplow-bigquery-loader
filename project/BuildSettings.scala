@@ -41,6 +41,12 @@ object BuildSettings {
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.loader.generated"
   )
 
+  lazy val fs2loaderProjectSettings = projectSettings ++ Seq(
+    name := "snowplow-bigquery-fs2loader",
+    description := "Snowplow BigQuery Loader Standalone App",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.generated"
+  )
+
   lazy val mutatorProjectSettings = projectSettings ++ Seq(
     name := "snowplow-bigquery-mutator",
     description := "Snowplow BigQuery Table Mutator",
@@ -165,6 +171,7 @@ object BuildSettings {
 
   lazy val commonBuildSettings    = (commonProjectSettings ++ buildSettings).diff(dockerSettings)
   lazy val loaderBuildSettings    = loaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
+  lazy val fs2loaderBuildSettings = fs2loaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
   lazy val mutatorBuildSettings   = mutatorProjectSettings ++ buildSettings
   lazy val repeaterBuildSettings  = repeaterProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
   lazy val forwarderBuildSettings = forwarderProjectSettings ++ buildSettings ++ macroSettings

@@ -10,28 +10,35 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery.loader.poc
+
+package com.snowplowanalytics.snowplow.storage.bigquery.fs2loader
 
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import cats.Id
-import cats.effect.Clock
+import cats.effect.{Clock, Concurrent, ContextShift, IO}
+import com.permutive.pubsub.consumer.Model
+import com.permutive.pubsub.consumer.decoder.MessageDecoder
+import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.Registry
 import com.snowplowanalytics.iglu.core.{SchemaMap, SchemaVer, SelfDescribingSchema}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
 import io.circe.literal._
+import fs2.Stream
 
+// TODO: Move to test once dev is done.
 object events {
-  object valid {
-    val unstructJson =
+  object Valid {
+    val UnstructJson =
       """{"schema":"iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0","data":{"schema":"iglu:com.snowplowanalytics.snowplow/link_click/jsonschema/1-0-1","data":{"targetUrl":"http://www.example.com","elementClasses":["foreground"],"elementId":"exampleLink"}}}"""
-    val contextsJson =
+    val ContextsJson =
       """{"schema":"iglu:com.snowplowanalytics.snowplow/contexts/jsonschema/1-0-0","data":[{"schema":"iglu:org.schema/WebPage/jsonschema/1-0-0","data":{"genre":"blog","inLanguage":"en-US","datePublished":"2014-11-06T00:00:00Z","author":"Fred Blundun","breadcrumb":["blog","releases"],"keywords":["snowplow","javascript","tracker","event"]}},{"schema":"iglu:org.w3/PerformanceTiming/jsonschema/1-0-0","data":{"navigationStart":1415358089861,"unloadEventStart":1415358090270,"unloadEventEnd":1415358090287,"redirectStart":0,"redirectEnd":0,"fetchStart":1415358089870,"domainLookupStart":1415358090102,"domainLookupEnd":1415358090102,"connectStart":1415358090103,"connectEnd":1415358090183,"requestStart":1415358090183,"responseStart":1415358090265,"responseEnd":1415358090265,"domLoading":1415358090270,"domInteractive":1415358090886,"domContentLoadedEventStart":1415358090968,"domContentLoadedEventEnd":1415358091309,"domComplete":0,"loadEventStart":0,"loadEventEnd":0}}]}"""
-    val derivedContextsJson =
+    val DerivedContextsJson =
       """{"schema":"iglu:com.snowplowanalytics.snowplow\/contexts\/jsonschema\/1-0-1","data":[{"schema":"iglu:com.snowplowanalytics.snowplow\/ua_parser_context\/jsonschema\/1-0-0","data":{"useragentFamily":"IE","useragentMajor":"7","useragentMinor":"0","useragentPatch":null,"useragentVersion":"IE 7.0","osFamily":"Windows XP","osMajor":null,"osMinor":null,"osPatch":null,"osPatchMinor":null,"osVersion":"Windows XP","deviceFamily":"Other"}}]}"""
     val event = List(
       "app_id"                   -> "angry-birds",
@@ -86,13 +93,13 @@ object events {
       "mkt_term"                 -> "",
       "mkt_content"              -> "",
       "mkt_campaign"             -> "",
-      "contexts"                 -> contextsJson,
+      "contexts"                 -> ContextsJson,
       "se_category"              -> "",
       "se_action"                -> "",
       "se_label"                 -> "",
       "se_property"              -> "",
       "se_value"                 -> "",
-      "unstruct_event"           -> unstructJson,
+      "unstruct_event"           -> UnstructJson,
       "tr_orderid"               -> "",
       "tr_affiliation"           -> "",
       "tr_total"                 -> "",
@@ -156,7 +163,7 @@ object events {
       "dvce_sent_tstamp"         -> "",
       "refr_domain_userid"       -> "",
       "refr_dvce_tstamp"         -> "",
-      "derived_contexts"         -> derivedContextsJson,
+      "derived_contexts"         -> DerivedContextsJson,
       "domain_sessionid"         -> "2b15e5c8-d3b1-11e4-b9d6-1681e6b88ec1",
       "derived_tstamp"           -> "2013-11-26 00:03:57.886",
       "event_vendor"             -> "com.snowplowanalytics.snowplow",
@@ -168,7 +175,7 @@ object events {
     ).unzip._2.mkString("\t")
   }
 
-  object invalid {
+  object Invalid {
     // format: off
     def emptyEvent(id: UUID, collectorTstamp: Instant, vCollector: String, vTstamp: String): Event =
       Event(None, None, None, collectorTstamp, None, None, id, None, None, None, vCollector, vTstamp, None, None, None,
@@ -198,5 +205,25 @@ object events {
       }
       .toList
       .mkString("\t")
+  }
+
+  sealed trait Source {
+    def getStream: Stream[IO, String]
+  }
+  final class StaticSource(size: Int) extends Source {
+    override def getStream: Stream[IO, String] =
+      Stream.emit(Valid.event).repeat.intersperse(Invalid.event).covary[IO].take(size)
+  }
+  final class PubsubSource(env: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO]) extends Source {
+    implicit val messageDecoder: MessageDecoder[String] = (bytes: Array[Byte]) => {
+      Right(new String(bytes))
+    }
+
+    override def getStream: Stream[IO, String] = PubsubGoogleConsumer.subscribeAndAck[IO, String](
+      Model.ProjectId(env.config.projectId),
+      Model.Subscription(env.config.input),
+      (msg, err, _, _) => IO(println(s"Msg $msg got error $err")),
+      config = PubsubGoogleConsumerConfig(onFailedTerminate = _ => IO.unit)
+    )
   }
 }

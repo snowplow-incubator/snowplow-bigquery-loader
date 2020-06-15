@@ -76,7 +76,7 @@ object Fs2Loader {
       }
 
     def dequeueTypes(typesQueue: Queue[IO, Set[ShreddedType]]): Stream[IO, Unit] =
-      typesQueue.dequeueChunk(MaxConcurrency).parEvalMapUnordered(MaxConcurrency) { typesSet =>
+      typesQueue.dequeue.parEvalMapUnordered(MaxConcurrency) { typesSet =>
         if (static) {
           log(toPayload(typesSet).noSpaces)("types")
         } else {
@@ -93,7 +93,7 @@ object Fs2Loader {
         goodSink(queue)
       )
       sinkTypes = dequeueTypes(queue)
-      _ <- sinkBadGood.concurrently(sinkTypes).compile.drain
+      _ <- sinkBadGood.compile.drain *> sinkTypes.compile.drain
     } yield ExitCode.Success
   }
 }

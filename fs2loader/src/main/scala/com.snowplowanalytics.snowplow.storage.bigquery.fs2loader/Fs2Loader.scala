@@ -32,11 +32,8 @@ import org.slf4j.LoggerFactory
 object Fs2Loader {
   private val MaxConcurrency = 5
 
-  def log(s: String)(name: String): IO[Unit] = IO.delay(LoggerFactory.getLogger(name).info(s))
-
-
   def goodSink(typesQueue: Queue[IO, Set[ShreddedType]])(loaderRows: Stream[IO, LoaderRow])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
-    enqueueTypes(loaderRows, typesQueue) *> bigquerySink(loaderRows)
+    enqueueTypes[LoaderRow, ShreddedType](loaderRows, typesQueue, _.inventory) *> bigquerySink(loaderRows)
 
   // TODO: Add non-static BigQuery Sink
   def bigquerySink(loaderRows: Stream[IO, LoaderRow])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
@@ -44,12 +41,11 @@ object Fs2Loader {
       log(loaderRow.toString)("good")
     }
 
-  def aggregateTypes(types: Stream[IO, Set[ShreddedType]]): Stream[IO, Set[ShreddedType]] =
-    types.mapChunks(c => Chunk(c.foldLeft[Set[ShreddedType]](Set.empty[ShreddedType])(_ ++ _)))
+  def aggregateTypes[A](types: Stream[IO, Set[A]]): Stream[IO, Set[A]] =
+    types.mapChunks(c => Chunk(c.foldLeft[Set[A]](Set.empty[A])(_ ++ _)))
 
-
-  def enqueueTypes(loaderRows: Stream[IO, LoaderRow], queue: Queue[IO, Set[ShreddedType]])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
-    aggregateTypes(loaderRows.map(_.inventory)).parEvalMapUnordered(MaxConcurrency) { t =>
+  def enqueueTypes[R, T](loaderRows: Stream[IO, R], queue: Queue[IO, Set[T]], f: R => Set[T])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
+    aggregateTypes[T](loaderRows.map(f)).parEvalMapUnordered(MaxConcurrency) { t =>
       queue.enqueue1(t)
     }
 
@@ -93,4 +89,7 @@ object Fs2Loader {
       _ <- sinkBadGood.compile.drain *> sinkTypes.compile.drain
     } yield ExitCode.Success
   }
+
+  private def log(s: String)(name: String): IO[Unit] = IO.delay(LoggerFactory.getLogger(name).info(s))
+
 }

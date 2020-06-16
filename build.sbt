@@ -48,7 +48,7 @@ lazy val fs2loader = project
   .enablePlugins(JavaAppPackaging)
   .settings(BuildSettings.fs2loaderBuildSettings)
   .settings(
-    libraryDependencies ++= Seq(Dependencies.fs2, Dependencies.pubsubFs2Grpc)
+    libraryDependencies ++= Seq(Dependencies.fs2, Dependencies.pubsubFs2Grpc, Dependencies.specs2)
   )
   .dependsOn(common, loader)
 

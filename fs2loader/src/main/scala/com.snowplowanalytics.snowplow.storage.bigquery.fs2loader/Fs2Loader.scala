@@ -12,13 +12,12 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.fs2loader
 
-import cats.effect.{Concurrent, ContextShift, ExitCode, IO}
 import cats.syntax.all._
-import com.permutive.pubsub.consumer.Model
-import com.permutive.pubsub.consumer.decoder.MessageDecoder
-import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-import fs2.{Chunk, Stream}
+import cats.effect.{Concurrent, ContextShift, ExitCode, IO, Timer}
+
+import fs2.{Pipe, Stream}
+import fs2.concurrent.Queue
+
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
@@ -26,14 +25,17 @@ import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.events._
 import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks.PubSub
 import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks.PubSub.{WriteBadRow, WriteObservedTypes}
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderRow
-import fs2.concurrent.Queue
+
 import org.slf4j.LoggerFactory
+
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
 object Fs2Loader {
   private val MaxConcurrency = 5
 
-  def goodSink(typesQueue: Queue[IO, Set[ShreddedType]])(loaderRows: Stream[IO, LoaderRow])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
-    enqueueTypes[LoaderRow, ShreddedType](loaderRows, typesQueue, _.inventory) *> bigquerySink(loaderRows)
+  def goodSink(typesQueue: Queue[IO, Set[ShreddedType]])(loaderRows: Stream[IO, LoaderRow])(implicit C: Concurrent[IO], T: Timer[IO]): Stream[IO, Unit] = {
+    loaderRows.through(enqueueTypes[LoaderRow, ShreddedType](typesQueue, _.inventory)) *> bigquerySink(loaderRows)
+  }
 
   // TODO: Add non-static BigQuery Sink
   def bigquerySink(loaderRows: Stream[IO, LoaderRow])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
@@ -41,13 +43,13 @@ object Fs2Loader {
       log(loaderRow.toString)("good")
     }
 
-  def aggregateTypes[A](types: Stream[IO, Set[A]]): Stream[IO, Set[A]] =
-    types.mapChunks(c => Chunk(c.foldLeft[Set[A]](Set.empty[A])(_ ++ _)))
+  import concurrent.duration._
 
-  def enqueueTypes[R, T](loaderRows: Stream[IO, R], queue: Queue[IO, Set[T]], f: R => Set[T])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
-    aggregateTypes[T](loaderRows.map(f)).parEvalMapUnordered(MaxConcurrency) { t =>
-      queue.enqueue1(t)
-    }
+  def aggregateTypes[A](implicit T: Timer[IO], C: Concurrent[IO]): Pipe[IO, Set[A], Set[A]] =
+    types => types.groupWithin(3, 2.seconds).map { chunk => chunk.toList.toSet.flatten }
+
+  def enqueueTypes[R, T](queue: Queue[IO, Set[T]], f: R => Set[T])(implicit C: Concurrent[IO], T: Timer[IO]): Pipe[IO, R, Unit] =
+    _.map(f).through[IO, Set[T]](aggregateTypes[T](T, C)).through(queue.enqueue)
 
   def badSink(env: Environment, static: Boolean)(badRows: Stream[IO, BadRow])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
     if (static) {
@@ -69,8 +71,7 @@ object Fs2Loader {
       }
     }
 
-
-  def run(env: Environment)(static: Boolean = true)(implicit cs: ContextShift[IO], c: Concurrent[IO]): IO[ExitCode] = {
+  def run(env: Environment)(static: Boolean = true)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[ExitCode] = {
     val source = {
       if (static) {
         new StaticSource(10)

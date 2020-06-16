@@ -32,6 +32,48 @@ import org.slf4j.LoggerFactory
 object Fs2Loader {
   private val MaxConcurrency = 5
 
+  def log(s: String)(name: String): IO[Unit] = IO.delay(LoggerFactory.getLogger(name).info(s))
+
+
+  def goodSink(typesQueue: Queue[IO, Set[ShreddedType]])(loaderRows: Stream[IO, LoaderRow])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
+    enqueueTypes(loaderRows, typesQueue) *> bigquerySink(loaderRows)
+
+  // TODO: Add non-static BigQuery Sink
+  def bigquerySink(loaderRows: Stream[IO, LoaderRow])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
+    loaderRows.parEvalMapUnordered(MaxConcurrency) { loaderRow =>
+      log(loaderRow.toString)("good")
+    }
+
+  def aggregateTypes(types: Stream[IO, Set[ShreddedType]]): Stream[IO, Set[ShreddedType]] =
+    types.mapChunks(c => Chunk(c.foldLeft[Set[ShreddedType]](Set.empty[ShreddedType])(_ ++ _)))
+
+
+  def enqueueTypes(loaderRows: Stream[IO, LoaderRow], queue: Queue[IO, Set[ShreddedType]])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
+    aggregateTypes(loaderRows.map(_.inventory)).parEvalMapUnordered(MaxConcurrency) { t =>
+      queue.enqueue1(t)
+    }
+
+  def badSink(env: Environment, static: Boolean)(badRows: Stream[IO, BadRow])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
+    if (static) {
+      badRows.parEvalMapUnordered(MaxConcurrency) { badRow =>
+        log(badRow.toString)("bad")
+      }
+    } else {
+      badRows.parEvalMapUnordered(MaxConcurrency) { badRow =>
+        PubSub.sink(env.config.projectId, env.config.badRows)(WriteBadRow(badRow))
+      }
+    }
+
+  def dequeueTypes(env: Environment, static: Boolean)(typesQueue: Queue[IO, Set[ShreddedType]])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
+    typesQueue.dequeue.parEvalMapUnordered(MaxConcurrency) { typesSet =>
+      if (static) {
+        log(toPayload(typesSet).noSpaces)("types")
+      } else {
+        PubSub.sink(env.config.projectId, env.config.typesTopic)(WriteObservedTypes(typesSet))
+      }
+    }
+
+
   def run(env: Environment)(static: Boolean = true)(implicit cs: ContextShift[IO], c: Concurrent[IO]): IO[ExitCode] = {
     val source = {
       if (static) {
@@ -44,55 +86,10 @@ object Fs2Loader {
     val eventStream: Stream[IO, Either[BadRow, LoaderRow]] =
       source.getStream.map(LoaderRow.parse(env.resolverJson))
 
-    def badSink(badRows: Stream[IO, BadRow]): Stream[IO, Unit] =
-      if (static) {
-        badRows.parEvalMapUnordered(MaxConcurrency) { badRow =>
-          log(badRow.toString)("bad")
-        }
-      } else {
-        badRows.parEvalMapUnordered(MaxConcurrency) { badRow =>
-          PubSub.sink(env.config.projectId, env.config.badRows)(WriteBadRow(badRow))
-        }
-      }
-
-    def goodSink(typesQueue: Queue[IO, Set[ShreddedType]])(loaderRows: Stream[IO, LoaderRow]): Stream[IO, Unit] =
-      enqueueTypes(loaderRows, typesQueue) *> bigquerySink(loaderRows)
-
-    // TODO: Add non-static BigQuery Sink
-    def bigquerySink(loaderRows: Stream[IO, LoaderRow]): Stream[IO, Unit] =
-      loaderRows.parEvalMapUnordered(MaxConcurrency) { loaderRow =>
-        log(loaderRow.toString)("good")
-      }
-
-    def aggregateTypes(types: Stream[IO, Set[ShreddedType]]): Stream[IO, Set[ShreddedType]] =
-      types.mapChunks(c => Chunk(c.foldLeft[Set[ShreddedType]](Set.empty[ShreddedType])(_ ++ _)))
-
-    def enqueueTypes(
-      loaderRows: Stream[IO, LoaderRow],
-      queue: Queue[IO, Set[ShreddedType]]
-    ): Stream[IO, Unit] =
-      aggregateTypes(loaderRows.map(_.inventory)).parEvalMapUnordered(MaxConcurrency) { t =>
-        queue.enqueue1(t)
-      }
-
-    def dequeueTypes(typesQueue: Queue[IO, Set[ShreddedType]]): Stream[IO, Unit] =
-      typesQueue.dequeue.parEvalMapUnordered(MaxConcurrency) { typesSet =>
-        if (static) {
-          log(toPayload(typesSet).noSpaces)("types")
-        } else {
-          PubSub.sink(env.config.projectId, env.config.typesTopic)(WriteObservedTypes(typesSet))
-        }
-      }
-
-    def log(s: String)(name: String): IO[Unit] = IO.delay(LoggerFactory.getLogger(name).info(s))
-
     for {
       queue <- Queue.bounded[IO, Set[ShreddedType]](MaxConcurrency)
-      sinkBadGood = eventStream.observeEither[BadRow, LoaderRow](
-        badSink,
-        goodSink(queue)
-      )
-      sinkTypes = dequeueTypes(queue)
+      sinkBadGood = eventStream.observeEither[BadRow, LoaderRow](badSink(env, static), goodSink(queue))
+      sinkTypes = dequeueTypes(env, static)(queue)
       _ <- sinkBadGood.compile.drain *> sinkTypes.compile.drain
     } yield ExitCode.Success
   }

@@ -30,48 +30,135 @@ import org.slf4j.LoggerFactory
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 
+import scala.concurrent.duration._
+
 object Fs2Loader {
   private val MaxConcurrency = 5
+  private val GroupByN       = 5
+  private val TimeWindow     = 2.seconds
 
-  def goodSink(typesQueue: Queue[IO, Set[ShreddedType]])(loaderRows: Stream[IO, LoaderRow])(implicit C: Concurrent[IO], T: Timer[IO]): Stream[IO, Unit] = {
-    loaderRows.through(enqueueTypes[LoaderRow, ShreddedType](typesQueue, _.inventory)) *> bigquerySink(loaderRows)
-  }
-
-  // TODO: Add non-static BigQuery Sink
-  def bigquerySink(loaderRows: Stream[IO, LoaderRow])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
-    loaderRows.parEvalMapUnordered(MaxConcurrency) { loaderRow =>
-      log(loaderRow.toString)("good")
+  /**
+    * Aggregate observed types when a specific number is reached or time passes, whichever happens first.
+    * @param groupByN Number of elements that trigger aggregation.
+    * @param timeWindow Time window to aggregate over if n limit is not reached.
+    * @tparam ST In a prod setting, this should be [[ShreddedType]].
+    * @return A pipe that does not change the type of elements but discards non-unique values within the group.
+    */
+  def aggregateTypes[ST](
+    groupByN: Int,
+    timeWindow: FiniteDuration
+  )(implicit T: Timer[IO], C: Concurrent[IO]): Pipe[IO, Set[ST], Set[ST]] =
+    _.groupWithin(groupByN, timeWindow).map { chunk =>
+      chunk.toList.toSet.flatten
     }
 
-  import concurrent.duration._
+  /**
+    * Extract observed types from loader rows and add aggregates to a queue.
+    *
+    * @param queue     A queue to add aggregated types to.
+    * @param getTypes A function that extracts types from loader rows.
+    * @param groupByN Number of elements that trigger aggregation.
+    * @param timeWindow Time window to aggregate over if n limit is not reached.
+    * @tparam LR The type of the row, should be [[LoaderRow]] in prod.
+    * @tparam ST The type of the observed types, should be [[ShreddedType]] in prod.
+    * @tparam U The return type of the load function, should be [[Unit]] in prod.
+    * @return A pipe that sinks observed types to a queue.
+    */
+  def enqueueTypes[LR, ST, U](
+    queue: Queue[IO, Set[ST]],
+    getTypes: LR => Set[ST],
+    groupByN: Int,
+    timeWindow: FiniteDuration,
+    enqueueF: Pipe[IO, Set[ST], U]
+  )(implicit T: Timer[IO], C: Concurrent[IO]): Pipe[IO, LR, U] =
+    _.map(getTypes).through[IO, Set[ST]](aggregateTypes[ST](groupByN, timeWindow)(T, C)).through(enqueueF)
 
-  def aggregateTypes[A](implicit T: Timer[IO], C: Concurrent[IO]): Pipe[IO, Set[A], Set[A]] =
-    types => types.groupWithin(3, 2.seconds).map { chunk => chunk.toList.toSet.flatten }
+  private def enqueueF[ST](q: Queue[IO, Set[ST]]) = q.enqueue
 
-  def enqueueTypes[R, T](queue: Queue[IO, Set[T]], f: R => Set[T])(implicit C: Concurrent[IO], T: Timer[IO]): Pipe[IO, R, Unit] =
-    _.map(f).through[IO, Set[T]](aggregateTypes[T](T, C)).through(queue.enqueue)
+  /**
+    *
+    * @param env Parsed common environment.
+    * @param typesQueue A queue of aggregated types.
+    * @param dequeueF A pipe that sinks observed types.
+    * @tparam ST The type of the observed types, should be [[ShreddedType]] in prod.
+    * @tparam U The return type of the load function, should be [[Unit]] in prod.
+    * @return A stream of IO to sink observed types.
+    */
+  def dequeueTypes[ST, U](env: Option[Environment] = None)(
+    typesQueue: Queue[IO, Set[ST]],
+    dequeueF: Pipe[IO, Set[ST], U]
+  )(implicit C: Concurrent[IO]): Stream[IO, U] =
+    typesQueue.dequeue.through(dequeueF)
 
-  def badSink(env: Environment, static: Boolean)(badRows: Stream[IO, BadRow])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
-    if (static) {
-      badRows.parEvalMapUnordered(MaxConcurrency) { badRow =>
-        log(badRow.toString)("bad")
-      }
-    } else {
-      badRows.parEvalMapUnordered(MaxConcurrency) { badRow =>
-        PubSub.sink(env.config.projectId, env.config.badRows)(WriteBadRow(badRow))
-      }
-    }
+  private def logTypes(types: Stream[IO, Set[ShreddedType]]) =
+    types.map(set => log(toPayload(set).noSpaces))
+  private def typesToPubsub(types: Stream[IO, Set[ShreddedType]])(env: Environment) =
+    types.evalMap(set => PubSub.sink(env.config.projectId, env.config.typesTopic)(WriteObservedTypes(set)))
 
-  def dequeueTypes(env: Environment, static: Boolean)(typesQueue: Queue[IO, Set[ShreddedType]])(implicit C: Concurrent[IO]): Stream[IO, Unit] =
-    typesQueue.dequeue.parEvalMapUnordered(MaxConcurrency) { typesSet =>
-      if (static) {
-        log(toPayload(typesSet).noSpaces)("types")
-      } else {
-        PubSub.sink(env.config.projectId, env.config.typesTopic)(WriteObservedTypes(typesSet))
-      }
-    }
+  /**
+    * Sink rows to BigQuery.
+    * @param sink A BQ load function.
+    * @tparam LR The type of the row, should be [[LoaderRow]] in prod.
+    * @tparam U The return type of the load function, should be [[Unit]] in prod.
+    * @return A pipe that sinks rows to BigQuery.
+    */
+  def bigquerySink[LR, U](sink: LR => IO[U])(implicit C: Concurrent[IO]): Pipe[IO, LR, U] =
+    _.parEvalMapUnordered(MaxConcurrency)(lr => sink(lr))
 
-  def run(env: Environment)(static: Boolean = true)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[ExitCode] = {
+  private def logGood(loaderRow: LoaderRow): IO[Unit] = IO.delay(log(loaderRow.toString))
+
+  /**
+    *
+    * @param env Parsed common environment.
+    * @param sink A pipe that sinks bad rows.
+    * @tparam BR The type of bad rows, should be [[BadRow]] in prod.
+    * @tparam U The return type of the sink function, should be [[Unit]] in prod.
+    * @return A stream of IO to sink bad rows.
+    */
+  def badSink[BR, U](env: Option[Environment] = None)(
+    sink: BR => IO[U]
+  )(implicit C: Concurrent[IO]): Pipe[IO, BR, U] = _.evalMap(br => sink(br))
+
+  private def logBad(badRow: BadRow): IO[Unit] =
+    IO.delay(log(badRow.toString))
+  private def badRowsToPubsub(badRow: BadRow)(env: Environment): IO[Unit] =
+    PubSub.sink(env.config.projectId, env.config.badRows)(WriteBadRow(badRow))
+
+  private def log(s: String): Unit = LoggerFactory.getLogger("sink").info(s)
+
+// We do not need this and I couldn't find a way to make it work. But leaving it here for now in case we want to revisit.
+//  /**
+//    * Sink aggregate types to a dedicated queue and good rows to BigQuery.
+//    * @param typesQueue A queue to add aggregated types to.
+//    * @param getTypes A function that extracts types from loader rows.
+//    * @param groupByN Number of elements that trigger aggregation.
+//    * @param timeWindow Time window to aggregate over if n limit is not reached.
+//    * @param sink A BQ load function.
+//    * @tparam LR The type of the row, should be [[LoaderRow]] in prod.
+//    * @tparam U The return type of the load function, should be [[Unit]] in prod.
+//    * @tparam ST The type of the observed types, should be [[ShreddedType]] in prod.
+//    * @return A pipe that sinks observed types to a queue and rows to BigQuery.
+//    */
+//  def goodSink[LR, U, ST](
+//    typesQueue: Queue[IO, Set[ST]],
+//    getTypes: LR => Set[ST],
+//    groupByN: Int,
+//    timeWindow: FiniteDuration,
+//    enqueueF: Pipe[IO, Set[ST], U],
+//    sink: LR => IO[U]
+//  )(implicit C: Concurrent[IO], T: Timer[IO]): Pipe[IO, LR, U] =
+//    loaderRows =>
+//      loaderRows
+//        .through(enqueueTypes[LR, ST, U](typesQueue, getTypes, groupByN, timeWindow, enqueueF))
+//        .concurrently(
+//          loaderRows.through(
+//            bigquerySink(sink)
+//          )
+//        )
+
+  def run(
+    env: Environment
+  )(static: Boolean = true)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[ExitCode] = {
     val source = {
       if (static) {
         new StaticSource(10)
@@ -85,12 +172,26 @@ object Fs2Loader {
 
     for {
       queue <- Queue.bounded[IO, Set[ShreddedType]](MaxConcurrency)
-      sinkBadGood = eventStream.observeEither[BadRow, LoaderRow](badSink(env, static), goodSink(queue))
-      sinkTypes = dequeueTypes(env, static)(queue)
+      sinkBadGood = eventStream.observeEither[BadRow, LoaderRow](
+        badSink[BadRow, Unit](Some(env))(logBad _),
+        bigquerySink[LoaderRow, Unit](logGood _)
+      )
+      _ <- eventStream
+        .filter(_.isRight)
+        .map { case Right(lr) => lr }
+        .through(
+          enqueueTypes[LoaderRow, ShreddedType, Unit](
+            queue,
+            _.inventory,
+            GroupByN,
+            TimeWindow,
+            enqueueF(queue)
+          )
+        )
+        .compile
+        .drain
+      sinkTypes = dequeueTypes(Some(env))(queue, logTypes)
       _ <- sinkBadGood.compile.drain *> sinkTypes.compile.drain
     } yield ExitCode.Success
   }
-
-  private def log(s: String)(name: String): IO[Unit] = IO.delay(LoggerFactory.getLogger(name).info(s))
-
 }

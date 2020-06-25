@@ -14,28 +14,25 @@ package com.snowplowanalytics.snowplow.storage.bigquery.fs2loader
 
 import cats.syntax.all._
 import cats.effect.{Concurrent, ContextShift, ExitCode, IO, Timer}
-
 import fs2.{Pipe, Stream}
 import fs2.concurrent.Queue
-
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
 import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.events._
-import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks.PubSub
+import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks.{Bigquery, PubSub}
 import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks.PubSub.{WriteBadRow, WriteObservedTypes}
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderRow
-
 import org.slf4j.LoggerFactory
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
+import com.google.cloud.bigquery.BigQuery
 
 import scala.concurrent.duration._
 
 object Fs2Loader {
-  private val MaxConcurrency = 5
-  private val GroupByN       = 5
-  private val TimeWindow     = 2.seconds
+  private val MaxConcurrency = 10
+  private val GroupByN       = 1
+  private val TimeWindow     = 1.seconds
 
   /**
     * Aggregate observed types when a specific number is reached or time passes, whichever happens first.
@@ -91,8 +88,10 @@ object Fs2Loader {
     typesQueue.dequeue.through(dequeueF)
 
   private def logTypes(types: Stream[IO, Set[ShreddedType]]) =
-    types.map(set => log(toPayload(set).noSpaces))
-  private def typesToPubsub(types: Stream[IO, Set[ShreddedType]])(env: Environment) =
+    types.evalMap { set =>
+      IO.delay(println("Hello from types sink.")) *> IO.delay(log(toPayload(set).noSpaces))
+    }
+  private def typesToPubsub(env: Environment)(types: Stream[IO, Set[ShreddedType]]) =
     types.evalMap(set => PubSub.sink(env.config.projectId, env.config.typesTopic)(WriteObservedTypes(set)))
 
   /**
@@ -103,9 +102,11 @@ object Fs2Loader {
     * @return A pipe that sinks rows to BigQuery.
     */
   def bigquerySink[LR, U](sink: LR => IO[U])(implicit C: Concurrent[IO]): Pipe[IO, LR, U] =
-    _.parEvalMapUnordered(MaxConcurrency)(lr => sink(lr))
+    _.parEvalMapUnordered(MaxConcurrency)(lr => IO.delay(println("Hello from good sink.")) *> sink(lr))
 
   private def logGood(loaderRow: LoaderRow): IO[Unit] = IO.delay(log(loaderRow.toString))
+  private def goodRowsToBigquery(loaderRow: LoaderRow)(env: Environment)(client: BigQuery): IO[Unit] =
+    Bigquery.insert[IO](client, env.config.datasetId, env.config.tableId, loaderRow)
 
   /**
     *
@@ -117,7 +118,9 @@ object Fs2Loader {
     */
   def badSink[BR, U](env: Option[Environment] = None)(
     sink: BR => IO[U]
-  )(implicit C: Concurrent[IO]): Pipe[IO, BR, U] = _.evalMap(br => sink(br))
+  )(implicit C: Concurrent[IO]): Pipe[IO, BR, U] = _.evalMap { br =>
+    IO.delay(println("Hello from bad sink.")) *> sink(br)
+  }
 
   private def logBad(badRow: BadRow): IO[Unit] =
     IO.delay(log(badRow.toString))
@@ -171,12 +174,15 @@ object Fs2Loader {
       source.getStream.map(LoaderRow.parse(env.resolverJson))
 
     for {
-      queue <- Queue.bounded[IO, Set[ShreddedType]](MaxConcurrency)
+      client <- Bigquery.getClient
+      queue  <- Queue.bounded[IO, Set[ShreddedType]](MaxConcurrency)
+      _      <- IO.delay(println("1"))
       sinkBadGood = eventStream.observeEither[BadRow, LoaderRow](
         badSink[BadRow, Unit](Some(env))(logBad _),
         bigquerySink[LoaderRow, Unit](logGood _)
       )
-      _ <- eventStream
+      _ <- IO.delay(println("2"))
+      typesQueue = eventStream
         .filter(_.isRight)
         .map { case Right(lr) => lr }
         .through(
@@ -188,10 +194,11 @@ object Fs2Loader {
             enqueueF(queue)
           )
         )
-        .compile
-        .drain
+      _ <- IO.delay(println("3"))
       sinkTypes = dequeueTypes(Some(env))(queue, logTypes)
-      _ <- sinkBadGood.compile.drain *> sinkTypes.compile.drain
+      _ <- IO.delay(println("4"))
+      _ <- typesQueue.merge(sinkTypes).merge(sinkBadGood).compile.drain
+      _ <- IO.delay(println("5"))
     } yield ExitCode.Success
   }
 }

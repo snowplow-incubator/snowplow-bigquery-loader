@@ -20,7 +20,7 @@ object Main extends IOApp {
     Fs2LoaderCli.parse(args) match {
       case Right(conf) =>
         val env = Fs2LoaderCli.getEnv(conf)
-        Fs2Loader.run(env)(true)
+        Fs2Loader.run(env)(false)
       case Left(help) =>
         IO(System.err.println(help.toString)) >> IO.pure(ExitCode.Error)
     }

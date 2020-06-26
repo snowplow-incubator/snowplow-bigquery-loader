@@ -164,9 +164,9 @@ object Fs2Loader {
   )(static: Boolean = true)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[ExitCode] = {
     val source = {
       if (static) {
-        new StaticSource(10)
+        new StaticSource(10)(c)
       } else {
-        new PubsubSource(env)(cs, c)
+        new PubsubSource(1)(env)(cs, c)
       }
     }
 
@@ -197,7 +197,7 @@ object Fs2Loader {
       _ <- IO.delay(println("3"))
       sinkTypes = dequeueTypes(Some(env))(queue, logTypes)
       _ <- IO.delay(println("4"))
-      _ <- typesQueue.merge(sinkTypes).merge(sinkBadGood).compile.drain
+      _ <- Stream(typesQueue, sinkTypes, sinkBadGood).parJoin(Int.MaxValue).compile.drain
       _ <- IO.delay(println("5"))
     } yield ExitCode.Success
   }

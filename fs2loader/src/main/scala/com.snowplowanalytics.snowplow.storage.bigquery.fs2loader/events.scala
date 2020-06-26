@@ -30,6 +30,9 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
 import io.circe.literal._
 import fs2.Stream
+import cats.effect.{Effect, IO}
+import fs2._
+import fs2.concurrent.Topic
 
 // TODO: Move to test once dev is done.
 object events {
@@ -210,20 +213,40 @@ object events {
   sealed trait Source {
     def getStream: Stream[IO, String]
   }
-  final class StaticSource(size: Int) extends Source {
-    override def getStream: Stream[IO, String] =
-      Stream.emit(Valid.event).repeat.intersperse(Invalid.event).covary[IO].take(size)
+
+  final class StaticSource(size: Int)(c: Concurrent[IO]) extends Source {
+    override def getStream: Stream[IO, String] = {
+      val topicStream = Stream.eval(Topic[IO, String]("Topic start")(c))
+      topicStream.flatMap { topic =>
+        val publisher  = Stream.emit(Valid.event).repeat.intersperse(Invalid.event).covary[IO].through(topic.publish)
+        val subscriber = topic.subscribe(10).take(size)
+        subscriber.concurrently(publisher)(c)
+      }
+    }
   }
-  final class PubsubSource(env: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO]) extends Source {
+
+  final class PubsubSource(size: Int)(env: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO])
+      extends Source {
     implicit val messageDecoder: MessageDecoder[String] = (bytes: Array[Byte]) => {
-      Right(new String(bytes))
+      val event = Right(new String(bytes))
+      println("Hello from input stream.")
+      event
     }
 
-    override def getStream: Stream[IO, String] = PubsubGoogleConsumer.subscribeAndAck[IO, String](
-      Model.ProjectId(env.config.projectId),
-      Model.Subscription(env.config.input),
-      (msg, err, _, _) => IO(println(s"Msg $msg got error $err")),
-      config = PubsubGoogleConsumerConfig(onFailedTerminate = _ => IO.unit)
-    )
+    override def getStream: Stream[IO, String] = {
+      val topicStream = Stream.eval(Topic[IO, String]("Topic start")(c))
+      topicStream.flatMap { topic =>
+        val publisher = PubsubGoogleConsumer
+          .subscribeAndAck[IO, String](
+            Model.ProjectId(env.config.projectId),
+            Model.Subscription(env.config.input),
+            (msg, err, _, _) => IO(println(s"Msg $msg got error $err")),
+            config = PubsubGoogleConsumerConfig(onFailedTerminate = _ => IO.unit)
+          )
+          .through(topic.publish)
+        val subscriber = topic.subscribe(10)
+        subscriber.concurrently(publisher)
+      }
+    }
   }
 }

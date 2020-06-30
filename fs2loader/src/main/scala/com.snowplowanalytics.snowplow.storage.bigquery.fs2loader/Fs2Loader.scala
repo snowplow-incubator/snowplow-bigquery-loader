@@ -101,10 +101,15 @@ object Fs2Loader {
     * @tparam U The return type of the load function, should be [[Unit]] in prod.
     * @return A pipe that sinks rows to BigQuery.
     */
-  def bigquerySink[LR, U](sink: LR => IO[U])(implicit C: Concurrent[IO]): Pipe[IO, LR, U] =
-    _.parEvalMapUnordered(MaxConcurrency)(lr => IO.delay(println("Hello from good sink.")) *> sink(lr))
+  def bigquerySink[LR, ST, U](typesQueue: Queue[IO, Set[ST]], f: LR => Set[ST], sink: LR => IO[U])(implicit C: Concurrent[IO]): Pipe[IO, LR, U] =
+    _.parEvalMapUnordered(MaxConcurrency) { lr =>
+      IO.delay(println("Hello from good sink.")) *>
+        typesQueue.enqueue1(f(lr)) *>
+        sink(lr)
+    }
 
   private def logGood(loaderRow: LoaderRow): IO[Unit] = IO.delay(log(loaderRow.toString))
+
   private def goodRowsToBigquery(loaderRow: LoaderRow)(env: Environment)(client: BigQuery): IO[Unit] =
     Bigquery.insert[IO](client, env.config.datasetId, env.config.tableId, loaderRow)
 
@@ -116,10 +121,8 @@ object Fs2Loader {
     * @tparam U The return type of the sink function, should be [[Unit]] in prod.
     * @return A stream of IO to sink bad rows.
     */
-  def badSink[BR, U](env: Option[Environment] = None)(
-    sink: BR => IO[U]
-  )(implicit C: Concurrent[IO]): Pipe[IO, BR, U] = _.evalMap { br =>
-    IO.delay(println("Hello from bad sink.")) *> sink(br)
+  def badSink[BR, U](env: Option[Environment] = None)(sink: BR => IO[U])(implicit C: Concurrent[IO]): Pipe[IO, BR, U] =
+    _.evalMap { br => IO.delay(println("Hello from bad sink.")) *> sink(br)
   }
 
   private def logBad(badRow: BadRow): IO[Unit] =
@@ -159,6 +162,7 @@ object Fs2Loader {
 //          )
 //        )
 
+
   def run(
     env: Environment
   )(static: Boolean = true)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[ExitCode] = {
@@ -181,26 +185,17 @@ object Fs2Loader {
       queue  <- Queue.bounded[IO, Set[ShreddedType]](MaxConcurrency)
       _      <- IO.delay(println("1"))
       sinkBadGood = eventStream.observeEither[BadRow, LoaderRow](
-        badSink[BadRow, Unit](Some(env))(logBad _),
-        bigquerySink[LoaderRow, Unit](logGood _)
+        badSink[BadRow, Unit](Some(env))(logBad),
+        bigquerySink[LoaderRow, ShreddedType, Unit](queue, _.inventory, logGood)
       )
+
       _ <- IO.delay(println("2"))
-      typesQueue = eventStream
-        .filter(_.isRight)
-        .map { case Right(lr) => lr }
-        .through(
-          enqueueTypes[LoaderRow, ShreddedType, Unit](
-            queue,
-            _.inventory,
-            GroupByN,
-            TimeWindow,
-            enqueueF(queue)
-          )
-        )
+
+      typesSink = queue.dequeue.through(aggregateTypes(GroupByN, TimeWindow)).through(logTypes)
+
       _ <- IO.delay(println("3"))
-      sinkTypes = dequeueTypes(Some(env))(queue, logTypes)
       _ <- IO.delay(println("4"))
-      _ <- Stream(typesQueue, sinkTypes, sinkBadGood).parJoin(Int.MaxValue).compile.drain
+      _ <- Stream(typesSink, sinkBadGood).parJoin(Int.MaxValue).compile.drain
       _ <- IO.delay(println("5"))
     } yield ExitCode.Success
   }

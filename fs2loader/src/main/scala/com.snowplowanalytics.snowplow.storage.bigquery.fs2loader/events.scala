@@ -219,17 +219,17 @@ object events {
       val topicStream = Stream.eval(Topic[IO, String]("Topic start")(c))
       topicStream.flatMap { topic =>
         val publisher  = Stream.emit(Valid.event).repeat.intersperse(Invalid.event).covary[IO].through(topic.publish)
-        val subscriber = topic.subscribe(10).take(size)
+        val subscriber = topic.subscribe(10).take(size + 1) // Do not count initial value.
         subscriber.concurrently(publisher)(c)
       }
     }
   }
 
-  final class PubsubSource(size: Int)(env: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO])
+  final class PubsubSource(size: Int = 1)(env: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO])
       extends Source {
     implicit val messageDecoder: MessageDecoder[String] = (bytes: Array[Byte]) => {
       val event = Right(new String(bytes))
-      println("Hello from input stream.")
+      println(s"""Hello from input stream: \n ${event.getOrElse("No event")}""")
       event
     }
 

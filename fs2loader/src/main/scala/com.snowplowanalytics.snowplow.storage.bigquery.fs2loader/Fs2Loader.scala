@@ -31,8 +31,8 @@ import scala.concurrent.duration._
 
 object Fs2Loader {
   private val MaxConcurrency = 10
-  private val GroupByN       = 1
-  private val TimeWindow     = 1.seconds
+  private val GroupByN       = 10
+  private val TimeWindow     = 10.seconds
 
   /**
     * Aggregate observed types when a specific number is reached or time passes, whichever happens first.
@@ -164,7 +164,7 @@ object Fs2Loader {
   )(static: Boolean = true)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[ExitCode] = {
     val source = {
       if (static) {
-        new StaticSource(10)(c)
+        new StaticSource(6)(c)
       } else {
         new PubsubSource(1)(env)(cs, c)
       }
@@ -172,6 +172,9 @@ object Fs2Loader {
 
     val eventStream: Stream[IO, Either[BadRow, LoaderRow]] =
       source.getStream.map(LoaderRow.parse(env.resolverJson))
+
+//    val test = eventStream.evalMap(l => IO.delay(println(s"Hello from event stream: \n $l")))
+//    test.compile.drain.unsafeRunSync() // Results in the correct number of events read from Pubsub
 
     for {
       client <- Bigquery.getClient

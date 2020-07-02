@@ -17,13 +17,11 @@ import cats.effect.{Concurrent, ContextShift, ExitCode, IO, Timer}
 import fs2.{Pipe, Stream}
 import fs2.concurrent.Queue
 import com.snowplowanalytics.snowplow.badrows.BadRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
 import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.events._
 import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks.{Bigquery, PubSub}
 import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks.PubSub.{WriteBadRow, WriteObservedTypes}
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderRow
-import org.slf4j.LoggerFactory
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.google.cloud.bigquery.BigQuery
 
@@ -95,7 +93,7 @@ object Fs2Loader {
     types.evalMap(set => PubSub.sink(env.config.projectId, env.config.typesTopic)(WriteObservedTypes(set)))
 
   def bigqueryPipe(loaderRow: LoaderRow)(env: Environment)(client: BigQuery): IO[Unit] =
-    Bigquery.insert[IO](client, loaderRow)(env)
+    Bigquery.insert(client, loaderRow)(env)
 
   def run(
     env: Environment

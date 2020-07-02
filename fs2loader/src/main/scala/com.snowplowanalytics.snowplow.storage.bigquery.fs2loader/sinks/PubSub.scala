@@ -66,9 +66,9 @@ object PubSub {
 
     // To show that the resource gets allocated and the thing we want to sink is the expected thing
     res match {
-      case Resource.Allocate(resource) => println(s"Allocate $resource for $r")
-      case b: Resource.Bind            => println(s"Bind $b for $r")
-      case Resource.Suspend(resource)  => println(s"Suspend for $r")
+      case Resource.Allocate(resource)   => println(s"Allocate $resource for $r")
+      case b @ Resource.Bind(source, fs) => println(s"Bind $b for $r")
+      case Resource.Suspend(resource)    => println(s"Suspend for $r")
     }
 
     res

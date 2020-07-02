@@ -15,16 +15,21 @@ package com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks
 import scala.collection.JavaConverters._
 import cats.effect.Sync
 import cats.syntax.all._
+import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, TableId}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
+import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks.PubSub.WriteTableRow
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderRow
 
 object Bigquery {
-  def insert[F[_]: Sync](client: BigQuery, dataset: String, table: String, loaderRow: LoaderRow): F[Unit] = {
-    val request = buildRequest(dataset, table, loaderRow)
+  def insert[F[_]: Sync](client: BigQuery, loaderRow: LoaderRow)(env: Environment): F[Unit] = {
+    val request = buildRequest(env.config.datasetId, env.config.tableId, loaderRow)
     Sync[F].delay(client.insertAll(request)).attempt.map {
       case Right(response) if response.hasErrors =>
-        val errors = response.getInsertErrors.asScala.toList
-        println(errors)
+        loaderRow.data.setFactory(new JacksonFactory)
+        val tableRow = loaderRow.data.toString
+        println("1")                                                                         // Just to show that we get to here
+        PubSub.sink(env.config.projectId, env.config.failedInserts)(WriteTableRow(tableRow)) // This appears identical to the badSink but does not work as expected
       case Right(_)    => ()
       case Left(error) => println(error)
     }

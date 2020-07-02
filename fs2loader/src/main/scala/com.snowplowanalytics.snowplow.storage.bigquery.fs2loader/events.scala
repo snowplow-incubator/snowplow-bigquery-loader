@@ -228,9 +228,7 @@ object events {
   final class PubsubSource(size: Int = 1)(env: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO])
       extends Source {
     implicit val messageDecoder: MessageDecoder[String] = (bytes: Array[Byte]) => {
-      val event = Right(new String(bytes))
-      println(s"""Hello from input stream: \n ${event.getOrElse("No event")}""")
-      event
+      Right(new String(bytes))
     }
 
     override def getStream: Stream[IO, String] = {

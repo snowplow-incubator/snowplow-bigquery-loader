@@ -91,56 +91,56 @@ class Fs2LoaderSpec extends Specification {
     }
   }
 
-  "enqueueTypes" should {
-    "correctly aggregate types and add them to the queue" >> {
-      val getTypes: String => Set[Char] = _.toCharArray.toSet
-      val GroupByN   = 2
-      val TimeWindow = 1.second
-      val QueueSize  = 3
+//  "enqueueTypes" should {
+//    "correctly aggregate types and add them to the queue" >> {
+//      val getTypes: String => Set[Char] = _.toCharArray.toSet
+//      val GroupByN   = 2
+//      val TimeWindow = 1.second
+//      val QueueSize  = 3
+//
+//      val enqueue = for {
+//        queue <- Queue.bounded[IO, Set[Char]](QueueSize)
+//        input = Stream("foo", "bar", "bar", "baz", "12345", "21").covary[IO]
+//        _ <- input
+//          .through(enqueueTypes(queue, getTypes, GroupByN, TimeWindow, queue.enqueue))
+//          .take(QueueSize)
+//          .compile
+//          .drain
+//        result <- queue.dequeue.take(QueueSize).compile.toList
+//      } yield result
+//
+//      val output   = enqueue.unsafeRunSync()
+//      val expected = List(Set('f', 'o', 'b', 'a', 'r'), Set('b', 'a', 'r', 'z'), Set('1', '2', '3', '4', '5'))
+//
+//      output must beEqualTo(expected)
+//    }
+//  }
 
-      val enqueue = for {
-        queue <- Queue.bounded[IO, Set[Char]](QueueSize)
-        input = Stream("foo", "bar", "bar", "baz", "12345", "21").covary[IO]
-        _ <- input
-          .through(enqueueTypes(queue, getTypes, GroupByN, TimeWindow, queue.enqueue))
-          .take(QueueSize)
-          .compile
-          .drain
-        result <- queue.dequeue.take(QueueSize).compile.toList
-      } yield result
-
-      val output   = enqueue.unsafeRunSync()
-      val expected = List(Set('f', 'o', 'b', 'a', 'r'), Set('b', 'a', 'r', 'z'), Set('1', '2', '3', '4', '5'))
-
-      output must beEqualTo(expected)
-    }
-  }
-
-  "dequeueTypes" should {
-    "sink all aggregate types" >> {
-      val getTypes: String => Set[Char] = _.toCharArray.toSet
-      val GroupByN                                                      = 2
-      val TimeWindow                                                    = 1.second
-      val QueueSize                                                     = 3
-      def dequeueF(types: Stream[IO, Set[Char]]): Stream[IO, Set[Char]] = types.map(set => set)
-
-      val enqueueAndDequeue = for {
-        queue <- Queue.bounded[IO, Set[Char]](QueueSize)
-        input = Stream("foo", "bar", "bar", "baz", "12345", "21").covary[IO]
-        _ <- input
-          .through(enqueueTypes(queue, getTypes, GroupByN, TimeWindow, queue.enqueue))
-          .take(QueueSize)
-          .compile
-          .drain
-        result <- dequeueTypes(None)(queue, dequeueF).take(QueueSize).compile.toList
-      } yield result
-
-      val output   = enqueueAndDequeue.unsafeRunSync()
-      val expected = List(Set('f', 'o', 'b', 'a', 'r'), Set('b', 'a', 'r', 'z'), Set('1', '2', '3', '4', '5'))
-
-      output must beEqualTo(expected)
-    }
-  }
+//  "dequeueTypes" should {
+//    "sink all aggregate types" >> {
+//      val getTypes: String => Set[Char] = _.toCharArray.toSet
+//      val GroupByN                                                      = 2
+//      val TimeWindow                                                    = 1.second
+//      val QueueSize                                                     = 3
+//      def dequeueF(types: Stream[IO, Set[Char]]): Stream[IO, Set[Char]] = types.map(set => set)
+//
+//      val enqueueAndDequeue = for {
+//        queue <- Queue.bounded[IO, Set[Char]](QueueSize)
+//        input = Stream("foo", "bar", "bar", "baz", "12345", "21").covary[IO]
+//        _ <- input
+//          .through(enqueueTypes(queue, getTypes, GroupByN, TimeWindow, queue.enqueue))
+//          .take(QueueSize)
+//          .compile
+//          .drain
+//        result <- dequeueTypes(None)(queue, dequeueF).take(QueueSize).compile.toList
+//      } yield result
+//
+//      val output   = enqueueAndDequeue.unsafeRunSync()
+//      val expected = List(Set('f', 'o', 'b', 'a', 'r'), Set('b', 'a', 'r', 'z'), Set('1', '2', '3', '4', '5'))
+//
+//      output must beEqualTo(expected)
+//    }
+//  }
 
   "bigquerySink" should {
     "correctly pipe the rows through the specified sink" >> {

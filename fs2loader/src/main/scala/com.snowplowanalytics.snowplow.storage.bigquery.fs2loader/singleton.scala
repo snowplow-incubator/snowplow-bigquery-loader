@@ -12,16 +12,27 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.fs2loader
 
-import cats.effect._
-import cats.syntax.all._
+import cats.Id
+import io.circe.Json
 
-object Main extends IOApp {
-  override def run(args: List[String]): IO[ExitCode] =
-    Fs2LoaderCli.parse(args) match {
-      case Right(conf) =>
-        val env = Fs2LoaderCli.getEnv(conf)
-        Fs2Loader.run(env)
-      case Left(help) =>
-        IO.delay(System.err.println(help.toString)) >> IO.pure(ExitCode.Error)
+import com.snowplowanalytics.iglu.client.Resolver
+
+object singleton {
+
+  /** Singleton for Resolver to maintain one per node */
+  object ResolverSingleton {
+    @volatile private var instance: Resolver[Id] = _
+
+    /** Retrieve or build an instance of a Resolver */
+    def get(r: Json): Resolver[Id] = {
+      if (instance == null) {
+        synchronized {
+          if (instance == null) {
+            instance = Resolver.parse(r).fold(e => throw new RuntimeException(e.toString), identity)
+          }
+        }
+      }
+      instance
     }
+  }
 }

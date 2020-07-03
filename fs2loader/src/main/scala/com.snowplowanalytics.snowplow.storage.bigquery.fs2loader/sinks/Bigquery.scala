@@ -16,18 +16,19 @@ import cats.effect.{IO, Sync}
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, TableId}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
-import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks.PubSub.WriteTableRow
-import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderRow
+import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.sinks.PubSub.PubSubOutput
+import com.snowplowanalytics.snowplow.storage.bigquery.fs2loader.Fs2LoaderRow
 
 object Bigquery {
-  def insert(client: BigQuery, loaderRow: LoaderRow)(env: Environment): IO[Unit] = {
+  def insert(loaderRow: Fs2LoaderRow, env: Environment, client: BigQuery): IO[Unit] = {
     val request = buildRequest(env.config.datasetId, env.config.tableId, loaderRow)
     Sync[IO].delay(client.insertAll(request)).attempt.flatMap {
       case Right(response) if response.hasErrors =>
         loaderRow.data.setFactory(new JacksonFactory)
         val tableRow = loaderRow.data.toString
-        PubSub.sink(env.config.projectId, env.config.failedInserts)(WriteTableRow(tableRow))
-      case Right(_)    => IO.delay(())
+        // TODO: Can this be turned into a sink?
+        PubSub.write(PubSubOutput.WriteTableRow(tableRow), env.config.projectId, env.config.failedInserts)
+      case Right(_)    => IO.unit
       case Left(error) => IO.delay(println(error))
     }
   }
@@ -35,6 +36,6 @@ object Bigquery {
   def getClient[F[_]: Sync]: F[BigQuery] =
     Sync[F].delay(BigQueryOptions.getDefaultInstance.getService)
 
-  private def buildRequest(dataset: String, table: String, loaderRow: LoaderRow) =
+  private def buildRequest(dataset: String, table: String, loaderRow: Fs2LoaderRow) =
     InsertAllRequest.newBuilder(TableId.of(dataset, table)).addRow(loaderRow.data).build()
 }

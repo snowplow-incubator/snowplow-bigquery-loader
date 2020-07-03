@@ -15,26 +15,11 @@ package com.snowplowanalytics.snowplow.storage.bigquery.fs2loader
 
 import java.time.Instant
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
-import cats.Id
-import cats.effect.{Clock, Concurrent, ContextShift, IO}
-import com.permutive.pubsub.consumer.Model
-import com.permutive.pubsub.consumer.decoder.MessageDecoder
-import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
-import com.snowplowanalytics.iglu.client.Resolver
-import com.snowplowanalytics.iglu.client.resolver.registries.Registry
-import com.snowplowanalytics.iglu.core.{SchemaMap, SchemaVer, SelfDescribingSchema}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
-import io.circe.literal._
-import fs2.Stream
-import cats.effect.{Effect, IO}
-import fs2._
-import fs2.concurrent.Topic
 
-// TODO: Move to test once dev is done.
+// TODO: Evaluate if this is still needed for tests.
 object events {
   object Valid {
     val UnstructJson =
@@ -208,43 +193,5 @@ object events {
       }
       .toList
       .mkString("\t")
-  }
-
-  sealed trait Source {
-    def getStream: Stream[IO, String]
-  }
-
-  final class StaticSource(size: Int)(c: Concurrent[IO]) extends Source {
-    override def getStream: Stream[IO, String] = {
-      val topicStream = Stream.eval(Topic[IO, String]("Topic start")(c))
-      topicStream.flatMap { topic =>
-        val publisher  = Stream.emit(Valid.event).repeat.intersperse(Invalid.event).covary[IO].through(topic.publish)
-        val subscriber = topic.subscribe(10).take(size + 1) // Do not count initial value.
-        subscriber.concurrently(publisher)(c)
-      }
-    }
-  }
-
-  final class PubsubSource(size: Int = 1)(env: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO])
-      extends Source {
-    implicit val messageDecoder: MessageDecoder[String] = (bytes: Array[Byte]) => {
-      Right(new String(bytes))
-    }
-
-    override def getStream: Stream[IO, String] = {
-      val topicStream = Stream.eval(Topic[IO, String]("Topic start")(c))
-      topicStream.flatMap { topic =>
-        val publisher = PubsubGoogleConsumer
-          .subscribeAndAck[IO, String](
-            Model.ProjectId(env.config.projectId),
-            Model.Subscription(env.config.input),
-            (msg, err, _, _) => IO(println(s"Msg $msg got error $err")),
-            config = PubsubGoogleConsumerConfig(onFailedTerminate = _ => IO.unit)
-          )
-          .through(topic.publish)
-        val subscriber = topic.subscribe(10)
-        subscriber.concurrently(publisher)
-      }
-    }
   }
 }

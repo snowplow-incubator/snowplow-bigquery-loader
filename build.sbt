@@ -50,7 +50,7 @@ lazy val fs2loader = project
   .settings(
     libraryDependencies ++= Seq(Dependencies.fs2, Dependencies.pubsubFs2Grpc, Dependencies.specs2)
   )
-  .dependsOn(common, loader)
+  .dependsOn(common)
 
 lazy val mutator = project
   .in(file("mutator"))

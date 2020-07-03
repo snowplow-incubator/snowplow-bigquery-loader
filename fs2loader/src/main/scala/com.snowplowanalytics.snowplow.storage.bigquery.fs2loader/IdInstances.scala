@@ -12,16 +12,17 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.fs2loader
 
-import cats.effect._
-import cats.syntax.all._
+import java.util.concurrent.TimeUnit
 
-object Main extends IOApp {
-  override def run(args: List[String]): IO[ExitCode] =
-    Fs2LoaderCli.parse(args) match {
-      case Right(conf) =>
-        val env = Fs2LoaderCli.getEnv(conf)
-        Fs2Loader.run(env)
-      case Left(help) =>
-        IO.delay(System.err.println(help.toString)) >> IO.pure(ExitCode.Error)
-    }
+import cats.Id
+import cats.effect.Clock
+
+object IdInstances {
+  implicit val idClock: Clock[Id] = new Clock[Id] {
+    def realTime(unit: TimeUnit): Id[Long] =
+      unit.convert(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+
+    def monotonic(unit: TimeUnit): Id[Long] =
+      unit.convert(System.nanoTime(), TimeUnit.NANOSECONDS)
+  }
 }

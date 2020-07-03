@@ -15,8 +15,10 @@ package loader
 
 import com.google.api.services.bigquery.model.TableRow
 import org.joda.time.Instant
+
 import cats.syntax.either._
 import io.circe.literal._
+
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 
 class LoaderRowSpec extends org.specs2.Specification {

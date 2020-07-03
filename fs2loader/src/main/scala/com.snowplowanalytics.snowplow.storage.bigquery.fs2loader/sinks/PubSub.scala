@@ -24,33 +24,33 @@ import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
 
 object PubSub {
-  sealed trait PubSubOutput
-  final case class WriteBadRow(badRow: BadRow) extends PubSubOutput
-  final case class WriteTableRow(tableRow: String) extends PubSubOutput
-  final case class WriteObservedTypes(types: Set[ShreddedType]) extends PubSubOutput
-
-  implicit val messageEncoder: MessageEncoder[PubSubOutput] = new MessageEncoder[PubSubOutput] {
-    override def encode(a: PubSubOutput): Either[Throwable, Array[Byte]] =
-      a match {
-        case WriteBadRow(br)       => Right(br.compact.getBytes())
-        case WriteTableRow(tr)     => Right(tr.getBytes())
-        case WriteObservedTypes(t) => Right(toPayload(t).noSpaces.getBytes())
-      }
+  sealed trait PubSubOutput extends Product with Serializable
+  object PubSubOutput {
+    final case class WriteBadRow(badRow: BadRow) extends PubSubOutput
+    final case class WriteTableRow(tableRow: String) extends PubSubOutput
+    final case class WriteObservedTypes(types: Set[ShreddedType]) extends PubSubOutput
   }
 
-  def sink(projectId: String, topic: String)(r: PubSubOutput): IO[Unit] =
+  implicit val messageEncoder: MessageEncoder[PubSubOutput] = {
+    case PubSubOutput.WriteBadRow(br)       => Right(br.compact.getBytes())
+    case PubSubOutput.WriteTableRow(tr)     => Right(tr.getBytes())
+    case PubSubOutput.WriteObservedTypes(t) => Right(toPayload(t).noSpaces.getBytes())
+  }
+
+  def write(record: PubSubOutput, projectId: String, topic: String): IO[Unit] =
     GooglePubsubProducer
       .of[IO, PubSubOutput](
         Model.ProjectId(projectId),
         Model.Topic(topic),
         config = PubsubProducerConfig[IO](
+          // TODO: Get rid of magic numbers
           batchSize         = 100,
           delayThreshold    = 100.millis,
-          onFailedTerminate = e => IO(println(s"Got error $e")) >> IO.unit
+          onFailedTerminate = e => IO.delay(println(s"Got error $e")) >> IO.unit
         )
       )
-      .use[Model.MessageId] { producer =>
-        producer.produce(r)
+      .use { producer =>
+        producer.produce(record)
       }
-      .map(_ => ())
+      .void
 }

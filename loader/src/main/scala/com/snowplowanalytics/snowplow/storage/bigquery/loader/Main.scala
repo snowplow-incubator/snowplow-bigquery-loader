@@ -16,7 +16,7 @@ package loader
 import scala.concurrent.duration.Duration
 import com.spotify.scio._
 
-object OldMain {
+object Main {
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
     LoaderCli.parse(args) match {

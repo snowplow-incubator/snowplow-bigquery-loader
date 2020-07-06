@@ -22,7 +22,7 @@ import sbtbuildinfo.BuildInfoKeys._
 object BuildSettings {
   lazy val projectSettings = Seq(
     organization := "com.snowplowanalytics",
-    version := "poc",
+    version := "0.6.0-rc2",
     scalaVersion := "2.12.10",
     buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description, BuildInfoKey.action("userAgent") {
       s"${name.value}/${version.value}"

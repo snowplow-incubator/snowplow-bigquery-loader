@@ -57,9 +57,9 @@ object Fs2Loader {
 //                                                                       +-----------------|(events)|
 //                                                                                         +--------+
 
-  private val MaxConcurrency = Int.MaxValue
+  private val MaxConcurrency = Runtime.getRuntime.availableProcessors * 16
   private val GroupByN       = 10
-  private val TimeWindow     = (5 * 60).seconds
+  private val TimeWindow     = 5.minutes
 
   implicit val cs: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
 

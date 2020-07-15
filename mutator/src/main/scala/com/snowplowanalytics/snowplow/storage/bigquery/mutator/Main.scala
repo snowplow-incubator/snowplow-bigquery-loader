@@ -41,7 +41,9 @@ object Main extends IOApp {
         for {
           env    <- c.getEnv
           client <- TableReference.BigQueryTable.getClient
-          _      <- TableReference.BigQueryTable.create(client, env.config.datasetId, env.config.tableId)
+          _ <- TableReference
+            .BigQueryTable
+            .create(client, env.config.projectId, env.config.datasetId, env.config.tableId)
         } yield ExitCode.Success
 
       case Right(c: CommandLine.AddColumnCommand) =>

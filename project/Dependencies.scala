@@ -21,7 +21,7 @@ object Dependencies {
 
   object V {
     // Java
-    val beam                = "2.19.0"
+    val beam                = "2.23.0"
     val googleCloudBigQuery = "1.102.0" // no upgrade before bumping pubsubFs2
     val googleCloudPubSub   = "1.102.0" // no upgrade before bumping pubsubFs2
     val googleCloudStorage  = "1.102.0" // no upgrade before bumping pubsubFs2
@@ -45,7 +45,7 @@ object Dependencies {
       * Runtime errors occur when the versions are incompatible.
       */
     val pubsubFs2 = "0.15.0"
-    val scio      = "0.8.2"
+    val scio      = "0.9.3"
 
     // Scala Snowplow
     val analyticsSdk = "2.0.1"

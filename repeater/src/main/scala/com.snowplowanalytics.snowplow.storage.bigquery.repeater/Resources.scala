@@ -18,7 +18,7 @@ import com.google.cloud.bigquery._
 
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
-import cats.{Monad, Show}
+import cats.Show
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
@@ -66,7 +66,7 @@ class Resources[F[_]: Sync](
       _ <- statistics.update(s => s.copy(lifetime = newLifetime))
     } yield ()
 
-  def showStats(implicit L: Logger[F], M: Monad[F]): F[Unit] =
+  def showStats(implicit L: Logger[F]): F[Unit] =
     statistics.get.flatMap(statistics => L.info(statistics.show))
 }
 

@@ -74,7 +74,7 @@ object Flow {
       _    <- Logger[F].debug(s"Preparing for sinking a chunk, $time")
       _    <- counter.update(_ + 1)
       i    <- counter.get
-      file = Storage.getFileName(bucket.path, i, time)
+      file = Storage.getFileName(bucket.path, i)
       _ <- Logger[F].debug(s"Filename will be $file")
       _ <- Storage.uploadChunk[F](bucket.bucket, file, chunk)
     } yield ()
@@ -86,7 +86,7 @@ object Flow {
     backoffTime: Int
   )(event: EventRecord[F]): F[Either[BadRow, Unit]] = {
     val res = for {
-      ready <- EitherT.right(event.value.isReady(backoffTime))
+      ready <- EitherT.right(event.value.isReady(backoffTime.toLong))
       result <- EitherT[F, BadRow, Unit] {
         if (ready)
           event.ack >>

@@ -14,7 +14,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 
 import com.google.cloud.bigquery.{Option => _, _}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import cats.effect.Sync
 import cats.syntax.all._
 import io.chrisdavenport.log4cats.Logger

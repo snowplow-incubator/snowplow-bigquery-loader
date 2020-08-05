@@ -29,12 +29,12 @@ object Storage {
 
   val TimestampFormat = DateTimeFormat.forPattern("YYYY-MM-dd-HHmmssSSS")
 
-  def getFileName(base: String, n: Int, tstamp: DateTime): String =
+  def getFileName(base: String, n: Int): String =
     base ++ DateTime.now(DateTimeZone.UTC).toString(TimestampFormat) ++ n.toString
 
   def uploadChunk[F[_]: Sync: Logger](bucketName: String, fileName: String, rows: Chunk[BadRow]): F[Unit] = {
     val blobInfo = BlobInfo.newBuilder(bucketName, fileName).build()
-    val content  = Stream.chunk(rows).map(_.compact).intersperse("\n").through(text.utf8Encode).compile.to[Array]
+    val content  = Stream.chunk(rows).map(_.compact).intersperse("\n").through(text.utf8Encode).compile.to(Array)
 
     Logger[F].info(s"Preparing write to a $fileName with ${rows.size} items") *>
       Sync[F].delay(storage.create(blobInfo, content)) *>

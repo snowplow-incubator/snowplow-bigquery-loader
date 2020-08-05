@@ -88,6 +88,7 @@ object Loader {
 
     // Sink good rows and forward failed inserts to PubSub
     sc.wrap(remaining).withName("failedInsertsSink").saveAsPubsub(env.config.getFullFailedInsertsTopic)
+    ()
   }
 
   /** Default BigQuery output options */
@@ -111,7 +112,7 @@ object Loader {
         common
           .withMethod(BigQueryIO.Write.Method.FILE_LOADS)
           .withNumFileShards(100)
-          .withTriggeringFrequency(Duration.standardSeconds(frequency))
+          .withTriggeringFrequency(Duration.standardSeconds(frequency.toLong))
     }
   }
 

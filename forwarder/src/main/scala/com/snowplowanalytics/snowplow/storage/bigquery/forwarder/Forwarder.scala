@@ -32,20 +32,23 @@ object Forwarder {
   val OutputWindowOptions = WindowOptions(
     Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane()),
     AccumulationMode.DISCARDING_FIRED_PANES,
-    Duration.ZERO)
+    Duration.ZERO
+  )
 
   def run(env: ForwarderEnvironment, sc: ScioContext): Unit = {
     val input = PubsubIO.readStrings().fromSubscription(env.getFullFailedInsertsSub)
     sc.customInput("failedInserts", input)
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)
       .saveAsCustomOutput("bigquery", getOutput.to(getTableReference(env)))
+    ()
   }
 
   def getTableReference(env: ForwarderEnvironment): String =
     s"${env.common.config.projectId}:${env.common.config.datasetId}.${env.common.config.tableId}"
 
   def getOutput: BigQueryIO.Write[String] =
-    BigQueryIO.write()
+    BigQueryIO
+      .write()
       .withCreateDisposition(CreateDisposition.CREATE_NEVER)
       .withFormatFunction(SerializeJsonRow)
       .withWriteDisposition(WriteDisposition.WRITE_APPEND)

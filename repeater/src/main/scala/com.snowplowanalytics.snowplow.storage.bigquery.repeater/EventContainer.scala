@@ -16,7 +16,7 @@ import java.time.Instant
 import java.util
 import java.util.{UUID, List => JList, Map => JMap}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import cats.effect.Sync
 import cats.syntax.either._
 import com.permutive.pubsub.consumer.decoder.MessageDecoder

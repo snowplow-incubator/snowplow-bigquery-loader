@@ -17,7 +17,7 @@ import com.google.pubsub.v1.PubsubMessage
 import cats.effect._
 import cats.syntax.all._
 import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
-import com.permutive.pubsub.consumer.Model
+import com.permutive.pubsub.consumer.{ConsumerRecord, Model}
 import io.chrisdavenport.log4cats.Logger
 import fs2.concurrent.Queue
 import fs2.Stream
@@ -30,11 +30,13 @@ object PubSub {
 
   /** Read events from `failedInserts` topic */
   def getEvents[F[_]: ContextShift: Concurrent: Timer: Logger](
+    blocker: Blocker,
     projectId: String,
     subscription: String,
     desperates: Queue[F, BadRow]
-  ): Stream[F, Model.Record[F, EventContainer]] =
+  ): Stream[F, ConsumerRecord[F, EventContainer]] =
     PubsubGoogleConsumer.subscribe[F, EventContainer](
+      blocker,
       Model.ProjectId(projectId),
       Model.Subscription(subscription),
       (msg, err, ack, _) => callback[F](msg, err, ack, desperates),

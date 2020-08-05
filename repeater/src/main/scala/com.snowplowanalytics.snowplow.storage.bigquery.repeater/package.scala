@@ -12,12 +12,12 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery
 
-import com.permutive.pubsub.consumer.Model
+import com.permutive.pubsub.consumer.ConsumerRecord
 import fs2.concurrent.Queue
 import fs2.Stream
 
 package object repeater {
-  type EventRecord[F[_]] = Model.Record[F, EventContainer]
+  type EventRecord[F[_]] = ConsumerRecord[F, EventContainer]
 
   type EventStream[F[_]] = Stream[F, EventRecord[F]]
 

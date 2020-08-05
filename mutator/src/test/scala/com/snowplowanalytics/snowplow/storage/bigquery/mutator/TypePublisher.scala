@@ -80,7 +80,9 @@ object TypePublisher {
 
   private def publish(publisher: Publisher, inventoryItem: ShreddedType): IO[Unit] = {
     val message = inventoryToMessage(inventoryItem)
-    IO(println(s"Publishing ${inventoryItem.schemaKey.toSchemaUri}")).flatMap(_ => IO(publisher.publish(message)))
+    IO(println(s"Publishing ${inventoryItem.schemaKey.toSchemaUri}")).flatMap(_ =>
+      IO(publisher.publish(message)) *> IO.pure(())
+    )
   }
 
   private def newPublisher(topic: String): IO[Publisher] =

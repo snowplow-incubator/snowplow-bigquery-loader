@@ -23,7 +23,7 @@ object BuildSettings {
   lazy val projectSettings = Seq(
     organization := "com.snowplowanalytics",
     version := "0.5.1",
-    scalaVersion := "2.12.10",
+    scalaVersion := "2.13.2",
     buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description, BuildInfoKey.action("userAgent") {
       s"${name.value}/${version.value}"
     })
@@ -31,8 +31,7 @@ object BuildSettings {
 
   lazy val commonProjectSettings = projectSettings ++ Seq(
     name := "snowplow-bigquery-common",
-    description := "Snowplow BigQuery Loader Common Utils",
-    crossScalaVersions := Seq("2.12.8", "2.11.12")
+    description := "Snowplow BigQuery Loader Common Utils"
   )
 
   lazy val loaderProjectSettings = projectSettings ++ Seq(
@@ -51,7 +50,6 @@ object BuildSettings {
   lazy val repeaterProjectSettings = projectSettings ++ Seq(
     name := "snowplow-bigquery-repeater",
     description := "Snowplow BigQuery Java app for replaying events from failed inserts subscription",
-    scalaVersion := "2.12.8",
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.repeater.generated"
   )
 
@@ -96,32 +94,6 @@ object BuildSettings {
   )
 
   lazy val compilerSettings = Seq(
-    scalacOptions := Seq(
-      "-target:jvm-1.8",
-      "-deprecation",
-      "-encoding",
-      "UTF-8",
-      "-explaintypes",
-      "-feature",
-      "-language:existentials",
-      "-language:experimental.macros",
-      "-language:higherKinds",
-      "-language:implicitConversions",
-      "-unchecked",
-      "-Xcheckinit",
-      "-Xfuture",
-      "-Yno-adapted-args",
-      "-Ypartial-unification",
-      "-Ywarn-dead-code",
-      "-Ywarn-extra-implicit",
-      "-Ywarn-inaccessible",
-      "-Ywarn-infer-any",
-      "-Ywarn-nullary-override",
-      "-Ywarn-nullary-unit",
-      "-Ywarn-numeric-widen",
-      "-Ywarn-unused",
-      "-Ywarn-value-discard"
-    ),
     javacOptions := Seq(
       "-source",
       "1.8",
@@ -139,8 +111,7 @@ object BuildSettings {
   )
 
   lazy val macroSettings = Seq(
-    libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-    addCompilerPlugin(("org.scalamacros" % "paradise" % Dependencies.V.scalaMacrosVersion).cross(CrossVersion.full))
+    libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value
   )
 
   lazy val dockerSettings = Seq(
@@ -159,8 +130,8 @@ object BuildSettings {
 
   lazy val buildSettings = Seq(
     Global / cancelable := true,
-    addCompilerPlugin("com.olegpy"     %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
-    addCompilerPlugin("org.spire-math" %% "kind-projector"     % Dependencies.V.kindProjector)
+    addCompilerPlugin("com.olegpy" %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
+    addCompilerPlugin(("org.typelevel" %% "kind-projector" % Dependencies.V.kindProjector).cross(CrossVersion.full))
   ) ++ compilerSettings ++ resolverSettings ++ dockerSettings
 
   lazy val commonBuildSettings    = (commonProjectSettings ++ buildSettings).diff(dockerSettings)

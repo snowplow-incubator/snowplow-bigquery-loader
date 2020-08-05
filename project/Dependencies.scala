@@ -22,38 +22,45 @@ object Dependencies {
   object V {
     // Java
     val beam                = "2.19.0"
-    val googleCloudBigQuery = "1.111.2"
-    val googleCloudPubSub   = "1.105.0"
-    val googleCloudStorage  = "1.107.0"
-    val metrics             = "3.1.0"
+    val googleCloudBigQuery = "1.102.0" // no upgrade before bumping pubsubFs2
+    val googleCloudPubSub   = "1.102.0" // no upgrade before bumping pubsubFs2
+    val googleCloudStorage  = "1.102.0" // no upgrade before bumping pubsubFs2
+    val metrics             = "4.1.11"
     val slf4j               = "1.7.30"
 
     // Scala third-party
-    val cats       = "1.6.1"
-    val catsEffect = "1.4.0"
-    val circe      = "0.11.1"
-    val decline    = "0.6.2"
-    val fs2        = "1.0.5"
-    val httpClient = "0.20.23"
-    val logging    = "0.3.0"
-    val pubsubFs2  = "0.14.0"
-    val scio       = "0.8.2"
+    val cats       = "2.1.1"
+    val catsEffect = "2.1.4"
+    val circe      = "0.13.0"
+    val decline    = "1.0.0"
+    val fs2        = "2.4.2"
+    val httpClient = "0.21.6"
+    val logging    = "1.1.1"
+
+    /**
+      * After 1.102.0 the Google Cloud Java SDK versions diverge.
+      * It becomes harder to know what versions are compatible with each other.
+      * Bumping pubsubFs2 to 0.16.0 calls for googleCloudPubSub 1.107.0,
+      * but it's unclear to what versions the other two SDKs need to be bumped.
+      * Runtime errors occur when the versions are incompatible.
+      */
+    val pubsubFs2 = "0.15.0"
+    val scio      = "0.8.2"
 
     // Scala Snowplow
-    val analyticsSdk       = "1.0.0"
-    val badrows            = "1.0.0"
-    val igluClient         = "0.6.2"
-    val igluCore           = "0.5.0"
-    val processingManifest = "0.2.0"
-    val schemaDdl          = "0.10.0"
+    val analyticsSdk = "2.0.1"
+    val badrows      = "2.1.0"
+    val igluClient   = "1.0.1"
+    val igluCore     = "1.0.0"
+    val schemaDdl    = "0.11.0"
 
     // Scala (test only)
-    val scalaCheck = "1.14.2"
-    val specs2     = "4.8.0"
+    val scalaCheck = "1.14.3"
+    val specs2     = "4.10.0"
 
     // Build
-    val betterMonadicFor   = "0.2.4"
-    val kindProjector      = "0.9.9"
+    val betterMonadicFor   = "0.3.1"
+    val kindProjector      = "0.11.0"
     val scalaMacrosVersion = "2.1.0"
   }
 
@@ -73,7 +80,6 @@ object Dependencies {
   val catsEffect    = "org.typelevel"     %% "cats-effect"              % V.catsEffect
   val circe         = "io.circe"          %% "circe-core"               % V.circe
   val circeJawn     = "io.circe"          %% "circe-jawn"               % V.circe
-  val circeJavaTime = "io.circe"          %% "circe-java8"              % V.circe
   val circeLiteral  = "io.circe"          %% "circe-literal"            % V.circe
   val circeParser   = "io.circe"          %% "circe-parser"             % V.circe
   val decline       = "com.monovore"      %% "decline"                  % V.decline
@@ -87,12 +93,11 @@ object Dependencies {
   val scioRepl      = "com.spotify"       %% "scio-repl"                % V.scio
 
   // Scala Snowplow
-  val analyticsSdk       = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk
-  val badrows            = "com.snowplowanalytics" %% "snowplow-badrows"             % V.badrows
-  val igluClient         = "com.snowplowanalytics" %% "iglu-scala-client"            % V.igluClient
-  val igluCoreCirce      = "com.snowplowanalytics" %% "iglu-core-circe"              % V.igluCore
-  val processingManifest = "com.snowplowanalytics" %% "snowplow-processing-manifest" % V.processingManifest
-  val schemaDdl          = "com.snowplowanalytics" %% "schema-ddl"                   % V.schemaDdl
+  val analyticsSdk  = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk
+  val badrows       = "com.snowplowanalytics" %% "snowplow-badrows"             % V.badrows
+  val igluClient    = "com.snowplowanalytics" %% "iglu-scala-client"            % V.igluClient
+  val igluCoreCirce = "com.snowplowanalytics" %% "iglu-core-circe"              % V.igluCore
+  val schemaDdl     = "com.snowplowanalytics" %% "schema-ddl"                   % V.schemaDdl
 
   // Scala (test only)
   val scalaCheck       = "org.scalacheck" %% "scalacheck"        % V.scalaCheck % "test"

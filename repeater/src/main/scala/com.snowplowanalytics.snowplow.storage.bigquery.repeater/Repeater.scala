@@ -42,6 +42,7 @@ object Repeater extends SafeIOApp {
           bqSink = services
             .PubSub
             .getEvents(
+              resources.insertBlocker,
               resources.env.config.projectId,
               command.failedInsertsSub,
               resources.desperates

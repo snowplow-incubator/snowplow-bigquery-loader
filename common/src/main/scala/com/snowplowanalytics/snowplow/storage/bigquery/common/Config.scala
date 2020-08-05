@@ -17,7 +17,7 @@ import java.util.{Base64, UUID}
 import cats.data.{EitherT, ValidatedNel}
 import cats.syntax.show._
 import cats.syntax.either._
-import cats.effect.{Clock, IO, Sync}
+import cats.effect.{Clock, Sync}
 import com.monovore.decline.Opts
 import io.circe.{Decoder, DecodingFailure, Json}
 import io.circe.parser.parse
@@ -98,8 +98,6 @@ object Config {
   }
 
   implicit val configCirceDecoder: Decoder[Config] = deriveDecoder[Config]
-
-  implicit private val clock: Clock[IO] = Clock.create[IO]
 
   def transform[F[_]: Sync: Clock](config: EnvironmentConfig): EitherT[F, InitializationError, Environment] =
     for {

@@ -6,7 +6,6 @@ lazy val common = project
       Dependencies.bigQuery,
       Dependencies.cats,
       Dependencies.circe,
-      Dependencies.circeJavaTime,
       Dependencies.circeParser,
       Dependencies.decline,
       Dependencies.analyticsSdk,

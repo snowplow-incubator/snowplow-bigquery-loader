@@ -41,6 +41,8 @@ object metrics {
     // `getValue` can throw an exception.
     def update(diff: Long): Either[Throwable, Long] =
       Either.catchNonFatal(this.gauge("bigquery.loader.latency", diff).getValue)
+
+    def startReporter(): Unit = reporter // To avoid 'unused private val' compile-time error
   }
 
   /** The default `Gauge` has no way to pass in a value. */

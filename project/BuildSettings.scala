@@ -40,6 +40,12 @@ object BuildSettings {
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.loader.generated"
   )
 
+  lazy val streamloaderProjectSettings = projectSettings ++ Seq(
+    name := "snowplow-bigquery-streamloader",
+    description := "Snowplow BigQuery Loader Standalone App",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.streamloader.generated"
+  )
+
   lazy val mutatorProjectSettings = projectSettings ++ Seq(
     name := "snowplow-bigquery-mutator",
     description := "Snowplow BigQuery Table Mutator",
@@ -134,9 +140,10 @@ object BuildSettings {
     addCompilerPlugin(("org.typelevel" %% "kind-projector" % Dependencies.V.kindProjector).cross(CrossVersion.full))
   ) ++ compilerSettings ++ resolverSettings ++ dockerSettings
 
-  lazy val commonBuildSettings    = (commonProjectSettings ++ buildSettings).diff(dockerSettings)
-  lazy val loaderBuildSettings    = loaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
-  lazy val mutatorBuildSettings   = mutatorProjectSettings ++ buildSettings
-  lazy val repeaterBuildSettings  = repeaterProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
-  lazy val forwarderBuildSettings = forwarderProjectSettings ++ buildSettings ++ macroSettings
+  lazy val commonBuildSettings       = (commonProjectSettings ++ buildSettings).diff(dockerSettings)
+  lazy val loaderBuildSettings       = loaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
+  lazy val streamloaderBuildSettings = streamloaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
+  lazy val mutatorBuildSettings      = mutatorProjectSettings ++ buildSettings
+  lazy val repeaterBuildSettings     = repeaterProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
+  lazy val forwarderBuildSettings    = forwarderProjectSettings ++ buildSettings ++ macroSettings
 }

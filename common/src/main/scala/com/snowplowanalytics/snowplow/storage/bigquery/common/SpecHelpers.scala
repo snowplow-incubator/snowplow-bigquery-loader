@@ -10,23 +10,33 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery.loader
+package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import java.time.Instant
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
+import scala.concurrent.duration.{MILLISECONDS, NANOSECONDS, TimeUnit}
 import cats.Id
 import cats.effect.Clock
-import io.circe.literal._
-
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
-import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
-import com.snowplowanalytics.iglu.core.{SchemaMap, SchemaVer, SelfDescribingSchema}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.Registry
+import com.snowplowanalytics.iglu.core.{SchemaMap, SchemaVer, SelfDescribingSchema}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
+import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
+import com.snowplowanalytics.snowplow.badrows.Processor
+import io.circe.literal._
 
 object SpecHelpers {
+  implicit val catsClockIdInstance: Clock[Id] = new Clock[Id] {
+    override def realTime(unit: TimeUnit): Id[Long] =
+      unit.convert(System.currentTimeMillis(), MILLISECONDS)
+
+    override def monotonic(unit: TimeUnit): Id[Long] =
+      unit.convert(System.nanoTime(), NANOSECONDS)
+  }
+
+  val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
+
   private val adClick        = json"""{
     	"$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
     	"description": "Schema for an ad click event",
@@ -111,10 +121,10 @@ object SpecHelpers {
   object IdInstances {
     implicit val idClock: Clock[Id] = new Clock[Id] {
       def realTime(unit: TimeUnit): Id[Long] =
-        unit.convert(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+        unit.convert(System.currentTimeMillis(), MILLISECONDS)
 
       def monotonic(unit: TimeUnit): Id[Long] =
-        unit.convert(System.nanoTime(), TimeUnit.NANOSECONDS)
+        unit.convert(System.nanoTime(), NANOSECONDS)
     }
   }
 

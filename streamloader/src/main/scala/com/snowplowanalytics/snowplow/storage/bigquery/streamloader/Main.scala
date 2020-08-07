@@ -10,16 +10,23 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery.loader
+package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import org.apache.beam.sdk.transforms.SerializableFunction
+import cats.effect._
 
-import com.spotify.scio.bigquery.TableRow
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
-
-/** Extract TableRow from raw row */
-object SerializeLoaderRow extends SerializableFunction[LoaderRow, TableRow] {
-  def apply(input: LoaderRow): TableRow =
-    input.data
+object Main extends IOApp {
+  override def run(args: List[String]): IO[ExitCode] =
+    StreamLoaderCli.parse(args) match {
+      case Right(conf) =>
+        Config.transform[IO](conf).value.flatMap {
+          case Right(env) =>
+            StreamLoader.run(env).as(ExitCode.Success)
+          case Left(error) =>
+            IO(System.err.println(s"Could not initialise Loader environment\n${error.getMessage}")).as(ExitCode.Error)
+        }
+      case Left(help) =>
+        IO.delay(System.err.println(help.toString)).as(ExitCode.Error)
+    }
 }

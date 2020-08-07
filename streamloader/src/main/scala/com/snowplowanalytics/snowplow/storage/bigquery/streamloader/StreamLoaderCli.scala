@@ -10,16 +10,19 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery.loader
+package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import org.apache.beam.sdk.transforms.SerializableFunction
+import cats.implicits._
+import com.monovore.decline._
 
-import com.spotify.scio.bigquery.TableRow
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
+object StreamLoaderCli {
+  private val options = (resolverOpt, configOpt).mapN { (resolver, config) =>
+    EnvironmentConfig(resolver, config)
+  }
 
-/** Extract TableRow from raw row */
-object SerializeLoaderRow extends SerializableFunction[LoaderRow, TableRow] {
-  def apply(input: LoaderRow): TableRow =
-    input.data
+  val command = Command(generated.BuildInfo.name, generated.BuildInfo.description)(options)
+
+  def parse(args: Seq[String]): Either[Help, EnvironmentConfig] = command.parse(args)
 }

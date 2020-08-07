@@ -1,11 +1,14 @@
 lazy val common = project
   .in(file("common"))
+  .enablePlugins(BuildInfoPlugin)
   .settings(BuildSettings.commonBuildSettings)
   .settings(
     libraryDependencies ++= Seq(
       Dependencies.bigQuery,
       Dependencies.cats,
       Dependencies.circe,
+      Dependencies.circeJawn,
+      Dependencies.circeLiteral,
       Dependencies.circeParser,
       Dependencies.decline,
       Dependencies.analyticsSdk,
@@ -38,6 +41,16 @@ lazy val loader = project
       Dependencies.specs2ScalaCheck,
       Dependencies.scioTest
     )
+  )
+  .dependsOn(common)
+
+lazy val streamloader = project
+  .in(file("streamloader"))
+  .enablePlugins(BuildInfoPlugin)
+  .enablePlugins(JavaAppPackaging)
+  .settings(BuildSettings.streamloaderBuildSettings)
+  .settings(
+    libraryDependencies ++= Seq(Dependencies.fs2, Dependencies.slf4j, Dependencies.pubsubFs2Grpc, Dependencies.specs2)
   )
   .dependsOn(common)
 

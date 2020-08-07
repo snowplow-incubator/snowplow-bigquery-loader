@@ -41,6 +41,16 @@ lazy val loader = project
   )
   .dependsOn(common)
 
+lazy val streamloader = project
+  .in(file("streamloader"))
+  .enablePlugins(BuildInfoPlugin)
+  .enablePlugins(JavaAppPackaging)
+  .settings(BuildSettings.streamloaderBuildSettings)
+  .settings(
+    libraryDependencies ++= Seq(Dependencies.fs2, Dependencies.pubsubFs2Grpc, Dependencies.specs2)
+  )
+  .dependsOn(common)
+
 lazy val mutator = project
   .in(file("mutator"))
   .enablePlugins(BuildInfoPlugin)

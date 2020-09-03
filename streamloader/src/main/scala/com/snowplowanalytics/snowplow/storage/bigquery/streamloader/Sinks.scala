@@ -15,22 +15,19 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, TableId}
 
-import scala.concurrent.duration._
-
 import cats.effect.{IO, Sync}
-import cats.syntax.all._
-import com.permutive.pubsub.producer.Model
-import com.permutive.pubsub.producer.encoder.MessageEncoder
-import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerConfig}
 
+import com.permutive.pubsub.producer.PubsubProducer
+import com.permutive.pubsub.producer.encoder.MessageEncoder
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
-import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoaderRow
 
 object Sinks {
   object PubSub {
+
+    type Producer[F[_]] = PubsubProducer[F, PubSubOutput]
+
     sealed trait PubSubOutput extends Product with Serializable
     object PubSubOutput {
       final case class WriteBadRow(badRow: BadRow) extends PubSubOutput
@@ -43,36 +40,19 @@ object Sinks {
       case PubSubOutput.WriteTableRow(tr)     => Right(tr.getBytes())
       case PubSubOutput.WriteObservedTypes(t) => Right(toPayload(t).noSpaces.getBytes())
     }
-
-    def write(record: PubSubOutput, projectId: String, topic: String): IO[Unit] =
-      GooglePubsubProducer
-        .of[IO, PubSubOutput](
-          Model.ProjectId(projectId),
-          Model.Topic(topic),
-          config = PubsubProducerConfig[IO](
-            // TODO: Get rid of magic numbers
-            batchSize         = 100,
-            delayThreshold    = 100.millis,
-            onFailedTerminate = e => IO.delay(println(s"Got error $e")) >> IO.unit
-          )
-        )
-        .use { producer =>
-          producer.produce(record)
-        }
-        .void
   }
 
   object Bigquery {
     import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.PubSub.PubSubOutput
 
-    def insert(loaderRow: StreamLoaderRow, env: Environment, client: BigQuery): IO[Unit] = {
-      val request = buildRequest(env.config.datasetId, env.config.tableId, loaderRow)
-      Sync[IO].delay(client.insertAll(request)).attempt.flatMap {
+    def insert(resources: Resources[IO], loaderRow: StreamLoaderRow): IO[Unit] = {
+      val request = buildRequest(resources.env.config.datasetId, resources.env.config.tableId, loaderRow)
+      Sync[IO].delay(resources.bigQuery.insertAll(request)).attempt.flatMap {
         case Right(response) if response.hasErrors =>
           loaderRow.data.setFactory(new JacksonFactory)
           val tableRow = loaderRow.data.toString
           // TODO: Can this be turned into a sink?
-          PubSub.write(PubSubOutput.WriteTableRow(tableRow), env.config.projectId, env.config.failedInserts)
+          resources.pubsub.produce(PubSubOutput.WriteTableRow(tableRow)).void // we can ack here
         case Right(_)    => IO.unit
         case Left(error) => IO.delay(println(error))
       }

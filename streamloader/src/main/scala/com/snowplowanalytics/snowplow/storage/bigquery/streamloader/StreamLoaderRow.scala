@@ -50,12 +50,11 @@ object StreamLoaderRow {
     * @param record An enriched TSV line.
     * @return Either a BadRow with error messages or a row that is ready to be loaded.
     */
-  def parse(resolver: Json)(record: String)(implicit t: Timer[IO]): IO[Either[BadRow, StreamLoaderRow]] =
+  def parse(igluClient: Client[IO, Json])(record: String)(implicit t: Timer[IO]): IO[Either[BadRow, StreamLoaderRow]] =
     for {
       event <- IO.delay(Event.parse(record).toEither.leftMap { e =>
         BadRow.LoaderParsingError(processor, e, Payload.RawPayload(record))
       })
-      igluClient <- Client.parseDefault[IO](resolver).value.flatMap(IO.fromEither)
       row <- event match {
         case Right(e) => fromEvent(igluClient)(e)
         case Left(br) => IO.delay(Left(br))
@@ -178,9 +177,9 @@ object StreamLoaderRow {
 
   implicit val bqModeEncoder: Encoder[Mode] = deriveEncoder[Mode]
 
-  implicit def bqTypeEncoder: Encoder[Type] = deriveEncoder[Type]
+  implicit val bqTypeEncoder: Encoder[Type] = deriveEncoder[Type]
 
-  implicit def bqFieldEncoder: Encoder[Field] = deriveEncoder[Field]
+  implicit val bqFieldEncoder: Encoder[Field] = deriveEncoder[Field]
 
   private def invalidSchema(schemaKey: SchemaKey): NonEmptyList[FailureDetails.LoaderIgluError] = {
     val error = FailureDetails.LoaderIgluError.InvalidSchema(schemaKey, "Cannot be parsed as JSON Schema AST")

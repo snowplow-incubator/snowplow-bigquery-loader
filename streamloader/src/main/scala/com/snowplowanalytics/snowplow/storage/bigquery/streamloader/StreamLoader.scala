@@ -12,20 +12,18 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import com.google.cloud.bigquery.BigQuery
-
 import scala.concurrent.duration._
-
-import cats.effect.{Concurrent, ContextShift, ExitCode, IO, Timer}
+import cats.effect.{Concurrent, ContextShift, IO, Timer}
+import com.snowplowanalytics.iglu.client.Client
 import fs2.{Pipe, Stream}
 import fs2.concurrent.Queue
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
-import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Source.PubsubSource
-import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.{Bigquery, PubSub}
+import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Source.{Payload, PubsubSource}
+import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.Bigquery
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.PubSub.PubSubOutput
+import io.circe.Json
 
 object StreamLoader {
 
@@ -58,28 +56,39 @@ object StreamLoader {
   //                                                                       +-----------------|(events)|
   //                                                                                         +--------+
 
+  type Parsed = Either[(BadRow, IO[Unit]), (StreamLoaderRow, IO[Unit])]
+
+  object Parsed {
+    def fromConsumerRecord(client: Client[IO, Json])(payload: Payload)(implicit T: Timer[IO]): IO[Parsed] =
+      StreamLoaderRow.parse(client)(payload.value).map {
+        case Right(row) => Right((row, payload.ack))
+        case Left(row) => Left((row, payload.ack))
+      }
+  }
+
   private val MaxConcurrency = Runtime.getRuntime.availableProcessors * 16
   private val GroupByN       = 10
   private val TimeWindow     = 5.minutes
 
-  implicit val cs: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
+  def run(e: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[Unit] = {
+    val source = new PubsubSource(e)
 
-  def run(e: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[ExitCode] = {
-    val source = new PubsubSource(e)(cs, c)
 
-    val eventStream: Stream[IO, Either[BadRow, StreamLoaderRow]] =
-      source.getStream.evalMap(StreamLoaderRow.parse(e.resolverJson))
+    Resources.acquire(e).use { resources =>
+      val eventStream: Stream[IO, Parsed] =
+        source.getStream.evalMap(Parsed.fromConsumerRecord(resources.igluClient))
 
-    for {
-      client <- Bigquery.getClient
-      queue  <- Queue.bounded[IO, Set[ShreddedType]](MaxConcurrency)
-      sinkBadGood = eventStream.observeEither[BadRow, StreamLoaderRow](
-        badSink(e),
-        goodSink(queue, _.inventory, bigquerySink(e, client))
-      )
-      sinkTypes = queue.dequeue.through(aggregateTypes(GroupByN, TimeWindow)).through(typesSink(e))
-      _ <- Stream(sinkTypes, sinkBadGood).parJoin(MaxConcurrency).compile.drain
-    } yield ExitCode.Success
+      for {
+        queue  <- Queue.bounded[IO, Set[ShreddedType]](MaxConcurrency)
+        sinkBadGood = eventStream.observeEither[(BadRow, IO[Unit]), (StreamLoaderRow, IO[Unit])](
+          badSink(resources),
+          goodSink(queue, bigquerySink(resources))
+        )
+        sinkTypes = queue.dequeue.through(aggregateTypes(GroupByN, TimeWindow)).through(typesSink(resources))
+        _ <- Stream(sinkTypes, sinkBadGood).parJoin(MaxConcurrency).compile.drain
+      } yield ()
+    }
+
   }
 
   // TODO: Maybe sinks can be generalised?
@@ -89,19 +98,19 @@ object StreamLoader {
     * @param e Parsed common environment.
     * @return A sink that writes bad rows to Pub/Sub.
     */
-  def badSink(e: Environment): Pipe[IO, BadRow, Unit] =
-    _.parEvalMapUnordered(MaxConcurrency)(badRow =>
-      PubSub.write(PubSubOutput.WriteBadRow(badRow), e.config.projectId, e.config.badRows)
-    )
+  def badSink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, (BadRow, IO[Unit]), Unit] =
+    _.parEvalMapUnordered(MaxConcurrency) { case (badRow, ack) =>
+      r.pubsub.produce(PubSubOutput.WriteBadRow(badRow)) *> ack
+    }
 
   /**
     * Sink types to Pub/Sub.
     * @param e Parsed common environment.
     * @return A sink that writes observed types to Pub/Sub (to be consumed by Mutator).
     */
-  def typesSink(e: Environment): Pipe[IO, Set[ShreddedType], Unit] =
+  def typesSink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, Set[ShreddedType], Unit] =
     _.parEvalMapUnordered(MaxConcurrency)(typesSet =>
-      PubSub.write(PubSubOutput.WriteObservedTypes(typesSet), e.config.projectId, e.config.typesTopic)
+      r.pubsub.produce(PubSubOutput.WriteObservedTypes(typesSet)).void
     )
 
   /**
@@ -110,8 +119,9 @@ object StreamLoader {
     * @param c BigQuery client.
     * @return A sink that writes rows to a BigQuery table and routes failed inserts to Pub/Sub (to be consumed by Repeater).
     */
-  def bigquerySink(e: Environment, c: BigQuery): Pipe[IO, StreamLoaderRow, Unit] =
-    _.parEvalMapUnordered(MaxConcurrency)(loaderRow => Bigquery.insert(loaderRow, e, c))
+  def bigquerySink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, (StreamLoaderRow, IO[Unit]), Unit] =
+    _.parEvalMapUnordered(MaxConcurrency) { case (row, ack) => Bigquery.insert(r, row) *> ack
+    }
 
   /**
     * Enqueue observed types to a pre-aggregation queue and then route rows through a BigQuery sink.
@@ -123,11 +133,10 @@ object StreamLoader {
     */
   def goodSink(
     types: Queue[IO, Set[ShreddedType]],
-    getTypes: StreamLoaderRow => Set[ShreddedType],
-    bigquerySink: Pipe[IO, StreamLoaderRow, Unit]
-  ): Pipe[IO, StreamLoaderRow, Unit] =
-    _.parEvalMapUnordered(MaxConcurrency) { lr =>
-      types.enqueue1(getTypes(lr)) *> IO(lr)
+    bigquerySink: Pipe[IO, (StreamLoaderRow, IO[Unit]), Unit]
+  )(implicit cs: ContextShift[IO]): Pipe[IO, (StreamLoaderRow, IO[Unit]), Unit] =
+    _.parEvalMapUnordered(MaxConcurrency) { case (lr, ack) =>
+      types.enqueue1(lr.inventory).as((lr, ack))
     }.through(bigquerySink)
 
   /**

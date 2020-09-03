@@ -12,16 +12,12 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import cats.effect.{Clock, IO}
 import cats.implicits._
 import com.monovore.decline._
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
 
 object StreamLoaderCli {
-  implicit private val privateIoClock: Clock[IO] =
-    Clock.create[IO]
-
   private val options = (resolverOpt, configOpt).mapN { (resolver, config) =>
     EnvironmentConfig(resolver, config)
   }
@@ -29,7 +25,4 @@ object StreamLoaderCli {
   val command = Command(generated.BuildInfo.name, generated.BuildInfo.description)(options)
 
   def parse(args: Seq[String]): Either[Help, EnvironmentConfig] = command.parse(args)
-
-  def getEnv(config: EnvironmentConfig): Environment =
-    transform[IO](config).value.flatMap(IO.fromEither[Environment]).unsafeRunSync()
 }

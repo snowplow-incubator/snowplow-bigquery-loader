@@ -13,15 +13,20 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import cats.effect._
-import cats.syntax.all._
+
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 
 object Main extends IOApp {
-  override def run(args: List[String]): IO[ExitCode] =
+  def run(args: List[String]): IO[ExitCode] =
     StreamLoaderCli.parse(args) match {
       case Right(conf) =>
-        val env = StreamLoaderCli.getEnv(conf)
-        StreamLoader.run(env)
+        Config.transform[IO](conf).value.flatMap {
+          case Right(env) =>
+            StreamLoader.run(env).as(ExitCode.Success)
+          case Left(error) =>
+            IO(System.err.println(s"Could not initialise Loader environment\n${error.getMessage}")).as(ExitCode.Error)
+        }
       case Left(help) =>
-        IO.delay(System.err.println(help.toString)) >> IO.pure(ExitCode.Error)
+        IO.delay(System.err.println(help.toString)).as(ExitCode.Error)
     }
 }

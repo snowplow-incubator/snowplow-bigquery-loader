@@ -19,9 +19,15 @@ import cats.effect.{IO, Sync}
 
 import com.permutive.pubsub.producer.PubsubProducer
 import com.permutive.pubsub.producer.encoder.MessageEncoder
+
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
+
 import com.snowplowanalytics.snowplow.badrows.BadRow
+
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
+
+import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.PubSub.PubSubOutput
 
 object Sinks {
   object PubSub {
@@ -43,16 +49,20 @@ object Sinks {
   }
 
   object Bigquery {
-    import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.PubSub.PubSubOutput
-
-    def insert(resources: Resources[IO], loaderRow: StreamLoaderRow): IO[Unit] = {
+    /**
+      * Insert into BigQuery or "failed inserts" PubSub topic if BQ client returns
+      * any known errors
+      *
+      * @param resources allocated clients (BQ and PubSub)
+      * @param loaderRow parsed row to insert
+      */
+    def insert(resources: Resources[IO], loaderRow: LoaderRow): IO[Unit] = {
       val request = buildRequest(resources.env.config.datasetId, resources.env.config.tableId, loaderRow)
-      Sync[IO].delay(resources.bigQuery.insertAll(request)).attempt.flatMap {
+      IO.delay(resources.bigQuery.insertAll(request)).attempt.flatMap {
         case Right(response) if response.hasErrors =>
           loaderRow.data.setFactory(new JacksonFactory)
           val tableRow = loaderRow.data.toString
-          // TODO: Can this be turned into a sink?
-          resources.pubsub.produce(PubSubOutput.WriteTableRow(tableRow)).void // we can ack here
+          resources.pubsub.produce(PubSubOutput.WriteTableRow(tableRow)).void
         case Right(_)    => IO.unit
         case Left(error) => IO.delay(println(error))
       }
@@ -61,7 +71,7 @@ object Sinks {
     def getClient[F[_]: Sync]: F[BigQuery] =
       Sync[F].delay(BigQueryOptions.getDefaultInstance.getService)
 
-    private def buildRequest(dataset: String, table: String, loaderRow: StreamLoaderRow) =
+    private def buildRequest(dataset: String, table: String, loaderRow: LoaderRow) =
       InsertAllRequest.newBuilder(TableId.of(dataset, table)).addRow(loaderRow.data).build()
   }
 }

@@ -10,35 +10,41 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
+package com.snowplowanalytics.snowplow.storage.bigquery.common
+
+import cats.Monad
+import cats.data.{NonEmptyList, Validated, ValidatedNel}
+import cats.implicits._
+import cats.effect.Clock
 
 import org.joda.time.Instant
+
 import com.google.api.services.bigquery.model.TableRow
 
-import cats.data.{NonEmptyList, ValidatedNel}
-import cats.effect.{IO, Timer}
-import cats.implicits._
 import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import io.circe.generic.semiauto._
 
-import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
-import com.snowplowanalytics.iglu.client.Client
+import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
+import com.snowplowanalytics.iglu.client.Resolver
+import com.snowplowanalytics.iglu.client.resolver.registries.RegistryLookup
+
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{Schema => DdlSchema}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError, Field, Mode, Row, Type}
+
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
+
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload, Processor}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema}
+
 
 /** Row ready to be passed into Loader stream and Mutator topic */
-case class StreamLoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])
+case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])
 
-object StreamLoaderRow {
-  val Atomic = SchemaKey("com.snowplowanalytics.snowplow", "atomic", "jsonschema", SchemaVer.Full(1, 0, 0))
+object LoaderRow {
 
-  val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
+  type Transformed = ValidatedNel[FailureDetails.LoaderIgluError, List[(String, AnyRef)]]
 
   /**
     * Parse the enriched TSV line into a loader row, that can be loaded into BigQuery.
@@ -46,42 +52,36 @@ object StreamLoaderRow {
     * it will return a BadRow with a detailed error message.
     * If this preliminary check was passed, but the row cannot be loaded for other reasons,
     * it will be forwarded to a "failed inserts" topic, without additional information.
-    * @param resolver A Resolver to be used for schema lookups.
+    * @param igluClient A Resolver to be used for schema lookups.
     * @param record An enriched TSV line.
     * @return Either a BadRow with error messages or a row that is ready to be loaded.
     */
-  def parse(igluClient: Client[IO, Json])(record: String)(implicit t: Timer[IO]): IO[Either[BadRow, StreamLoaderRow]] =
-    for {
-      event <- IO.delay(Event.parse(record).toEither.leftMap { e =>
-        BadRow.LoaderParsingError(processor, e, Payload.RawPayload(record))
-      })
-      row <- event match {
-        case Right(e) => fromEvent(igluClient)(e)
-        case Left(br) => IO.delay(Left(br))
-      }
-    } yield row
-
-  type Transformed[A] = ValidatedNel[FailureDetails.LoaderIgluError, A]
+  def parse[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], processor: Processor)(record: String): F[Either[BadRow, LoaderRow]] =
+    Event.parse(record) match {
+      case Validated.Valid(event) =>
+        fromEvent[F](igluClient, processor)(event)
+      case Validated.Invalid(error) =>
+        val badRowError = BadRow.LoaderParsingError(processor, error, Payload.RawPayload(record))
+        Monad[F].pure(badRowError.asLeft)
+    }
 
   /** Parse JSON object provided by Snowplow Analytics SDK */
-  def fromEvent(
-    igluClient: Client[IO, Json]
-  )(event: Event)(implicit t: Timer[IO]): IO[Either[BadRow, StreamLoaderRow]] = {
+  def fromEvent[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], processor: Processor)(event: Event): F[Either[BadRow, LoaderRow]] = {
     val atomic                                         = transformAtomic(event)
-    val contexts: IO[Transformed[List[(String, Any)]]] = groupContexts(igluClient, event.contexts.data.toVector)
-    val derivedContexts: IO[Transformed[List[(String, Any)]]] =
+    val contexts: F[Transformed] = groupContexts[F](igluClient, event.contexts.data.toVector)
+    val derivedContexts: F[Transformed] =
       groupContexts(igluClient, event.derived_contexts.data.toVector)
-    val selfDescribingEvent: IO[Transformed[List[(String, Any)]]] = event
+
+    val selfDescribingEvent: F[Transformed] = event
       .unstruct_event
       .data
       .map {
         case SelfDescribingData(schema, data) =>
           val columnName = Schema.getColumnName(ShreddedType(UnstructEvent, schema))
-          transformJson(igluClient, schema)(data).map(_.map { row =>
+          transformJson[F](igluClient, schema)(data).map(_.map { row =>
             List((columnName, Adapter.adaptRow(row)))
           })
-      }
-      .getOrElse(IO.delay(List.empty[(String, Any)].validNel))
+      }.getOrElse(Monad[F].pure(List.empty[(String, AnyRef)].validNel[FailureDetails.LoaderIgluError]))
 
     val payload: Payload.LoaderPayload = Payload.LoaderPayload(event)
 
@@ -97,9 +97,9 @@ object StreamLoaderRow {
         jsons  <- badRowsOrJsons
         atomic <- atomic.leftMap(failure => BadRow.LoaderRuntimeError(processor, failure, payload))
         timestamp = new Instant(event.collector_tstamp.toEpochMilli)
-      } yield StreamLoaderRow(
+      } yield LoaderRow(
         timestamp,
-        (atomic ++ jsons).foldLeft(new TableRow())((r, kv: (String, Any)) => r.set(kv._1, kv._2)),
+        (atomic ++ jsons).foldLeft(new TableRow())((r, kv) => r.set(kv._1, kv._2)),
         event.inventory
       )
     }
@@ -128,15 +128,15 @@ object StreamLoaderRow {
   }
 
   /** Group list of contexts by their full URI and transform values into ready to load rows */
-  def groupContexts(
-    igluClient: Client[IO, Json],
-    contexts: Vector[SelfDescribingData[Json]]
-  )(implicit t: Timer[IO]): IO[ValidatedNel[FailureDetails.LoaderIgluError, List[(String, Any)]]] = {
+  def groupContexts[F[_]: Monad: RegistryLookup: Clock](
+                                                         igluClient: Resolver[F],
+                                                         contexts: Vector[SelfDescribingData[Json]]
+                                                       ): F[ValidatedNel[FailureDetails.LoaderIgluError, List[(String, AnyRef)]]] = {
     val grouped = contexts.groupBy(_.schema).map {
       case (key, groupedContexts) =>
         val contexts   = groupedContexts.map(_.data) // Strip away URI
         val columnName = Schema.getColumnName(ShreddedType(Contexts(CustomContexts), key))
-        val getRow     = transformJson(igluClient, key)(_)
+        val getRow     = transformJson[F](igluClient, key)(_)
         contexts
           .toList
           .map(getRow)
@@ -150,11 +150,10 @@ object StreamLoaderRow {
     * Get BigQuery-compatible table rows from data-only JSON payload
     * Can be transformed to contexts (via Repeated) later only remain ue-compatible
     */
-  def transformJson(igluClient: Client[IO, Json], schemaKey: SchemaKey)(
+  def transformJson[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], schemaKey: SchemaKey)(
     data: Json
-  )(implicit t: Timer[IO]): IO[ValidatedNel[FailureDetails.LoaderIgluError, Row]] =
+  ): F[ValidatedNel[FailureDetails.LoaderIgluError, Row]] =
     igluClient
-      .resolver
       .lookupSchema(schemaKey)
       .map(
         _.leftMap { e =>

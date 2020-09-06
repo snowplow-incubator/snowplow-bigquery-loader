@@ -13,17 +13,25 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import scala.concurrent.duration._
-import cats.effect.{Concurrent, ContextShift, IO, Timer}
-import com.snowplowanalytics.iglu.client.Client
+
+import cats.implicits._
+import cats.effect.{Clock, Concurrent, ContextShift, IO, Timer}
+
 import fs2.{Pipe, Stream}
 import fs2.concurrent.Queue
+
+import com.snowplowanalytics.iglu.client.Resolver
+
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-import com.snowplowanalytics.snowplow.badrows.BadRow
+
+import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
+
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
+
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Source.{Payload, PubsubSource}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.Bigquery
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.PubSub.PubSubOutput
-import io.circe.Json
 
 object StreamLoader {
 
@@ -56,31 +64,28 @@ object StreamLoader {
   //                                                                       +-----------------|(events)|
   //                                                                                         +--------+
 
-  type Parsed = Either[(BadRow, IO[Unit]), (StreamLoaderRow, IO[Unit])]
+  val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
-  object Parsed {
-    def fromConsumerRecord(client: Client[IO, Json])(payload: Payload)(implicit T: Timer[IO]): IO[Parsed] =
-      StreamLoaderRow.parse(client)(payload.value).map {
-        case Right(row) => Right((row, payload.ack))
-        case Left(row) => Left((row, payload.ack))
-      }
-  }
+  /** PubSub message with successfully parsed row, ready to be inserted into BQ */
+  case class StreamLoaderRow[F[_]](row: LoaderRow, ack: F[Unit])
+
+  /** PubSub message with a row that failed parsing */
+  case class StreamBadRow[F[_]](row: BadRow, ack: F[Unit])
+
+  type Parsed = Either[StreamBadRow[IO], StreamLoaderRow[IO]]
 
   private val MaxConcurrency = Runtime.getRuntime.availableProcessors * 16
   private val GroupByN       = 10
   private val TimeWindow     = 5.minutes
 
-  def run(e: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[Unit] = {
-    val source = new PubsubSource(e)
-
-
+  def run(e: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[Unit] =
     Resources.acquire(e).use { resources =>
       val eventStream: Stream[IO, Parsed] =
-        source.getStream.evalMap(Parsed.fromConsumerRecord(resources.igluClient))
+        new PubsubSource(e).getStream.evalMap(parse(resources.igluClient.resolver))
 
       for {
         queue  <- Queue.bounded[IO, Set[ShreddedType]](MaxConcurrency)
-        sinkBadGood = eventStream.observeEither[(BadRow, IO[Unit]), (StreamLoaderRow, IO[Unit])](
+        sinkBadGood = eventStream.observeEither[StreamBadRow[IO], StreamLoaderRow[IO]](
           badSink(resources),
           goodSink(queue, bigquerySink(resources))
         )
@@ -89,23 +94,26 @@ object StreamLoader {
       } yield ()
     }
 
-  }
-
-  // TODO: Maybe sinks can be generalised?
+  /** Parse common `LoaderRow` (or `BadRow`) and attach `ack` action to be used after sink */
+  def parse(igluClient: Resolver[IO])(payload: Payload)(implicit C: Clock[IO]): IO[Parsed] =
+    LoaderRow.parse[IO](igluClient, processor)(payload.value).map {
+      case Right(row) => StreamLoaderRow[IO](row, payload.ack).asRight[StreamBadRow[IO]]
+      case Left(row) => StreamBadRow[IO](row, payload.ack).asLeft[StreamLoaderRow[IO]]
+    }
 
   /**
     * Sink bad rows to Pub/Sub.
-    * @param e Parsed common environment.
+    * @param r allocated set of Loader resources
     * @return A sink that writes bad rows to Pub/Sub.
     */
-  def badSink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, (BadRow, IO[Unit]), Unit] =
-    _.parEvalMapUnordered(MaxConcurrency) { case (badRow, ack) =>
-      r.pubsub.produce(PubSubOutput.WriteBadRow(badRow)) *> ack
+  def badSink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, StreamBadRow[IO], Unit] =
+    _.parEvalMapUnordered(MaxConcurrency) { badRow =>
+      r.pubsub.produce(PubSubOutput.WriteBadRow(badRow.row)) *> badRow.ack
     }
 
   /**
     * Sink types to Pub/Sub.
-    * @param e Parsed common environment.
+    * @param r allocated set of Loader resources
     * @return A sink that writes observed types to Pub/Sub (to be consumed by Mutator).
     */
   def typesSink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, Set[ShreddedType], Unit] =
@@ -115,28 +123,25 @@ object StreamLoader {
 
   /**
     * Sink rows to BigQuery and failed inserts to Pub/Sub.
-    * @param e Parsed common environment.
-    * @param c BigQuery client.
+    * @param r allocated set of Loader resources
     * @return A sink that writes rows to a BigQuery table and routes failed inserts to Pub/Sub (to be consumed by Repeater).
     */
-  def bigquerySink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, (StreamLoaderRow, IO[Unit]), Unit] =
-    _.parEvalMapUnordered(MaxConcurrency) { case (row, ack) => Bigquery.insert(r, row) *> ack
-    }
+  def bigquerySink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, StreamLoaderRow[IO], Unit] =
+    _.parEvalMapUnordered(MaxConcurrency) { row => Bigquery.insert(r, row.row) *> row.ack }
 
   /**
     * Enqueue observed types to a pre-aggregation queue and then route rows through a BigQuery sink.
     *
     * @param types        A queue in which observed types will be put.
-    * @param getTypes     A function to extract types from a [[StreamLoaderRow]].
     * @param bigquerySink A sink that writes rows to a BigQuery table and routes failed inserts to Pub/Sub.
     * @return             A sink that combines enqueing observed types with sinking rows to BigQuery and failed inserts to Pub/Sub.
     */
   def goodSink(
     types: Queue[IO, Set[ShreddedType]],
-    bigquerySink: Pipe[IO, (StreamLoaderRow, IO[Unit]), Unit]
-  )(implicit cs: ContextShift[IO]): Pipe[IO, (StreamLoaderRow, IO[Unit]), Unit] =
-    _.parEvalMapUnordered(MaxConcurrency) { case (lr, ack) =>
-      types.enqueue1(lr.inventory).as((lr, ack))
+    bigquerySink: Pipe[IO, StreamLoaderRow[IO], Unit]
+  )(implicit cs: ContextShift[IO]): Pipe[IO, StreamLoaderRow[IO], Unit] =
+    _.parEvalMapUnordered(MaxConcurrency) { row =>
+      types.enqueue1(row.row.inventory).as(row)
     }.through(bigquerySink)
 
   /**

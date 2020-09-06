@@ -13,27 +13,39 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 package loader
 
+import cats.Id
+
 import com.google.api.services.bigquery.model.TableReference
+
 import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
+
 import org.joda.time.{Duration, Instant}
+
 import org.slf4j.LoggerFactory
 
 import com.spotify.scio.ScioContext
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
 import com.spotify.scio.coders.Coder
+
 import io.circe.Json
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-import com.snowplowanalytics.snowplow.badrows.BadRow
+
+import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
+
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.metrics._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
+import com.snowplowanalytics.snowplow.storage.bigquery.loader.IdInstances._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
 
 object Loader {
   implicit val coderBadRow: Coder[BadRow] = Coder.kryo[BadRow]
+
+  val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
   val OutputWindow: Duration =
     Duration.millis(10000)
@@ -136,7 +148,7 @@ object Loader {
   /** Read data from PubSub topic and transform to ready to load rows */
   def getData(resolver: Json, sc: ScioContext, input: String): SCollection[Either[BadRow, LoaderRow]] =
     sc.pubsubSubscription[String](input)
-      .map(LoaderRow.parse(resolver))
+      .map(parse(resolver))
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)
 
   def getTableReference(env: Environment): TableReference =
@@ -144,4 +156,19 @@ object Loader {
       .setProjectId(env.config.projectId)
       .setDatasetId(env.config.datasetId)
       .setTableId(env.config.tableId)
+
+  /**
+    * Parse enriched TSV into a loader row, ready to be loaded into bigquery
+    * If Loader is able to figure out that row cannot be loaded into BQ -
+    * it will return return BadRow with detailed error that later can be analyzed
+    * If premature check has passed, but row cannot be loaded it will be forwarded
+    * to "failed inserts" topic, without additional information
+    * @param resolverJson serializable Resolver's config to get it from singleton store
+    * @param record enriched TSV line
+    * @return either bad with error messages or entity ready to be loaded
+    */
+  def parse(resolverJson: Json)(record: String): Either[BadRow, LoaderRow] = {
+    val resolver = singleton.ResolverSingleton.get(resolverJson)
+    LoaderRow.parse[Id](resolver, processor)(record)
+  }
 }

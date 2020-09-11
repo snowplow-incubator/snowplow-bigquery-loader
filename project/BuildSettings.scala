@@ -31,7 +31,8 @@ object BuildSettings {
 
   lazy val commonProjectSettings = projectSettings ++ Seq(
     name := "snowplow-bigquery-common",
-    description := "Snowplow BigQuery Loader Common Utils"
+    description := "Snowplow BigQuery Loader Common Utils",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.common.generated"
   )
 
   lazy val loaderProjectSettings = projectSettings ++ Seq(

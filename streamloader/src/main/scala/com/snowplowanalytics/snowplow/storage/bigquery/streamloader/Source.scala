@@ -32,23 +32,22 @@ object Source {
 
   // For tests
   final class StaticSource(size: Int, valid: String, invalid: String) extends Source {
-    def getStream(implicit cs: ContextShift[IO], c: Concurrent[IO]): Stream[IO, Payload] = {
+    override def getStream(implicit cs: ContextShift[IO], c: Concurrent[IO]): Stream[IO, Payload] = {
       val validRecord: Payload = new ConsumerRecord[IO, String] {
-        def value: String = valid
-        def ack: IO[Unit] = IO.unit
-        def nack: IO[Unit] = IO.unit
+        def value: String                                = valid
+        def ack: IO[Unit]                                = IO.unit
+        def nack: IO[Unit]                               = IO.unit
         def extendDeadline(by: FiniteDuration): IO[Unit] = IO.unit
       }
 
       val invalidRecord = new ConsumerRecord[IO, String] {
-        def value: String = invalid
-        def ack: IO[Unit] = IO.unit
-        def nack: IO[Unit] = IO.unit
+        def value: String                                = invalid
+        def ack: IO[Unit]                                = IO.unit
+        def nack: IO[Unit]                               = IO.unit
         def extendDeadline(by: FiniteDuration): IO[Unit] = IO.unit
       }
 
-      Stream.emit(validRecord)
-        .repeat.intersperse(invalidRecord).covary[IO].take(size.toLong)
+      Stream.emit(validRecord).repeat.intersperse(invalidRecord).covary[IO].take(size.toLong)
     }
   }
 
@@ -58,7 +57,7 @@ object Source {
       Right(new String(bytes))
     }
 
-    def getStream(implicit cs: ContextShift[IO], c: Concurrent[IO]): Stream[IO, Payload] =
+    override def getStream(implicit cs: ContextShift[IO], c: Concurrent[IO]): Stream[IO, Payload] =
       for {
         blocker <- Stream.resource(Blocker[IO])
         stream <- PubsubGoogleConsumer.subscribe[IO, String](

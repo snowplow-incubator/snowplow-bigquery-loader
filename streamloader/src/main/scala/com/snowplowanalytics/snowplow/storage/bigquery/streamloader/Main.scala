@@ -17,7 +17,7 @@ import cats.effect._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 
 object Main extends IOApp {
-  def run(args: List[String]): IO[ExitCode] =
+  override def run(args: List[String]): IO[ExitCode] =
     StreamLoaderCli.parse(args) match {
       case Right(conf) =>
         Config.transform[IO](conf).value.flatMap {

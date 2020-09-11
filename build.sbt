@@ -1,11 +1,14 @@
 lazy val common = project
   .in(file("common"))
+  .enablePlugins(BuildInfoPlugin)
   .settings(BuildSettings.commonBuildSettings)
   .settings(
     libraryDependencies ++= Seq(
       Dependencies.bigQuery,
       Dependencies.cats,
       Dependencies.circe,
+      Dependencies.circeJawn,
+      Dependencies.circeLiteral,
       Dependencies.circeParser,
       Dependencies.decline,
       Dependencies.analyticsSdk,

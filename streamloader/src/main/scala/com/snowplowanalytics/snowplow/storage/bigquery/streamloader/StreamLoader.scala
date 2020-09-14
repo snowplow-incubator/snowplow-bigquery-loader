@@ -127,7 +127,9 @@ object StreamLoader {
     * @return A sink that writes rows to a BigQuery table and routes failed inserts to Pub/Sub (to be consumed by Repeater).
     */
   def bigquerySink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, StreamLoaderRow[IO], Unit] =
-    _.parEvalMapUnordered(MaxConcurrency) { row => Bigquery.insert(r, row.row) *> row.ack }
+    _.parEvalMapUnordered(MaxConcurrency) { row =>
+      r.blocker.blockOn(Bigquery.insert(r, row.row) *> row.ack)
+    }
 
   /**
     * Enqueue observed types to a pre-aggregation queue and then route rows through a BigQuery sink.

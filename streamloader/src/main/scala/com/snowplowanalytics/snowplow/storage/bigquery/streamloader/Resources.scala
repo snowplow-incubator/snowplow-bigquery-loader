@@ -16,7 +16,7 @@ import scala.concurrent.duration._
 
 import cats.Applicative
 import cats.implicits._
-import cats.effect.{Async, Resource, Sync}
+import cats.effect.{Async, Resource, Sync, Blocker}
 
 import io.circe.Json
 
@@ -35,7 +35,8 @@ import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.PubSub
 class Resources[F[_]](val pubsub: PubSub.Producer[F],
                       val bigQuery: BigQuery,
                       val igluClient: Client[F, Json],
-                      val env: Environment)
+                      val env: Environment,
+                      val blocker: Blocker)
 
 object Resources {
   /**
@@ -56,7 +57,8 @@ object Resources {
       pubsub <- mkProducer[F](env.config.projectId, env.config.failedInserts)
       bigquery <- Resource.liftF(Bigquery.getClient)
       client <- Resource.liftF(clientF)
-    } yield new Resources[F](pubsub, bigquery, client, env)
+      blocker <- Blocker[F]
+    } yield new Resources[F](pubsub, bigquery, client, env, blocker)
   }
 
   /** Constructor for PubSub producer (reader) */

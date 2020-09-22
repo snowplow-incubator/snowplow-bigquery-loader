@@ -69,8 +69,8 @@ object Resources {
         Model.Topic(topic),
         config = PubsubProducerConfig[F](
           // TODO: Get rid of magic numbers
-          batchSize         = 100,
-          delayThreshold    = 100.millis,
+          batchSize         = 32,
+          delayThreshold    = 500.millis,
           onFailedTerminate = e => Sync[F].delay(println(s"Got error $e")).void
         )
       )

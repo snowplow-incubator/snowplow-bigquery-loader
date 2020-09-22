@@ -77,6 +77,7 @@ object StreamLoader {
   private val MaxConcurrency = Runtime.getRuntime.availableProcessors * 16
   private val GroupByN       = 10
   private val TimeWindow     = 5.minutes
+  private val QueueSize      = 1024
 
   def run(e: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[Unit] =
     Resources.acquire(e).use { resources =>
@@ -84,13 +85,13 @@ object StreamLoader {
         new PubsubSource(e).getStream.evalMap(parse(resources.igluClient.resolver))
 
       for {
-        queue  <- Queue.bounded[IO, Set[ShreddedType]](MaxConcurrency)
+        queue  <- Queue.bounded[IO, Set[ShreddedType]](QueueSize)
         sinkBadGood = eventStream.observeEither[StreamBadRow[IO], StreamLoaderRow[IO]](
           badSink(resources),
-          goodSink(queue, bigquerySink(resources))
-        )
+          goodSink(resources, queue)
+        ).void
         sinkTypes = queue.dequeue.through(aggregateTypes(GroupByN, TimeWindow)).through(typesSink(resources))
-        _ <- Stream(sinkTypes, sinkBadGood).parJoin(MaxConcurrency).compile.drain
+        _ <- sinkBadGood.merge(sinkTypes).compile.drain
       } yield ()
     }
 
@@ -106,7 +107,7 @@ object StreamLoader {
     * @param r allocated set of Loader resources
     * @return A sink that writes bad rows to Pub/Sub.
     */
-  def badSink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, StreamBadRow[IO], Unit] =
+  def badSink(r: Resources[IO])(implicit cs: Concurrent[IO]): Pipe[IO, StreamBadRow[IO], Unit] =
     _.parEvalMapUnordered(MaxConcurrency) { badRow =>
       r.pubsub.produce(PubSubOutput.WriteBadRow(badRow.row)) *> badRow.ack
     }
@@ -116,35 +117,25 @@ object StreamLoader {
     * @param r allocated set of Loader resources
     * @return A sink that writes observed types to Pub/Sub (to be consumed by Mutator).
     */
-  def typesSink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, Set[ShreddedType], Unit] =
+  def typesSink(r: Resources[IO])(implicit cs: Concurrent[IO]): Pipe[IO, Set[ShreddedType], Unit] =
     _.parEvalMapUnordered(MaxConcurrency)(typesSet =>
       r.pubsub.produce(PubSubOutput.WriteObservedTypes(typesSet)).void
     )
 
   /**
-    * Sink rows to BigQuery and failed inserts to Pub/Sub.
-    * @param r allocated set of Loader resources
-    * @return A sink that writes rows to a BigQuery table and routes failed inserts to Pub/Sub (to be consumed by Repeater).
-    */
-  def bigquerySink(r: Resources[IO])(implicit cs: ContextShift[IO]): Pipe[IO, StreamLoaderRow[IO], Unit] =
-    _.parEvalMapUnordered(MaxConcurrency) { row =>
-      r.blocker.blockOn(Bigquery.insert(r, row.row) *> row.ack)
-    }
-
-  /**
     * Enqueue observed types to a pre-aggregation queue and then route rows through a BigQuery sink.
     *
     * @param types        A queue in which observed types will be put.
-    * @param bigquerySink A sink that writes rows to a BigQuery table and routes failed inserts to Pub/Sub.
     * @return             A sink that combines enqueing observed types with sinking rows to BigQuery and failed inserts to Pub/Sub.
     */
   def goodSink(
+    r: Resources[IO],
     types: Queue[IO, Set[ShreddedType]],
-    bigquerySink: Pipe[IO, StreamLoaderRow[IO], Unit]
   )(implicit cs: ContextShift[IO]): Pipe[IO, StreamLoaderRow[IO], Unit] =
     _.parEvalMapUnordered(MaxConcurrency) { row =>
-      types.enqueue1(row.row.inventory).as(row)
-    }.through(bigquerySink)
+      types.enqueue1(row.row.inventory) *>
+        r.blocker.blockOn(Bigquery.insert(r, row.row) *> row.ack)
+    }
 
   /**
     * Aggregate observed types when a specific number is reached or time passes, whichever happens first.

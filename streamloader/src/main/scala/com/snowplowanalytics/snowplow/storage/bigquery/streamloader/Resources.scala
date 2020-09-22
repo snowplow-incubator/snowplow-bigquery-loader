@@ -70,8 +70,8 @@ object Resources {
       failedInserts <- mkProducer[F, Bigquery.FailedInsert](env.config.projectId, env.config.failedInserts, 8, 2.seconds)
       badRows <- mkBadRowsSink[F](env.config.projectId, env.config.badRows, maxConcurrency)
       types <- mkTypesSink[F](env.config.projectId, env.config.failedInserts, maxConcurrency)
-      bigquery <- Resource.liftF(Bigquery.getClient)
-      client <- Resource.liftF(clientF)
+      bigquery <- Resource.liftF[F, BigQuery](Bigquery.getClient)
+      client <- Resource.liftF[F, Client[F, Json]](clientF)
     } yield new Resources[F](source, failedInserts, badRows, types, maxConcurrency, bigquery, client, env, blocker)
   }
 
@@ -93,18 +93,11 @@ object Resources {
 
   def mkBadRowsSink[F[_]: Concurrent](project: String, topic: String, maxConcurrency: Int): Resource[F, Pipe[F, StreamBadRow[F], Unit]] =
     mkProducer[F, BadRow](project, topic, 8L, 2.seconds).map { p =>
-      (s: Stream[F, StreamBadRow[F]]) =>
-        s.parEvalMapUnordered(maxConcurrency) { badRow =>
-          p.produce(badRow.row) *> badRow.ack
-        }
+      _.parEvalMapUnordered(maxConcurrency) { badRow => p.produce(badRow.row) *> badRow.ack }
     }
 
   def mkTypesSink[F[_]: Concurrent](project: String, topic: String, maxConcurrency: Int): Resource[F, Pipe[F, Set[ShreddedType], Unit]] =
     mkProducer[F, Set[ShreddedType]](project, topic, 4L, 200.millis).map { p =>
-      (s: Stream[F, Set[ShreddedType]]) =>
-        s.parEvalMapUnordered(maxConcurrency) { types =>
-          p.produce(types).void
-        }
+      _.parEvalMapUnordered(maxConcurrency) { types => p.produce(types).void }
     }
-
 }

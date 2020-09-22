@@ -17,7 +17,7 @@ import scala.concurrent.duration._
 import cats.implicits._
 import cats.effect.{Clock, Concurrent, ContextShift, IO, Timer}
 
-import fs2.{Pipe, Stream}
+import fs2.Pipe
 import fs2.concurrent.Queue
 
 import com.snowplowanalytics.iglu.client.Resolver
@@ -29,12 +29,9 @@ import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
 
-import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Source.{Payload, PubsubSource}
-import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.Bigquery
-
 object StreamLoader {
 
-  val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
+  val processor: Processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
   /** PubSub message with successfully parsed row, ready to be inserted into BQ */
   case class StreamLoaderRow[F[_]](row: LoaderRow, ack: F[Unit])
@@ -51,8 +48,7 @@ object StreamLoader {
 
   def run(e: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[Unit] =
     Resources.acquire(e).use { resources =>
-      val eventStream: Stream[IO, Parsed] =
-        new PubsubSource(e).getStream.evalMap(parse(resources.igluClient.resolver))
+      val eventStream = resources.source.evalMap(parse(resources.igluClient.resolver))
 
       for {
         queue  <- Queue.bounded[IO, Set[ShreddedType]](QueueSize)
@@ -66,7 +62,7 @@ object StreamLoader {
     }
 
   /** Parse common `LoaderRow` (or `BadRow`) and attach `ack` action to be used after sink */
-  def parse(igluClient: Resolver[IO])(payload: Payload)(implicit C: Clock[IO]): IO[Parsed] =
+  def parse(igluClient: Resolver[IO])(payload: Payload[IO])(implicit C: Clock[IO]): IO[Parsed] =
     LoaderRow.parse[IO](igluClient, processor)(payload.value).map {
       case Right(row) => StreamLoaderRow[IO](row, payload.ack).asRight[StreamBadRow[IO]]
       case Left(row) => StreamBadRow[IO](row, payload.ack).asLeft[StreamLoaderRow[IO]]

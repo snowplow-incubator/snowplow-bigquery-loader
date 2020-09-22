@@ -12,8 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-
 import cats.effect.{Blocker, Concurrent, ContextShift, Sync}
+
 import fs2.Stream
 
 import com.permutive.pubsub.consumer.Model

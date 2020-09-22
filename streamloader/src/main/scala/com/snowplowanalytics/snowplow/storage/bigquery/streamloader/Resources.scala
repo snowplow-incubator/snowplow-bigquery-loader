@@ -42,7 +42,6 @@ class Resources[F[_]](val source: Stream[F, Payload[F]],
                       val failedInsertsProducer: PubsubProducer[F, Bigquery.FailedInsert],
                       val badRowsSink: Pipe[F, StreamBadRow[F], Unit],
                       val typesSink: Pipe[F, Set[ShreddedType], Unit],
-                      val maxConcurrrency: Int,
                       val bigQuery: BigQuery,
                       val igluClient: Client[F, Json],
                       val env: Environment,
@@ -72,7 +71,7 @@ object Resources {
       types <- mkTypesSink[F](env.config.projectId, env.config.failedInserts, maxConcurrency)
       bigquery <- Resource.liftF[F, BigQuery](Bigquery.getClient)
       client <- Resource.liftF[F, Client[F, Json]](clientF)
-    } yield new Resources[F](source, failedInserts, badRows, types, maxConcurrency, bigquery, client, env, blocker)
+    } yield new Resources[F](source, failedInserts, badRows, types, bigquery, client, env, blocker)
   }
 
   /** Constructor for PubSub producer (reader) */

@@ -50,7 +50,7 @@ lazy val streamloader = project
   .enablePlugins(JavaAppPackaging)
   .settings(BuildSettings.streamloaderBuildSettings)
   .settings(
-    libraryDependencies ++= Seq(Dependencies.fs2, Dependencies.pubsubFs2Grpc, Dependencies.specs2)
+    libraryDependencies ++= Seq(Dependencies.fs2, Dependencies.slf4j, Dependencies.pubsubFs2Grpc, Dependencies.specs2)
   )
   .dependsOn(common)
 

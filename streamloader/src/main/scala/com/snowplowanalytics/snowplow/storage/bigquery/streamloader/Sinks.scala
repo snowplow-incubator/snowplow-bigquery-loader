@@ -68,7 +68,7 @@ object Sinks {
         case Right(response) if response.hasErrors =>
           loaderRow.data.setFactory(new JacksonFactory)
           val tableRow = loaderRow.data.toString
-          resources.pubsub.produce(PubSubOutput.WriteTableRow(tableRow)).void
+          resources.failedInsertsProducer.produce(PubSubOutput.WriteTableRow(tableRow)).void
         case Right(_)    => IO.unit
         case Left(error) => IO.delay(println(error))
       }

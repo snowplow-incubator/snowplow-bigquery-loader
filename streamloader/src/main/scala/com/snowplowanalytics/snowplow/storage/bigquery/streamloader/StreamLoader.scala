@@ -31,38 +31,8 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
 
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Source.{Payload, PubsubSource}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.Bigquery
-import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Sinks.PubSub.PubSubOutput
 
 object StreamLoader {
-
-  //      TOPOLOGY OVERVIEW
-  //                                            +-----------+
-  //                                 bad sink   |   PubSub  |
-  //                              +-------------|   (bad)   |
-  //                              |             +-----------+
-  //                              |
-  //  +------------+          +--------+                                       aggregate
-  //  |            |  parse   | (bad,  |                  enqueue   +-------+  >> sink     +--------+
-  //  | enriched   | -------- | good)  |                  types     |types  |  types       | PubSub |
-  //  |            |          |        |               +------------|queue  | -------------| (types)|
-  //  +------------+          +--------+               |            +-------+              +--------+
-  //                              |                    |
-  //                              |                    |
-  //                              |             +------------+                              +---------+
-  //                              |             |            |              failed inserts  | PubSub  |
-  //                              +-------------| good sink  |             +----------------| (failed |
-  //                                            |            |             |                | inserts)|
-  //                                            +------|-----+             |                +---------+
-  //                                                   |                   |
-  //                                                   |             +-----|----+
-  //                                                   |             | BigQuery |
-  //                                                   +-------------| sink     |
-  //                                                                 +-----|----+
-  //                                                                       |
-  //                                                                       |                 +--------+
-  //                                                                       |     insert      |BigQuery|
-  //                                                                       +-----------------|(events)|
-  //                                                                                         +--------+
 
   val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
@@ -76,7 +46,7 @@ object StreamLoader {
 
   private val MaxConcurrency = Runtime.getRuntime.availableProcessors * 16
   private val GroupByN       = 10
-  private val TimeWindow     = 5.minutes
+  private val TimeWindow     = 30.seconds
   private val QueueSize      = 1024
 
   def run(e: Environment)(implicit cs: ContextShift[IO], c: Concurrent[IO], T: Timer[IO]): IO[Unit] =
@@ -87,10 +57,10 @@ object StreamLoader {
       for {
         queue  <- Queue.bounded[IO, Set[ShreddedType]](QueueSize)
         sinkBadGood = eventStream.observeEither[StreamBadRow[IO], StreamLoaderRow[IO]](
-          badSink(resources),
+          resources.badRowsSink,
           goodSink(resources, queue)
         ).void
-        sinkTypes = queue.dequeue.through(aggregateTypes(GroupByN, TimeWindow)).through(typesSink(resources))
+        sinkTypes = queue.dequeue.through(aggregateTypes(GroupByN, TimeWindow)).through(resources.typesSink)
         _ <- sinkBadGood.merge(sinkTypes).compile.drain
       } yield ()
     }
@@ -101,26 +71,6 @@ object StreamLoader {
       case Right(row) => StreamLoaderRow[IO](row, payload.ack).asRight[StreamBadRow[IO]]
       case Left(row) => StreamBadRow[IO](row, payload.ack).asLeft[StreamLoaderRow[IO]]
     }
-
-  /**
-    * Sink bad rows to Pub/Sub.
-    * @param r allocated set of Loader resources
-    * @return A sink that writes bad rows to Pub/Sub.
-    */
-  def badSink(r: Resources[IO])(implicit cs: Concurrent[IO]): Pipe[IO, StreamBadRow[IO], Unit] =
-    _.parEvalMapUnordered(MaxConcurrency) { badRow =>
-      r.pubsub.produce(PubSubOutput.WriteBadRow(badRow.row)) *> badRow.ack
-    }
-
-  /**
-    * Sink types to Pub/Sub.
-    * @param r allocated set of Loader resources
-    * @return A sink that writes observed types to Pub/Sub (to be consumed by Mutator).
-    */
-  def typesSink(r: Resources[IO])(implicit cs: Concurrent[IO]): Pipe[IO, Set[ShreddedType], Unit] =
-    _.parEvalMapUnordered(MaxConcurrency)(typesSet =>
-      r.pubsub.produce(PubSubOutput.WriteObservedTypes(typesSet)).void
-    )
 
   /**
     * Enqueue observed types to a pre-aggregation queue and then route rows through a BigQuery sink.

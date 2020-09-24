@@ -19,7 +19,8 @@ lazy val common = project
       Dependencies.specs2,
       Dependencies.scalaCheck,
       Dependencies.jackson,
-      Dependencies.nettyCodec
+      Dependencies.nettyCodec,
+      Dependencies.nettyCodecHttp
     )
   )
 
@@ -41,7 +42,8 @@ lazy val loader = project
       Dependencies.specs2,
       Dependencies.scalaCheck,
       Dependencies.specs2ScalaCheck,
-      Dependencies.scioTest
+      Dependencies.scioTest,
+      Dependencies.nettyCodecHttp
     )
   )
   .dependsOn(common)
@@ -120,7 +122,8 @@ lazy val forwarder = project
       Dependencies.scioCore,
       Dependencies.scioBigQuery,
       Dependencies.specs2,
-      Dependencies.scalaCheck
+      Dependencies.scalaCheck,
+      Dependencies.nettyCodecHttp
     )
   )
   .dependsOn(common)

@@ -29,8 +29,9 @@ object Dependencies {
     val slf4j               = "1.7.30"
 
     // TODO: remove when libraries bringing in older versions are bumped
-    val jackson    = "2.9.10.6"
-    val nettyCodec = "4.1.46.Final"
+    val jackson        = "2.9.10.6"
+    val nettyCodec     = "4.1.46.Final"
+    val nettyCodecHttp = "4.1.44.Final"
 
     // Scala third-party
     val cats       = "2.1.1"
@@ -80,6 +81,7 @@ object Dependencies {
   val slf4j          = "org.slf4j"                  % "slf4j-simple"                            % V.slf4j
   val jackson        = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
   val nettyCodec     = "io.netty"                   % "netty-codec"                             % V.nettyCodec
+  val nettyCodecHttp = "io.netty"                   % "netty-codec-http"                        % V.nettyCodecHttp
 
   // Scala third-party
   val cats          = "org.typelevel"     %% "cats-core"                % V.cats

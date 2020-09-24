@@ -2,7 +2,7 @@ name: Snyk
 
 on:
   push:
-    branches: [ master ]
+    branches: [ feature/fs2 ]
 
 jobs:
   security:

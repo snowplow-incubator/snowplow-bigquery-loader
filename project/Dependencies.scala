@@ -27,6 +27,7 @@ object Dependencies {
     val googleCloudStorage  = "1.102.0" // no upgrade before bumping pubsubFs2
     val metrics             = "4.1.11"
     val slf4j               = "1.7.30"
+    val jackson             = "2.9.10.6" // TODO: remove when libraries bringing in older versions are bumped
 
     // Scala third-party
     val cats       = "2.1.1"
@@ -70,10 +71,11 @@ object Dependencies {
   val gcs      = "com.google.cloud" % "google-cloud-storage"  % V.googleCloudStorage
 
   // Java
-  val dataflowRunner = "org.apache.beam"       % "beam-runners-google-cloud-dataflow-java" % V.beam
-  val directRunner   = "org.apache.beam"       % "beam-runners-direct-java"                % V.beam
-  val metrics        = "io.dropwizard.metrics" % "metrics-core"                            % V.metrics
-  val slf4j          = "org.slf4j"             % "slf4j-simple"                            % V.slf4j
+  val dataflowRunner = "org.apache.beam"            % "beam-runners-google-cloud-dataflow-java" % V.beam
+  val directRunner   = "org.apache.beam"            % "beam-runners-direct-java"                % V.beam
+  val metrics        = "io.dropwizard.metrics"      % "metrics-core"                            % V.metrics
+  val slf4j          = "org.slf4j"                  % "slf4j-simple"                            % V.slf4j
+  val jackson        = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
 
   // Scala third-party
   val cats          = "org.typelevel"     %% "cats-core"                % V.cats

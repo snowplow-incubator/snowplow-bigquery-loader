@@ -18,7 +18,8 @@ lazy val common = project
       Dependencies.schemaDdl,
       Dependencies.specs2,
       Dependencies.scalaCheck,
-      Dependencies.jackson
+      Dependencies.jackson,
+      Dependencies.nettyCodec
     )
   )
 

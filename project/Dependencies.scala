@@ -27,7 +27,10 @@ object Dependencies {
     val googleCloudStorage  = "1.102.0" // no upgrade before bumping pubsubFs2
     val metrics             = "4.1.11"
     val slf4j               = "1.7.30"
-    val jackson             = "2.9.10.6" // TODO: remove when libraries bringing in older versions are bumped
+
+    // TODO: remove when libraries bringing in older versions are bumped
+    val jackson    = "2.9.10.6"
+    val nettyCodec = "4.1.46.Final"
 
     // Scala third-party
     val cats       = "2.1.1"
@@ -76,6 +79,7 @@ object Dependencies {
   val metrics        = "io.dropwizard.metrics"      % "metrics-core"                            % V.metrics
   val slf4j          = "org.slf4j"                  % "slf4j-simple"                            % V.slf4j
   val jackson        = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
+  val nettyCodec     = "io.netty"                   % "netty-codec"                             % V.nettyCodec
 
   // Scala third-party
   val cats          = "org.typelevel"     %% "cats-core"                % V.cats

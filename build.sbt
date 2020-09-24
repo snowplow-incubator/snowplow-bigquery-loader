@@ -17,7 +17,8 @@ lazy val common = project
       Dependencies.igluCoreCirce,
       Dependencies.schemaDdl,
       Dependencies.specs2,
-      Dependencies.scalaCheck
+      Dependencies.scalaCheck,
+      Dependencies.jackson
     )
   )
 
@@ -50,7 +51,13 @@ lazy val streamloader = project
   .enablePlugins(JavaAppPackaging)
   .settings(BuildSettings.streamloaderBuildSettings)
   .settings(
-    libraryDependencies ++= Seq(Dependencies.fs2, Dependencies.slf4j, Dependencies.pubsubFs2Grpc, Dependencies.specs2)
+    libraryDependencies ++= Seq(
+      Dependencies.fs2,
+      Dependencies.slf4j,
+      Dependencies.pubsubFs2Grpc,
+      Dependencies.specs2,
+      Dependencies.jackson
+    )
   )
   .dependsOn(common)
 
@@ -68,7 +75,8 @@ lazy val mutator = project
       Dependencies.fs2,
       Dependencies.igluClient,
       Dependencies.specs2,
-      Dependencies.scalaCheck
+      Dependencies.scalaCheck,
+      Dependencies.jackson
     )
   )
   .dependsOn(common)
@@ -92,7 +100,8 @@ lazy val repeater = project
       Dependencies.fs2,
       Dependencies.specs2,
       Dependencies.scalaCheck,
-      Dependencies.specs2ScalaCheck
+      Dependencies.specs2ScalaCheck,
+      Dependencies.jackson
     )
   )
   .dependsOn(common)

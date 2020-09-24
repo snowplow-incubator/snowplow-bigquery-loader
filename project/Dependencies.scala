@@ -33,6 +33,7 @@ object Dependencies {
     val nettyCodec     = "4.1.46.Final" // scio
     val nettyCodecHttp = "4.1.44.Final" // scio
     val fastjson       = "1.2.69"       // scio
+    val googleOauth    = "1.31.0"       // scio
 
     // Scala third-party
     val cats       = "2.1.1"
@@ -84,6 +85,7 @@ object Dependencies {
   val nettyCodec     = "io.netty"                   % "netty-codec"                             % V.nettyCodec
   val nettyCodecHttp = "io.netty"                   % "netty-codec-http"                        % V.nettyCodecHttp
   val fastjson       = "com.alibaba"                % "fastjson"                                % V.fastjson
+  val googleOauth    = "com.google.oauth-client"    % "google-oauth-client"                     % V.googleOauth
 
   // Scala third-party
   val cats          = "org.typelevel"     %% "cats-core"                % V.cats

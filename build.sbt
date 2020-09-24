@@ -20,7 +20,8 @@ lazy val common = project
       Dependencies.scalaCheck,
       Dependencies.jackson,
       Dependencies.nettyCodec,
-      Dependencies.nettyCodecHttp
+      Dependencies.nettyCodecHttp,
+      Dependencies.googleOauth
     )
   )
 
@@ -44,7 +45,8 @@ lazy val loader = project
       Dependencies.specs2ScalaCheck,
       Dependencies.scioTest,
       Dependencies.nettyCodecHttp,
-      Dependencies.fastjson
+      Dependencies.fastjson,
+      Dependencies.googleOauth
     )
   )
   .dependsOn(common)
@@ -60,7 +62,8 @@ lazy val streamloader = project
       Dependencies.slf4j,
       Dependencies.pubsubFs2Grpc,
       Dependencies.specs2,
-      Dependencies.jackson
+      Dependencies.jackson,
+      Dependencies.googleOauth
     )
   )
   .dependsOn(common)
@@ -80,7 +83,8 @@ lazy val mutator = project
       Dependencies.igluClient,
       Dependencies.specs2,
       Dependencies.scalaCheck,
-      Dependencies.jackson
+      Dependencies.jackson,
+      Dependencies.googleOauth
     )
   )
   .dependsOn(common)
@@ -105,7 +109,8 @@ lazy val repeater = project
       Dependencies.specs2,
       Dependencies.scalaCheck,
       Dependencies.specs2ScalaCheck,
-      Dependencies.jackson
+      Dependencies.jackson,
+      Dependencies.googleOauth
     )
   )
   .dependsOn(common)
@@ -125,7 +130,8 @@ lazy val forwarder = project
       Dependencies.specs2,
       Dependencies.scalaCheck,
       Dependencies.nettyCodecHttp,
-      Dependencies.fastjson
+      Dependencies.fastjson,
+      Dependencies.googleOauth
     )
   )
   .dependsOn(common)

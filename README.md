@@ -14,6 +14,7 @@ Assuming git and [SBT][sbt] installed:
 $ git clone https://github.com/snowplow-incubator/snowplow-bigquery-loader
 $ cd snowplow-bigquery-loader
 $ sbt "project loader" test
+$ sbt "project streamloader" test
 $ sbt "project mutator" test
 $ sbt "project repeater" test
 ```
@@ -48,13 +49,13 @@ limitations under the License.
 [travis]: https://travis-ci.org/snowplow-incubator/snowplow-bigquery-loader
 [travis-image]: https://travis-ci.org/snowplow-incubator/snowplow-bigquery-loader.png?branch=master
 
-[release-image]: http://img.shields.io/badge/release-0.5.1-blue.svg?style=flat
+[release-image]: http://img.shields.io/badge/release-0.6.0-blue.svg?style=flat
 [releases]: https://github.com/snowplow-incubator/snowplow-bigquery-loader
 
 [techdocs-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/techdocs.png
 [setup-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/setup.png
 [contributing-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/contributing.png
 
-[techdocs]: https://docs.snowplowanalytics.com/docs/setup-snowplow-on-gcp/setup-bigquery-destination/bigquery-loader-0-5-0/
-[setup]: https://docs.snowplowanalytics.com/docs/setup-snowplow-on-gcp/setup-bigquery-destination/bigquery-loader-0-5-0/#setup-guide
+[techdocs]: https://docs.snowplowanalytics.com/docs/setup-snowplow-on-gcp/setup-bigquery-destination/bigquery-loader-0-6-0/
+[setup]: https://docs.snowplowanalytics.com/docs/setup-snowplow-on-gcp/setup-bigquery-destination/bigquery-loader-0-6-0/#setup-guide
 [contributing]: https://github.com/snowplow/snowplow/wiki/Contributing

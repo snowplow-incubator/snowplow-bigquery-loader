@@ -1,3 +1,16 @@
+Version 0.6.0 (2020-09-28)
+--------------------------
+Add Snowplow BigQuery StreamLoader (#116)
+Fix ignored project id from the config (#104)
+Bump Scala to 2.13 (#115)
+Bump scio-core to 0.9.4 (#114)
+Integrate Snyk (#117)
+Common: fix jackson-databind version to 2.9.10.6 (#128)
+Common: fix netty-codec version to 4.1.46.Final (#129)
+Common: fix netty-codec-http version to 4.1.44.Final (#130)
+Common: fix fastjson version to 1.2.69 (#131)
+Common: fix google-oauth-client version to 1.31.0 (#132)
+
 Version 0.5.1 (2020-06-08)
 --------------------------
 Remove LoaderCache.scala (#107)

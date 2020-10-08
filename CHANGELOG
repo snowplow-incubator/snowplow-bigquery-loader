@@ -1,3 +1,7 @@
+Version 0.6.1 (2020-10-08)
+--------------------------
+Common: do not drop contexts when creating TableRow from enriched event (#136)
+
 Version 0.6.0 (2020-09-28)
 --------------------------
 Add Snowplow BigQuery StreamLoader (#116)

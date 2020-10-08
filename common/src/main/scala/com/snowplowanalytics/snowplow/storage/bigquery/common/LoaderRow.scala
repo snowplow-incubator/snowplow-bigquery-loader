@@ -16,28 +16,20 @@ import cats.Monad
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits._
 import cats.effect.Clock
-
 import org.joda.time.Instant
-
 import com.google.api.services.bigquery.model.TableRow
-
 import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import io.circe.generic.semiauto._
-
 import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.RegistryLookup
-
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{Schema => DdlSchema}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError, Field, Mode, Row, Type}
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
-
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload, Processor}
-
 
 /** Row ready to be passed into Loader stream and Mutator topic */
 case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])
@@ -56,7 +48,9 @@ object LoaderRow {
     * @param record An enriched TSV line.
     * @return Either a BadRow with error messages or a row that is ready to be loaded.
     */
-  def parse[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], processor: Processor)(record: String): F[Either[BadRow, LoaderRow]] =
+  def parse[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], processor: Processor)(
+    record: String
+  ): F[Either[BadRow, LoaderRow]] =
     Event.parse(record) match {
       case Validated.Valid(event) =>
         fromEvent[F](igluClient, processor)(event)
@@ -66,8 +60,10 @@ object LoaderRow {
     }
 
   /** Parse JSON object provided by Snowplow Analytics SDK */
-  def fromEvent[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], processor: Processor)(event: Event): F[Either[BadRow, LoaderRow]] = {
-    val atomic                                         = transformAtomic(event)
+  def fromEvent[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], processor: Processor)(
+    event: Event
+  ): F[Either[BadRow, LoaderRow]] = {
+    val atomic                   = transformAtomic(event)
     val contexts: F[Transformed] = groupContexts[F](igluClient, event.contexts.data.toVector)
     val derivedContexts: F[Transformed] =
       groupContexts(igluClient, event.derived_contexts.data.toVector)
@@ -81,12 +77,16 @@ object LoaderRow {
           transformJson[F](igluClient, schema)(data).map(_.map { row =>
             List((columnName, Adapter.adaptRow(row)))
           })
-      }.getOrElse(Monad[F].pure(List.empty[(String, AnyRef)].validNel[FailureDetails.LoaderIgluError]))
+      }
+      .getOrElse(Monad[F].pure(List.empty[(String, AnyRef)].validNel[FailureDetails.LoaderIgluError]))
 
     val payload: Payload.LoaderPayload = Payload.LoaderPayload(event)
 
     val transformedJsons = (contexts, derivedContexts, selfDescribingEvent).mapN { (c, dc, e) =>
-      (c *> dc *> e)
+      (c, dc, e)
+        .mapN { (c, dc, e) =>
+          c ++ dc ++ e
+        }
         .leftMap(details => Failure.LoaderIgluErrors(details))
         .leftMap(failure => BadRow.LoaderIgluError(processor, failure, payload))
         .toEither
@@ -129,9 +129,9 @@ object LoaderRow {
 
   /** Group list of contexts by their full URI and transform values into ready to load rows */
   def groupContexts[F[_]: Monad: RegistryLookup: Clock](
-                                                         igluClient: Resolver[F],
-                                                         contexts: Vector[SelfDescribingData[Json]]
-                                                       ): F[ValidatedNel[FailureDetails.LoaderIgluError, List[(String, AnyRef)]]] = {
+    igluClient: Resolver[F],
+    contexts: Vector[SelfDescribingData[Json]]
+  ): F[ValidatedNel[FailureDetails.LoaderIgluError, List[(String, AnyRef)]]] = {
     val grouped = contexts.groupBy(_.schema).map {
       case (key, groupedContexts) =>
         val contexts   = groupedContexts.map(_.data) // Strip away URI

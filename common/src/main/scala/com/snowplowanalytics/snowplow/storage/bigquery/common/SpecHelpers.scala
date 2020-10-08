@@ -92,11 +92,59 @@ object SpecHelpers {
       "additionalProperties": false
       }
     """
+  private val webPage        = json"""
+      {
+      "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+      "description": "Schema for a web page context",
+      "type": "object",
+      "properties": {
+          "id": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$$"
+          }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+      }
+    """
+  private val derivedContext =
+    json"""
+      {
+      "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+      "description": "Schema for a test derived context",
+      "type": "object",
+      "properties": {
+          "a": {
+              "type": "string"
+          }
+      },
+      "required": ["a"],
+      "additionalProperties": false
+      }
+    """
+  private val unstructEvent =
+    json"""
+      {
+      "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+      "description": "Schema for a test unstruct event",
+      "type": "object",
+      "properties": {
+          "c": {
+              "type": "string"
+          }
+      },
+      "required": ["c"],
+      "additionalProperties": false
+      }
+    """
 
   val schemas = Map(
     SchemaMap("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))            -> adClick,
     SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0)) -> geolocation100,
-    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 1, 0)) -> geolocation110
+    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 1, 0)) -> geolocation110,
+    SchemaMap("com.snowplowanalytics.snowplow", "web_page", "jsonschema", SchemaVer.Full(1, 0, 0))            -> webPage,
+    SchemaMap("com.snowplowanalytics.snowplow", "derived_context", "jsonschema", SchemaVer.Full(1, 0, 0))     -> derivedContext,
+    SchemaMap("com.snowplowanalytics.snowplow", "unstruct_event", "jsonschema", SchemaVer.Full(1, 0, 0))      -> unstructEvent
   )
 
   // format: off

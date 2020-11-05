@@ -100,6 +100,8 @@ lazy val repeater = project
       Dependencies.gcs,
       Dependencies.pubsub,
       Dependencies.pubsubFs2Grpc,
+      Dependencies.blobstoreCore,
+      Dependencies.blobstoreGcs,
       Dependencies.slf4j,
       Dependencies.catsEffect,
       Dependencies.circeLiteral,

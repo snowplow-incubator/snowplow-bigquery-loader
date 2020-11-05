@@ -51,9 +51,8 @@ object Repeater extends SafeIOApp {
             .through[IO, Unit](Flow.sink(resources))
           desparatesSink = Flow.dequeueDesperates(resources)
           logging        = Stream.awakeEvery[IO](5.minute).evalMap(_ => resources.updateLifetime *> resources.showStats)
-          _ <- Stream(bqSink, desparatesSink, logging).parJoin(
-            StreamConcurrency
-          )
+          recover        = Recover.recoverFailedInserts(resources)
+          _ <- Stream(bqSink, desparatesSink, logging, recover).parJoin(StreamConcurrency)
         } yield ()
 
         process.compile.drain.attempt.flatMap {

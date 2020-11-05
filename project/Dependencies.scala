@@ -43,6 +43,7 @@ object Dependencies {
     val fs2        = "2.4.2"
     val httpClient = "0.21.6"
     val logging    = "1.1.1"
+    val blobstore  = "0.7.3"
 
     /**
       * After 1.102.0 the Google Cloud Java SDK versions diverge.
@@ -88,21 +89,23 @@ object Dependencies {
   val googleOauth    = "com.google.oauth-client"    % "google-oauth-client"                     % V.googleOauth
 
   // Scala third-party
-  val cats          = "org.typelevel"     %% "cats-core"                % V.cats
-  val catsEffect    = "org.typelevel"     %% "cats-effect"              % V.catsEffect
-  val circe         = "io.circe"          %% "circe-core"               % V.circe
-  val circeJawn     = "io.circe"          %% "circe-jawn"               % V.circe
-  val circeLiteral  = "io.circe"          %% "circe-literal"            % V.circe
-  val circeParser   = "io.circe"          %% "circe-parser"             % V.circe
-  val decline       = "com.monovore"      %% "decline"                  % V.decline
-  val fs2           = "co.fs2"            %% "fs2-core"                 % V.fs2
-  val httpClient    = "org.http4s"        %% "http4s-async-http-client" % V.httpClient
-  val logging       = "io.chrisdavenport" %% "log4cats-slf4j"           % V.logging
-  val pubsubFs2     = "com.permutive"     %% "fs2-google-pubsub-http"   % V.pubsubFs2
-  val pubsubFs2Grpc = "com.permutive"     %% "fs2-google-pubsub-grpc"   % V.pubsubFs2
-  val scioBigQuery  = "com.spotify"       %% "scio-bigquery"            % V.scio
-  val scioCore      = "com.spotify"       %% "scio-core"                % V.scio
-  val scioRepl      = "com.spotify"       %% "scio-repl"                % V.scio
+  val cats          = "org.typelevel"            %% "cats-core"                % V.cats
+  val catsEffect    = "org.typelevel"            %% "cats-effect"              % V.catsEffect
+  val circe         = "io.circe"                 %% "circe-core"               % V.circe
+  val circeJawn     = "io.circe"                 %% "circe-jawn"               % V.circe
+  val circeLiteral  = "io.circe"                 %% "circe-literal"            % V.circe
+  val circeParser   = "io.circe"                 %% "circe-parser"             % V.circe
+  val decline       = "com.monovore"             %% "decline"                  % V.decline
+  val fs2           = "co.fs2"                   %% "fs2-core"                 % V.fs2
+  val httpClient    = "org.http4s"               %% "http4s-async-http-client" % V.httpClient
+  val logging       = "io.chrisdavenport"        %% "log4cats-slf4j"           % V.logging
+  val pubsubFs2     = "com.permutive"            %% "fs2-google-pubsub-http"   % V.pubsubFs2
+  val pubsubFs2Grpc = "com.permutive"            %% "fs2-google-pubsub-grpc"   % V.pubsubFs2
+  val scioBigQuery  = "com.spotify"              %% "scio-bigquery"            % V.scio
+  val scioCore      = "com.spotify"              %% "scio-core"                % V.scio
+  val scioRepl      = "com.spotify"              %% "scio-repl"                % V.scio
+  val blobstoreCore = "com.github.fs2-blobstore" %% "core"                     % V.blobstore
+  val blobstoreGcs  = "com.github.fs2-blobstore" %% "gcs"                      % V.blobstore
 
   // Scala Snowplow
   val analyticsSdk  = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk

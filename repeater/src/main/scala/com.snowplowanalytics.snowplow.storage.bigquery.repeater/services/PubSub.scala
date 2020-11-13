@@ -60,11 +60,10 @@ object PubSub {
     Right(s.getBytes())
   }
 
-  //TODO: provide projectId and topic
-  def getProducer[F[_]: Concurrent: Timer: Logger] =
+  def getProducer[F[_]: Concurrent: Timer: Logger](projectId: String, failedInsertsTopic: String) =
     GooglePubsubProducer.of[F, String](
-      producer.Model.ProjectId("com-snplow-eng-gcp"),
-      producer.Model.Topic("sp-rt-pipeline-failed-inserts-dev1"),
+      producer.Model.ProjectId(projectId),
+      producer.Model.Topic(failedInsertsTopic),
       config = PubsubProducerConfig[F](
         batchSize         = 100,
         delayThreshold    = 100.millis,

@@ -76,6 +76,20 @@ class Resources[F[_]: Sync](
     statistics.get.flatMap(statistics => L.info(statistics.show))
 }
 
+class PartialResources[F[_]: Sync](
+  val bigQuery: BigQuery,
+  val bucket: GcsPath,
+  val env: Config.Environment,
+  val desperates: Queue[F, BadRow],
+  val counter: Ref[F, Int],
+  val stop: SignallingRef[F, Boolean],
+  val statistics: Ref[F, Resources.Statistics],
+  val concurrency: Int,
+  val insertBlocker: Blocker,
+  val jobStartTime: Instant,
+  val store: Store[F]
+)
+
 object Resources {
 
   val QueueSize = 100
@@ -100,7 +114,7 @@ object Resources {
     cmd: RepeaterCli.ListenCommand
   ): Resource[F, Resources[F]] = {
     // It's a function because blocker needs to be created as Resource
-    val initResources: F[Blocker => PubsubProducer[F, String] => Resources[F]] = for {
+    val initResources: F[Blocker => PartialResources[F]] = for {
       transformed <- Config.transform[F](cmd.config).value
       env         <- Sync[F].fromEither(transformed)
       bigQuery    <- services.Database.getClient[F]
@@ -115,30 +129,42 @@ object Resources {
       )
       jobStartTime <- Sync[F].delay(Instant.now())
     } yield (b: Blocker) =>
-      (p: PubsubProducer[F, String]) =>
-        new Resources(
-          bigQuery,
-          cmd.deadEndBucket,
-          env,
-          queue,
-          counter,
-          stop,
-          statistics,
-          cmd.bufferSize,
-          cmd.window,
-          cmd.backoff,
-          concurrency,
-          b,
-          jobStartTime,
-          p,
-          GcsStore(storage, b, List.empty)
-        )
+      new PartialResources(
+        bigQuery,
+        cmd.deadEndBucket,
+        env,
+        queue,
+        counter,
+        stop,
+        statistics,
+        concurrency,
+        b,
+        jobStartTime,
+        GcsStore(storage, b, List.empty)
+      )
 
     val createBlocker = Sync[F].delay(Executors.newCachedThreadPool()).map(ExecutionContext.fromExecutorService)
     for {
       blocker        <- Resource.make(createBlocker)(ec => Sync[F].delay(ec.shutdown())).map(Blocker.liftExecutionContext)
-      pubsubProducer <- services.PubSub.getProducer[F]
-      resources      <- Resource.make(initResources.map(init => init(blocker)(pubsubProducer)))(release)
+      pr             <- Resource.make(initResources.map(init => init(blocker)))(release)
+      pubsubProducer <- services.PubSub.getProducer[F](pr.env.config.failedInserts, pr.env.config.projectId)
+      resources = new Resources(
+        pr.bigQuery,
+        cmd.deadEndBucket,
+        pr.env,
+        pr.desperates,
+        pr.counter,
+        pr.stop,
+        pr.statistics,
+        cmd.bufferSize,
+        cmd.window,
+        cmd.backoff,
+        pr.concurrency,
+        pr.insertBlocker,
+        pr.jobStartTime,
+        pubsubProducer,
+        pr.store
+      )
     } yield resources
   }
 
@@ -158,7 +184,7 @@ object Resources {
 
   /** Stop pulling data from Pubsub, flush despeates queue into GCS bucket */
   def release[F[_]: ConcurrentEffect: Timer: Logger](
-    env: Resources[F]
+    env: PartialResources[F]
   ): F[Unit] = {
     val flushDesperate = for {
       desperates <- pullRemaining(env.desperates)

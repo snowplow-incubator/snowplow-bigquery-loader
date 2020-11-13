@@ -58,7 +58,7 @@ class Resources[F[_]: Sync](
   val concurrency: Int,
   val insertBlocker: Blocker,
   val jobStartTime: Instant,
-  val pubSubProducer: PubsubProducer[F, EventContainer],
+  val pubSubProducer: PubsubProducer[F, String],
   val store: Store[F]
 ) {
   def logInserted: F[Unit] =
@@ -100,7 +100,7 @@ object Resources {
     cmd: RepeaterCli.ListenCommand
   ): Resource[F, Resources[F]] = {
     // It's a function because blocker needs to be created as Resource
-    val initResources: F[Blocker => PubsubProducer[F, EventContainer] => Resources[F]] = for {
+    val initResources: F[Blocker => PubsubProducer[F, String] => Resources[F]] = for {
       transformed <- Config.transform[F](cmd.config).value
       env         <- Sync[F].fromEither(transformed)
       bigQuery    <- services.Database.getClient[F]
@@ -115,7 +115,7 @@ object Resources {
       )
       jobStartTime <- Sync[F].delay(Instant.now())
     } yield (b: Blocker) =>
-      (p: PubsubProducer[F, EventContainer]) =>
+      (p: PubsubProducer[F, String]) =>
         new Resources(
           bigQuery,
           cmd.deadEndBucket,

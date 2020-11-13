@@ -2,61 +2,62 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import fs2.Stream
 import cats.effect.Concurrent
-import cats.effect.Timer
 import blobstore.Path
 import blobstore.implicits.GetOps
-import io.circe.JsonObject
-import java.time.Instant
-import java.util.UUID
-import io.circe.generic.auto._, io.circe.parser._
 import cats.effect.Sync
 import cats.syntax.all._
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.GcsPath
+import io.chrisdavenport.log4cats.Logger
 
 object Recover {
 
-  def recoverFailedInserts[F[_]: Timer: Concurrent](resources: Resources[F]): Stream[F, Unit] =
+  val GcsPrefix = "gs://"
+
+  def preparePath: GcsPath => Path =
+    gcsPath => Path(GcsPrefix + gcsPath.bucket + gcsPath.path)
+
+  def recoverFailedInserts[F[_]: Concurrent: Logger](resources: Resources[F]): Stream[F, Unit] =
     resources
       .store
-      .list(resources.bucket)
+      .list(preparePath(resources.bucket))
+      .evalMap(writeListingToLogs)
+      .filter(keepTimePeriod)
       .evalMap(resources.store.getContents)
+      .filter(keepInvalidColumnErrors)
       .map(recover)
-      .evalMap {
-        case Left(e)     => Sync[F].pure(println(s"Error: $e")) // TODO: use logger
-        case Right(read) => resources.pubSubProducer.produce(read) *> Sync[F].unit
-      }
+      .evalMap(writeToPubSub(resources))
 
-  case class SimpleEventContainer(eventId: UUID, etlTstamp: Instant, payload: String)
+  def writeToPubSub[F[_]: Concurrent: Logger](
+    resources: Resources[F]
+  ): Either[String, String] => F[Unit] = {
+    case Left(e) => Logger[F].error(s"Error: $e")
+    case Right(event) =>
+      for {
+        msgId <- resources.pubSubProducer.produce(event)
+        _     <- Logger[F].info(s"Successfully writen to PubSub: $msgId")
+      } yield ()
+  }
 
-  // TODO: filter only time period that is needed (based on names in GCS bucket)
-  // TODO: filter only failures that are due to invalid column
-  // TODO: count successfuly recovered events (?)
-  def recover: String => Either[String, EventContainer] =
-    b =>
-      stringToFailedInsertBadRow(b).map { ev =>
-        val fixed = fix(ev.payload)
-        EventContainer(ev.eventId, ev.etlTstamp, stringToJson(fixed))
-      }
+  def writeListingToLogs[F[_]: Concurrent: Logger]: Path => F[Path] =
+    p =>
+      Logger[F].info(s"Processing file: ${p.fileName}, path: ${p.pathFromRoot}, isDir: ${p.isDir}") *> Sync[F].delay(p)
 
-  case class FailedInsert(schema: String, data: Data)
-  case class Data(payload: String)
+  def keepTimePeriod[F[_]: Concurrent: Logger]: Path => Boolean =
+    p => p.fileName.map(_.startsWith("2020-11")).getOrElse(false)
 
-  case class Payload(eventId: UUID, etlTstamp: Instant)
+  def keepInvalidColumnErrors[F[_]: Concurrent: Logger]: String => Boolean =
+    _.contains("no such field.")
 
-  case class Combined(eventId: UUID, etlTstamp: Instant, payload: String)
-
-  def stringToFailedInsertBadRow: String => Either[String, Combined] =
-    in => {
-      val parse =
-        for {
-          raw   <- decode[FailedInsert](in).map(_.data.payload)
-          extra <- decode[Payload](raw)
-        } yield Combined(extra.eventId, extra.etlTstamp, raw)
-
-      parse.left.map(_.toString)
+  def recover: String => Either[String, String] =
+    failed => {
+      import io.circe._, io.circe.parser._
+      val doc: Json    = parse(failed).getOrElse(Json.Null)
+      val payload      = doc.hcursor.downField("data").downField("payload")
+      val quoted       = payload.as[String].getOrElse("")
+      val innerPayload = parse(quoted).getOrElse(Json.Null).hcursor.downField("payload").as[Json].getOrElse(Json.Null)
+      Right(fix(innerPayload.spaces2))
     }
 
   def fix: String => String = _.replaceAll("_%", "_percentage")
-
-  def stringToJson: String => JsonObject = ???
 
 }

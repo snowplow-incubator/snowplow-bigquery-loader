@@ -56,15 +56,15 @@ object PubSub {
     desperates.enqueue1(badRow) >> ack
   }
 
-  implicit val encoder: MessageEncoder[EventContainer] = new MessageEncoder[EventContainer] {
-    override def encode(a: EventContainer): Either[Throwable, Array[Byte]] = ???
+  implicit val messageEncoder: MessageEncoder[String] = { s =>
+    Right(s.getBytes())
   }
 
   //TODO: provide projectId and topic
   def getProducer[F[_]: Concurrent: Timer: Logger] =
-    GooglePubsubProducer.of[F, EventContainer](
-      producer.Model.ProjectId("test-project"),
-      producer.Model.Topic("values"),
+    GooglePubsubProducer.of[F, String](
+      producer.Model.ProjectId("com-snplow-eng-gcp"),
+      producer.Model.Topic("sp-rt-pipeline-failed-inserts-dev1"),
       config = PubsubProducerConfig[F](
         batchSize         = 100,
         delayThreshold    = 100.millis,

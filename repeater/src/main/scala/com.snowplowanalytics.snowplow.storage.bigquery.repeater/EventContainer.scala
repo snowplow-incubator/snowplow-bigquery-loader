@@ -26,6 +26,7 @@ import io.circe.parser.parse
 
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.PayloadParser.ReconstructedEvent
+import com.permutive.pubsub.producer.encoder.MessageEncoder
 
 /**
   * Primary data type for events parsed from `failedInserts` PubSub subscription
@@ -63,6 +64,8 @@ object EventContainer {
       payload <- json.as[EventContainer]
     } yield payload
   }
+
+  implicit val pubsubEventEncoder: MessageEncoder[String] = s => Right(s.getBytes)
 
   private def decomposeArray(arr: Vector[Json]): JList[Any] =
     arr.map(decomposeJson).asJava

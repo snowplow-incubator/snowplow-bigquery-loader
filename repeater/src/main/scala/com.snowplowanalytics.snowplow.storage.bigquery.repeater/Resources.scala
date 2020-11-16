@@ -123,7 +123,7 @@ object Resources {
       stop        <- SignallingRef[F, Boolean](false)
       statistics  <- Ref[F].of[Statistics](Statistics.start)
       concurrency <- Sync[F].delay(Runtime.getRuntime.availableProcessors * 16)
-      storage = StorageOptions.getDefaultInstance.getService
+      storage     <- Sync[F].delay(StorageOptions.getDefaultInstance.getService)
       _ <- Logger[F].info(
         s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId} with $concurrency streams"
       )

@@ -147,7 +147,7 @@ object Resources {
     for {
       blocker        <- Resource.make(createBlocker)(ec => Sync[F].delay(ec.shutdown())).map(Blocker.liftExecutionContext)
       pr             <- Resource.make(initResources.map(init => init(blocker)))(release)
-      pubsubProducer <- services.PubSub.getProducer[F](pr.env.config.failedInserts, pr.env.config.projectId)
+      pubsubProducer <- services.PubSub.getProducer[F](pr.env.config.projectId, pr.env.config.failedInserts)
       resources = new Resources(
         pr.bigQuery,
         cmd.deadEndBucket,

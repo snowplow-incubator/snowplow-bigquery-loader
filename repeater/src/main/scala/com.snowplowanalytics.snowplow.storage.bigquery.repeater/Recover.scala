@@ -44,6 +44,7 @@ object Recover {
     case Left(e) => Logger[F].error(s"Error: $e")
     case Right(event) =>
       for {
+        _     <- Logger[F].info(s"Preparing to write to PubSub for recovery: $event")
         msgId <- resources.pubSubProducer.produce(event)
         _     <- Logger[F].info(s"Successfully writen to PubSub: $msgId")
       } yield ()

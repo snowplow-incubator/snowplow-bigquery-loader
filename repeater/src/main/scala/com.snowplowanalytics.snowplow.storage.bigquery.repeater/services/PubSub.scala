@@ -67,7 +67,7 @@ object PubSub {
       config = PubsubProducerConfig[F](
         batchSize         = 100,
         delayThreshold    = 100.millis,
-        onFailedTerminate = e => Sync[F].pure(println(s"Got error $e")) >> Sync[F].unit
+        onFailedTerminate = e => Logger[F].error(s"Got error from producer: $e") >> Sync[F].unit
       )
     )
 

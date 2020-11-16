@@ -44,7 +44,7 @@ import com.google.cloud.storage.StorageOptions
   * @param stop a signal to stop retreving items
   * @param concurrency a number of streams to execute inserts
   */
-class Resources[F[_]: Sync](
+case class Resources[F[_]: Sync](
   val bigQuery: BigQuery,
   val bucket: GcsPath,
   val env: Config.Environment,

@@ -14,7 +14,7 @@ object Recover {
   val GcsPrefix = "gs://"
 
   def preparePath: GcsPath => Path =
-    gcsPath => Path(GcsPrefix + gcsPath.bucket + gcsPath.path)
+    gcsPath => Path(GcsPrefix + gcsPath.bucket + "/" + gcsPath.path)
 
   def recoverFailedInserts[F[_]: Concurrent: Logger](resources: Resources[F]): Stream[F, Unit] =
     for {

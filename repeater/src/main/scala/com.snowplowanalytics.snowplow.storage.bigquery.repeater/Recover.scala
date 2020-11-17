@@ -72,9 +72,11 @@ object Recover {
       val quoted       = payload.as[String].getOrElse("")
       val quotedParsed = parse(quoted).getOrElse(Json.Null)
       val innerPayload = quotedParsed.hcursor.downField("payload").as[Json].getOrElse(Json.Null)
-      val eventId      = quotedParsed.hcursor.downField("eventId").as[String].getOrElse("")
+      val modifiedversion =
+        innerPayload.hcursor.downField("event_version").withFocus(_.mapString(_ => "1-0-1")).top.getOrElse(Json.Null)
+      val eventId = quotedParsed.hcursor.downField("eventId").as[String].getOrElse("")
 
-      Right(IdAndEvent(eventId, innerPayload.spaces2))
+      Right(IdAndEvent(eventId, modifiedversion.spaces2))
     }
 
   def printEventId[F[_]: Concurrent: Logger]: Either[String, IdAndEvent] => F[Either[String, IdAndEvent]] =
@@ -85,6 +87,6 @@ object Recover {
 
   def recover: Either[String, IdAndEvent] => Either[String, String] = idAndEvent => idAndEvent.map(_.event).map(fix)
 
-  def fix: String => String = _.replaceAll("_%", "_percentage")
+  def fix: String => String = _.replaceAll("availability_%", "availability_percentage")
 
 }

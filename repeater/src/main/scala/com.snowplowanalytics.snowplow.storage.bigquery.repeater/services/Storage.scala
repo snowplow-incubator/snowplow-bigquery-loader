@@ -15,13 +15,12 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.format.DateTimeFormat
 import com.google.cloud.storage.{BlobInfo, StorageOptions}
-
 import cats.effect.Sync
 import cats.implicits._
 import io.chrisdavenport.log4cats.Logger
 import fs2.{Chunk, Stream, text}
-
 import com.snowplowanalytics.snowplow.badrows.BadRow
+import io.circe.Json
 
 object Storage {
   // TODO: this is certainly non-RT
@@ -37,6 +36,15 @@ object Storage {
     val content  = Stream.chunk(rows).map(_.compact).intersperse("\n").through(text.utf8Encode).compile.to(Array)
 
     Logger[F].info(s"Preparing write to a $fileName with ${rows.size} items") *>
+      Sync[F].delay(storage.create(blobInfo, content)) *>
+      Logger[F].info(s"Written ${blobInfo.getName} of ${content.size} bytes")
+  }
+
+  def uploadJson[F[_]: Sync: Logger](bucketName: String, fileName: String, rows: Chunk[Json]): F[Unit] = {
+    val blobInfo = BlobInfo.newBuilder(bucketName, fileName).build()
+    val content  = Stream.chunk(rows).map(_.noSpaces).intersperse("\n").through(text.utf8Encode).compile.to(Array)
+
+    Logger[F].info(s"Preparing write to a failed insderts $fileName with ${rows.size} items") *>
       Sync[F].delay(storage.create(blobInfo, content)) *>
       Logger[F].info(s"Written ${blobInfo.getName} of ${content.size} bytes")
   }

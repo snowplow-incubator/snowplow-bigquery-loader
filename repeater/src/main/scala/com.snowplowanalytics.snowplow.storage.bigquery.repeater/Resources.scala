@@ -67,6 +67,14 @@ class Resources[F[_]: Sync](
     statistics.update(s => s.copy(inserted = s.inserted + 1))
   def logAbandoned: F[Unit] =
     statistics.update(s => s.copy(desperates = s.desperates + 1))
+
+  def logRecovered: F[Unit] =
+    statistics.update(s => s.copy(recovered = s.recovered + 1))
+  def logFailed: F[Unit] =
+    statistics.update(s => s.copy(failed = s.failed + 1))
+  def logTotal: F[Unit] =
+    statistics.update(s => s.copy(total = s.total + 1))
+
   def updateLifetime: F[Unit] =
     for {
       now <- Sync[F].delay(Instant.now())
@@ -96,18 +104,24 @@ object Resources {
 
   val QueueSize = 100
 
-  case class Statistics(inserted: Int, desperates: Int, lifetime: Duration)
+  case class Statistics(inserted: Int, desperates: Int, lifetime: Duration, recovered: Int, failed: Int, total: Int)
 
   object Statistics {
-    val start = Statistics(0, 0, Duration(0, "millis"))
+    val start = Statistics(0, 0, Duration(0, "millis"), 0, 0, 0)
 
     implicit val showRepeaterStatistics: Show[Statistics] = {
       case s if (s.lifetime.toHours == 0) =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected in ${s.lifetime.toMinutes} minutes."
+        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected, " +
+          s"${s.recovered} recovered, ${s.failed} failed to recover, ${s.total} total " +
+          s"in ${s.lifetime.toMinutes} minutes"
       case s if (s.lifetime.toHours > 24) =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected in ${s.lifetime.toDays} days and ${s.lifetime.toHours - s.lifetime.toDays * 24} hours."
+        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected, " +
+          s"${s.recovered} recovered, ${s.failed} failed to recover, ${s.total} total " +
+          s"in ${s.lifetime.toDays} days and ${s.lifetime.toHours - s.lifetime.toDays * 24} hours"
       case s =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected in ${s.lifetime.toHours} hours."
+        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected, " +
+          s"${s.recovered} recovered, ${s.failed} failed to recover, ${s.total} total " +
+          s"in ${s.lifetime.toHours} hours"
     }
   }
 

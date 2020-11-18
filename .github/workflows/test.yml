@@ -1,0 +1,22 @@
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  deploy:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up JDK 8
+      uses: actions/setup-java@v1
+      with:
+        java-version: 8
+    - name: Run tests
+      run: sbt "project repeater" test
+    - name: Build and publish repeater
+      run: .github/deploy_docker.sh ${GITHUB_REF##*/}
+      env:
+        BINTRAY_SNOWPLOW_DOCKER_USER: ${{ secrets.BINTRAY_SNOWPLOW_DOCKER_USER }}
+        BINTRAY_SNOWPLOW_DOCKER_API_KEY: ${{ secrets.BINTRAY_SNOWPLOW_DOCKER_API_KEY }}
+

@@ -29,6 +29,10 @@ import fs2.concurrent.{Queue, SignallingRef}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.GcsPath
+import com.permutive.pubsub.producer.PubsubProducer
+import blobstore.Store
+import blobstore.gcs.GcsStore
+import com.google.cloud.storage.StorageOptions
 
 /**
   * Resources container, allowing to manipulate all acquired entities
@@ -53,12 +57,24 @@ class Resources[F[_]: Sync](
   val backoffTime: Int,
   val concurrency: Int,
   val insertBlocker: Blocker,
-  val jobStartTime: Instant
+  val jobStartTime: Instant,
+  val pubSubProducer: PubsubProducer[F, String],
+  val store: Store[F],
+  val problematicContext: String,
+  val fixedContext: String
 ) {
   def logInserted: F[Unit] =
     statistics.update(s => s.copy(inserted = s.inserted + 1))
   def logAbandoned: F[Unit] =
     statistics.update(s => s.copy(desperates = s.desperates + 1))
+
+  def logRecovered: F[Unit] =
+    statistics.update(s => s.copy(recovered = s.recovered + 1))
+  def logFailed: F[Unit] =
+    statistics.update(s => s.copy(failed = s.failed + 1))
+  def logTotal: F[Unit] =
+    statistics.update(s => s.copy(total = s.total + 1))
+
   def updateLifetime: F[Unit] =
     for {
       now <- Sync[F].delay(Instant.now())
@@ -70,31 +86,51 @@ class Resources[F[_]: Sync](
     statistics.get.flatMap(statistics => L.info(statistics.show))
 }
 
+class PartialResources[F[_]: Sync](
+  val bigQuery: BigQuery,
+  val bucket: GcsPath,
+  val env: Config.Environment,
+  val desperates: Queue[F, BadRow],
+  val counter: Ref[F, Int],
+  val stop: SignallingRef[F, Boolean],
+  val statistics: Ref[F, Resources.Statistics],
+  val concurrency: Int,
+  val insertBlocker: Blocker,
+  val jobStartTime: Instant,
+  val store: Store[F]
+)
+
 object Resources {
 
   val QueueSize = 100
 
-  case class Statistics(inserted: Int, desperates: Int, lifetime: Duration)
+  case class Statistics(inserted: Int, desperates: Int, lifetime: Duration, recovered: Int, failed: Int, total: Int)
 
   object Statistics {
-    val start = Statistics(0, 0, Duration(0, "millis"))
+    val start = Statistics(0, 0, Duration(0, "millis"), 0, 0, 0)
 
     implicit val showRepeaterStatistics: Show[Statistics] = {
       case s if (s.lifetime.toHours == 0) =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected in ${s.lifetime.toMinutes} minutes."
+        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected, " +
+          s"${s.recovered} recovered, ${s.failed} failed to recover, ${s.total} total " +
+          s"in ${s.lifetime.toMinutes} minutes"
       case s if (s.lifetime.toHours > 24) =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected in ${s.lifetime.toDays} days and ${s.lifetime.toHours - s.lifetime.toDays * 24} hours."
+        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected, " +
+          s"${s.recovered} recovered, ${s.failed} failed to recover, ${s.total} total " +
+          s"in ${s.lifetime.toDays} days and ${s.lifetime.toHours - s.lifetime.toDays * 24} hours"
       case s =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected in ${s.lifetime.toHours} hours."
+        s"Statistics: ${s.inserted} rows inserted, ${s.desperates} rows rejected, " +
+          s"${s.recovered} recovered, ${s.failed} failed to recover, ${s.total} total " +
+          s"in ${s.lifetime.toHours} hours"
     }
   }
 
   /** Allocate all resources for an application */
-  def acquire[F[_]: ConcurrentEffect: Timer: Logger](
+  def acquire[F[_]: ContextShift: ConcurrentEffect: Timer: Logger](
     cmd: RepeaterCli.ListenCommand
   ): Resource[F, Resources[F]] = {
     // It's a function because blocker needs to be created as Resource
-    val initResources: F[Blocker => Resources[F]] = for {
+    val initResources: F[Blocker => PartialResources[F]] = for {
       transformed <- Config.transform[F](cmd.config).value
       env         <- Sync[F].fromEither(transformed)
       bigQuery    <- services.Database.getClient[F]
@@ -103,12 +139,13 @@ object Resources {
       stop        <- SignallingRef[F, Boolean](false)
       statistics  <- Ref[F].of[Statistics](Statistics.start)
       concurrency <- Sync[F].delay(Runtime.getRuntime.availableProcessors * 16)
+      storage     <- Sync[F].delay(StorageOptions.getDefaultInstance.getService)
       _ <- Logger[F].info(
         s"Initializing Repeater from ${env.config.failedInserts} to ${env.config.tableId} with $concurrency streams"
       )
       jobStartTime <- Sync[F].delay(Instant.now())
     } yield (b: Blocker) =>
-      new Resources(
+      new PartialResources(
         bigQuery,
         cmd.deadEndBucket,
         env,
@@ -116,18 +153,36 @@ object Resources {
         counter,
         stop,
         statistics,
-        cmd.bufferSize,
-        cmd.window,
-        cmd.backoff,
         concurrency,
         b,
-        jobStartTime
+        jobStartTime,
+        GcsStore(storage, b, List.empty)
       )
 
     val createBlocker = Sync[F].delay(Executors.newCachedThreadPool()).map(ExecutionContext.fromExecutorService)
     for {
-      blocker   <- Resource.make(createBlocker)(ec      => Sync[F].delay(ec.shutdown())).map(Blocker.liftExecutionContext)
-      resources <- Resource.make(initResources.map(init => init.apply(blocker)))(release)
+      blocker        <- Resource.make(createBlocker)(ec => Sync[F].delay(ec.shutdown())).map(Blocker.liftExecutionContext)
+      pr             <- Resource.make(initResources.map(init => init(blocker)))(release)
+      pubsubProducer <- services.PubSub.getProducer[F](pr.env.config.projectId, pr.env.config.failedInserts)
+      resources = new Resources(
+        pr.bigQuery,
+        cmd.deadEndBucket,
+        pr.env,
+        pr.desperates,
+        pr.counter,
+        pr.stop,
+        pr.statistics,
+        cmd.bufferSize,
+        cmd.window,
+        cmd.backoff,
+        pr.concurrency,
+        pr.insertBlocker,
+        pr.jobStartTime,
+        pubsubProducer,
+        pr.store,
+        cmd.problematicContext,
+        cmd.fixedContext
+      )
     } yield resources
   }
 
@@ -147,7 +202,7 @@ object Resources {
 
   /** Stop pulling data from Pubsub, flush despeates queue into GCS bucket */
   def release[F[_]: ConcurrentEffect: Timer: Logger](
-    env: Resources[F]
+    env: PartialResources[F]
   ): F[Unit] = {
     val flushDesperate = for {
       desperates <- pullRemaining(env.desperates)

@@ -24,7 +24,8 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.services.Storage
 
 object Recover {
 
-  val ConcurrencyLevel = 64
+  val FileConcurrencyLevel = 12  // We don't want to have a big gap between first and last files
+  val ConcurrencyLevel = 32      // We have 30 lines in a file at most
 
   val GcsPrefix = "gs://"
 
@@ -44,12 +45,16 @@ object Recover {
     resources
       .store
       .list(path)
-      .evalMap(writeListingToLogs[F])
       .filter(keepTimePeriod)
-      .evalMap(resources.store.getContents)
-      .through(fs2.text.lines)
-      .evalTap(_ => resources.logTotal)
-      .filter(keepInvalidColumnErrors)
+      .map { path =>
+        Stream.eval_[F, Unit](writeListingToLogs[F](path)) ++
+          resources.store.get(path)
+            .through(fs2.text.utf8Decode)
+            .through(fs2.text.lines)
+            .evalTap(_ => resources.logTotal)
+      }
+      .parJoin[F, String](FileConcurrencyLevel)
+      .filter(keepInvalidColumnErrors(resources.problematicContext))
       .map(recover(resources.problematicContext, resources.fixedContext))
       .observeEither(badPipe(resources), goodPipe(resources))
       .void
@@ -103,7 +108,7 @@ object Recover {
     result.leftMap { error => FailedRecovery(failed, error) }
   }
 
-  /** Fix `payload` property from loader_recovery_error bad row
+  /** Fix *inner* `payload` property from loader_recovery_error bad row
     * by replacing "availability_%" with "availability_percentage" keys
     * in `ColumnToFix` column
     */
@@ -127,12 +132,12 @@ object Recover {
       }
     } yield Json.fromFields(fixed)
 
-  def writeListingToLogs[F[_]: Monad: Logger](p: Path): F[Path] =
-    Logger[F].info(s"Processing file: ${p.fileName}, path: ${p.pathFromRoot}, isDir: ${p.isDir}").as(p)
+  def writeListingToLogs[F[_]: Monad: Logger](p: Path): F[Unit] =
+    Logger[F].info(s"File: ${p.fileName}, path: ${p.size.getOrElse(0L)}")
 
   def keepTimePeriod(p: Path): Boolean =
-    p.fileName.exists(_.startsWith("2020-11"))
+    p.fileName.exists(_.contains("2020-11"))
 
-  def keepInvalidColumnErrors(f: String): Boolean =
-    f.contains("no such field.")
+  def keepInvalidColumnErrors(columnToFix: String)(f: String): Boolean =
+    f.contains("no such field.") && f.contains(columnToFix)
 }

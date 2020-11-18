@@ -133,10 +133,10 @@ object Recover {
     } yield Json.fromFields(fixed)
 
   def writeListingToLogs[F[_]: Monad: Logger](p: Path): F[Unit] =
-    Logger[F].info(s"File: ${p.fileName}, path: ${p.size.getOrElse(0L)}")
+    Logger[F].info(s"File: ${p.fileName}, size: ${p.size.getOrElse(0L)}")
 
   def keepTimePeriod(p: Path): Boolean =
-    p.fileName.exists(_.contains("2020-11"))
+    p.fileName.exists(file => !file.contains("2020-11") && file.contains("2020-10")) && p.size.exists(_ > 0)
 
   def keepInvalidColumnErrors(columnToFix: String)(f: String): Boolean =
     f.contains("no such field.") && f.contains(columnToFix)

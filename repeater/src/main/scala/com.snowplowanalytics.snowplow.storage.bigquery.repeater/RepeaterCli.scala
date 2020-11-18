@@ -68,6 +68,9 @@ object RepeaterCli { // TODO: factor out into a common module
 
   val verbose = Opts.flag("verbose", "Provide debug output").orFalse
 
+  val problematicContext = Opts.option[String]("problematicContext", "A context column name with '%' to recover")
+  val fixedContext = Opts.option[String]("fixedContext", "A context column name that problematic should be renamed to")
+
   case class ListenCommand(
     config: EnvironmentConfig,
     failedInsertsSub: String,
@@ -75,11 +78,13 @@ object RepeaterCli { // TODO: factor out into a common module
     verbose: Boolean,
     bufferSize: Int,
     window: Int,
-    backoff: Int
+    backoff: Int,
+    problematicContext: String,
+    fixedContext: String,
   )
 
   val command = Command(generated.BuildInfo.name, generated.BuildInfo.description) {
-    (options, failedInsertsSub, deadEndBucket, verbose, bufferSize, window, backoffPeriod).mapN(ListenCommand.apply)
+    (options, failedInsertsSub, deadEndBucket, verbose, bufferSize, window, backoffPeriod, problematicContext, fixedContext).mapN(ListenCommand.apply)
   }
 
   def parse(args: Seq[String]) = command.parse(args)

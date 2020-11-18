@@ -44,29 +44,25 @@ object Recover {
       .filter(keepTimePeriod)
       .evalMap(resources.store.getContents)
       .filter(keepInvalidColumnErrors)
-      .map(recover)
+      .map(recover(resources.problematicContext, resources.fixedContext))
       .evalMap(printEventId[F, Error])
       .parEvalMapUnordered(ConcurrencyLevel)(writeToPubSub(resources))
 
   def writeToPubSub[F[_]: Concurrent: Logger](
     resources: Resources[F]
   ): Either[Error, Json] => F[Unit] = {
-    case Left(e) => Logger[F].error(s"Error: $e")
+    case Left(e) => Logger[F].error(e.show)
     case Right(event) =>
-      for {
-        _     <- Logger[F].info(s"Preparing to write to PubSub for recovery: $event")
-        msgId <- resources.pubSubProducer.produce(event.noSpaces)
-        _     <- Logger[F].info(s"Successfully written to PubSub: $msgId")
-      } yield ()
+      Logger[F].info(s"Preparing to write to PubSub for recovery: $event") *>
+        resources.pubSubProducer.produce(event.noSpaces).flatMap { msgId =>
+          Logger[F].debug(s"Successfully written to PubSub: $msgId")
+        }
   }
 
   case class IdAndEvent(id: UUID, event: Json)
 
-  val ColumnToFix = "contexts_com_snplow_eng_gcp_luke_test_percentage_1_0_0"
-  val FixedColumn = "contexts_com_snplow_eng_gcp_luke_test_percentage_1_0_3"
-
   /** Try to parse loader_recovery_error bad row and fix it, attaching event id */
-  def recover(failed: String): Either[Error, IdAndEvent] =
+  def recover(columnToFix: String, fixedColumn: String)(failed: String): Either[Error, IdAndEvent] =
     for {
       doc          <- parse(failed)
       payload       = doc.hcursor.downField("data").downField("payload")
@@ -75,7 +71,7 @@ object Recover {
       innerPayload <- quotedParsed.hcursor.downField("payload").as[Json]
       eventId      <- quotedParsed.hcursor.downField("eventId").as[UUID]
 
-      fixedPayload  = fix(innerPayload).getOrElse(innerPayload)
+      fixedPayload <- fix(innerPayload, columnToFix, fixedColumn)
 
     } yield IdAndEvent(eventId, fixedPayload)
 
@@ -83,11 +79,11 @@ object Recover {
     * by replacing "availability_%" with "availability_percentage" keys
     * in `ColumnToFix` column
     */
-  def fix(payload: Json): Either[DecodingFailure, Json] =
+  def fix(payload: Json, columnToFix: String, fixedColumn: String): Either[DecodingFailure, Json] =
     for {
       jsonObject <- payload.as[JsonObject].map(_.toMap)
       fixed = jsonObject.map {
-        case (ColumnToFix, value) if value.isArray =>
+        case (key, value) if key == columnToFix && value.isArray =>
           val fixedContexts = value.asArray.getOrElse(Vector.empty).map { context =>
             val fixedContext = context.asObject.map { hash =>
               val fixedHash = hash.toMap.map {
@@ -98,7 +94,7 @@ object Recover {
             }
             fixedContext.getOrElse(context)
           }
-          (FixedColumn, Json.fromValues(fixedContexts))
+          (fixedColumn, Json.fromValues(fixedContexts))
         case (key, value) => (key, value)
       }
     } yield Json.fromFields(fixed)

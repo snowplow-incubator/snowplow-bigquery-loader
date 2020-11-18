@@ -15,8 +15,11 @@ class RecoverSpec extends Specification {
     """
 
   def e1 = {
+    val ColumnToFix = "contexts_com_snplow_eng_gcp_luke_test_percentage_1_0_0"
+    val FixedColumn = "contexts_com_snplow_eng_gcp_luke_test_percentage_1_0_3"
+
     val in        = Source.fromResource("failed_inserts.json").mkString
-    val recovered = Recover.recover(in)
+    val recovered = Recover.recover(ColumnToFix, FixedColumn)(in)
     val out       = parse(Source.fromResource("payload_fixed.json").mkString).getOrElse(Json.Null)
 
     recovered must beRight.like {

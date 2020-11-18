@@ -44,7 +44,7 @@ import com.google.cloud.storage.StorageOptions
   * @param stop a signal to stop retreving items
   * @param concurrency a number of streams to execute inserts
   */
-case class Resources[F[_]: Sync](
+class Resources[F[_]: Sync](
   val bigQuery: BigQuery,
   val bucket: GcsPath,
   val env: Config.Environment,
@@ -59,7 +59,9 @@ case class Resources[F[_]: Sync](
   val insertBlocker: Blocker,
   val jobStartTime: Instant,
   val pubSubProducer: PubsubProducer[F, String],
-  val store: Store[F]
+  val store: Store[F],
+  val problematicContext: String,
+  val fixedContext: String
 ) {
   def logInserted: F[Unit] =
     statistics.update(s => s.copy(inserted = s.inserted + 1))
@@ -163,7 +165,9 @@ object Resources {
         pr.insertBlocker,
         pr.jobStartTime,
         pubsubProducer,
-        pr.store
+        pr.store,
+        cmd.problematicContext,
+        cmd.fixedContext
       )
     } yield resources
   }

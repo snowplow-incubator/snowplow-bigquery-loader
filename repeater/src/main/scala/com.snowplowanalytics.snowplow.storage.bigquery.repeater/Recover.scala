@@ -62,10 +62,8 @@ object Recover {
 
   case class IdAndEvent(id: UUID, event: Json)
 
-  val ColumnToFix = "unstruct_event_com_snplow_eng_gcp_luke_test_percentage_1_0_0"
-  val FixedColumn = "unstruct_event_com_snplow_eng_gcp_luke_test_percentage_1_0_3"
-  val VersionToFix = "1-0-0"
-  val FixedVersion = "1-0-3"
+  val ColumnToFix = "contexts_com_snplow_eng_gcp_luke_test_percentage_1_0_0"
+  val FixedColumn = "contexts_com_snplow_eng_gcp_luke_test_percentage_1_0_3"
 
   /** Try to parse loader_recovery_error bad row and fix it, attaching event id */
   def recover(failed: String): Either[Error, IdAndEvent] =
@@ -89,15 +87,18 @@ object Recover {
     for {
       jsonObject <- payload.as[JsonObject].map(_.toMap)
       fixed = jsonObject.map {
-        case (ColumnToFix, value) if value.isObject =>
-          val problematicColumn = value.asObject.getOrElse(JsonObject.empty).toMap
-          val fixed = problematicColumn.map {
-            case ("availability_%", value) => ("availability_percentage", value)
-            case (key, value) => (key, value)
+        case (ColumnToFix, value) if value.isArray =>
+          val fixedContexts = value.asArray.getOrElse(Vector.empty).map { context =>
+            val fixedContext = context.asObject.map { hash =>
+              val fixedHash = hash.toMap.map {
+                case ("availability_%", value) => ("availability_percentage", value)
+                case (key, value) => (key, value)
+              }
+              Json.fromFields(fixedHash)
+            }
+            fixedContext.getOrElse(context)
           }
-          (FixedColumn, Json.fromFields(fixed))
-        case ("event_version", value) if value.asString.contains(VersionToFix) && jsonObject.isDefinedAt(ColumnToFix) =>
-          ("event_version", Json.fromString(FixedVersion))
+          (FixedColumn, Json.fromValues(fixedContexts))
         case (key, value) => (key, value)
       }
     } yield Json.fromFields(fixed)

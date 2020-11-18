@@ -113,8 +113,8 @@
       "webview_app_version_major": null
     }
   ],
-  "unstruct_event_com_snplow_eng_gcp_luke_test_percentage_1_0_0": {
+  "contexts_com_snplow_eng_gcp_luke_test_percentage_1_0_0": [{
     "availability_%": "10",
     "name": "test01"
-  }
+  }]
 }

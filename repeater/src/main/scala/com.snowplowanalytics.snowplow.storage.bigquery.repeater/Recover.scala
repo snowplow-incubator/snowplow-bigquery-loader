@@ -1,15 +1,26 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
+import java.util.UUID
+
 import fs2.Stream
-import cats.effect.Concurrent
+
 import blobstore.Path
 import blobstore.implicits.GetOps
-import cats.syntax.all._
-import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.GcsPath
+
+import cats.Monad
+import cats.implicits._
+import cats.effect.Concurrent
+
 import io.chrisdavenport.log4cats.Logger
-import cats.effect.Sync
+
+import io.circe._
+import io.circe.parser._
+
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.GcsPath
 
 object Recover {
+
+  val ConcurrencyLevel = 64
 
   val GcsPrefix = "gs://"
 
@@ -20,7 +31,7 @@ object Recover {
     for {
       _    <- Stream.eval(Logger[F].info(s"Starting recovery stream."))
       _    <- Stream.eval(Logger[F].info(s"Resources for recovery: $resources"))
-      path <- Stream.eval(Sync[F].pure(preparePath(resources.bucket)))
+      path  = preparePath(resources.bucket)
       _    <- Stream.eval(Logger[F].info(s"Path for recovery: $path"))
       r    <- recoverStream(resources, path)
     } yield r
@@ -29,64 +40,79 @@ object Recover {
     resources
       .store
       .list(path)
-      .evalMap(writeListingToLogs)
+      .evalMap(writeListingToLogs[F])
       .filter(keepTimePeriod)
       .evalMap(resources.store.getContents)
       .filter(keepInvalidColumnErrors)
-      .map(parseJson)
-      .evalMap(printEventId)
       .map(recover)
-      .evalMap(writeToPubSub(resources))
+      .evalMap(printEventId[F, Error])
+      .parEvalMapUnordered(ConcurrencyLevel)(writeToPubSub(resources))
 
   def writeToPubSub[F[_]: Concurrent: Logger](
     resources: Resources[F]
-  ): Either[String, String] => F[Unit] = {
+  ): Either[Error, Json] => F[Unit] = {
     case Left(e) => Logger[F].error(s"Error: $e")
     case Right(event) =>
       for {
         _     <- Logger[F].info(s"Preparing to write to PubSub for recovery: $event")
-        msgId <- resources.pubSubProducer.produce(event)
-        _     <- Logger[F].info(s"Successfully writen to PubSub: $msgId")
+        msgId <- resources.pubSubProducer.produce(event.noSpaces)
+        _     <- Logger[F].info(s"Successfully written to PubSub: $msgId")
       } yield ()
   }
 
-  def writeListingToLogs[F[_]: Concurrent: Logger]: Path => F[Path] =
-    p =>
-      for {
-        _ <- Logger[F].info(s"Processing file: ${p.fileName}, path: ${p.pathFromRoot}, isDir: ${p.isDir}")
-      } yield p
+  case class IdAndEvent(id: UUID, event: Json)
 
-  def keepTimePeriod[F[_]: Concurrent: Logger]: Path => Boolean =
-    p => p.fileName.map(_.startsWith("2020-11")).getOrElse(false)
+  val ColumnToFix = "unstruct_event_com_snplow_eng_gcp_luke_test_percentage_1_0_0"
+  val FixedColumn = "unstruct_event_com_snplow_eng_gcp_luke_test_percentage_1_0_3"
 
-  def keepInvalidColumnErrors[F[_]: Concurrent: Logger]: String => Boolean =
-    _.contains("no such field.")
+  /** Try to parse loader_recovery_error bad row and fix it, attaching event id */
+  def recover(failed: String): Either[Error, IdAndEvent] =
+    for {
+      doc          <- parse(failed)
+      payload       = doc.hcursor.downField("data").downField("payload")
+      quoted       <- payload.as[String]
+      quotedParsed <- parse(quoted)
+      innerPayload <- quotedParsed.hcursor.downField("payload").as[Json]
+      eventId      <- quotedParsed.hcursor.downField("eventId").as[UUID]
 
-  case class IdAndEvent(id: String, event: String)
+      fixedPayload  = fix(innerPayload).getOrElse(innerPayload)
 
-  def parseJson: String => Either[String, IdAndEvent] =
-    failed => {
-      import io.circe._, io.circe.parser._
-      val doc: Json    = parse(failed).getOrElse(Json.Null)
-      val payload      = doc.hcursor.downField("data").downField("payload")
-      val quoted       = payload.as[String].getOrElse("")
-      val quotedParsed = parse(quoted).getOrElse(Json.Null)
-      val innerPayload = quotedParsed.hcursor.downField("payload").as[Json].getOrElse(Json.Null)
-      val modifiedversion =
-        innerPayload.hcursor.downField("event_version").withFocus(_.mapString(_ => "1-0-1")).top.getOrElse(Json.Null)
-      val eventId = quotedParsed.hcursor.downField("eventId").as[String].getOrElse("")
+    } yield IdAndEvent(eventId, fixedPayload)
 
-      Right(IdAndEvent(eventId, modifiedversion.spaces2))
+  /** Fix `payload` property from loader_recovery_error bad row
+    * by replacing "availability_%" with "availability_percentage" keys
+    * in `ColumnToFix` column
+    */
+  def fix(payload: Json): Either[DecodingFailure, Json] =
+    for {
+      jsonObject <- payload.as[JsonObject].map(_.toMap)
+      fixed = jsonObject.map {
+        case (key, value) if key == ColumnToFix && value.isObject =>
+          val problematicColumn = value.asObject.getOrElse(JsonObject.empty).toMap
+          val fixed = problematicColumn.map {
+            case ("availability_%", value) => ("availability_percentage", value)
+            case (key, value) => (key, value)
+          }
+          (FixedColumn, Json.fromFields(fixed))
+        case (key, value) => (key, value)
+      }
+    } yield Json.fromFields(fixed)
+
+  /** Print id and throw it away */
+  def printEventId[F[_]: Monad: Logger, E](x: Either[E, IdAndEvent]): F[Either[E, Json]] =
+    x match {
+      case Right(IdAndEvent(id, payload)) =>
+        Logger[F].info(s"Event id for recovery: $id").as(payload.asRight)
+      case Left(error) =>
+        Monad[F].pure(error.asLeft)
     }
 
-  def printEventId[F[_]: Concurrent: Logger]: Either[String, IdAndEvent] => F[Either[String, IdAndEvent]] =
-    x =>
-      for {
-        _ <- Logger[F].info(s"Event id for recovery: ${x.map(_.id)}")
-      } yield x
+  def writeListingToLogs[F[_]: Monad: Logger](p: Path): F[Path] =
+    Logger[F].info(s"Processing file: ${p.fileName}, path: ${p.pathFromRoot}, isDir: ${p.isDir}").as(p)
 
-  def recover: Either[String, IdAndEvent] => Either[String, String] = idAndEvent => idAndEvent.map(_.event).map(fix)
+  def keepTimePeriod(p: Path): Boolean =
+    p.fileName.exists(_.startsWith("2020-11"))
 
-  def fix: String => String = _.replaceAll("availability_%", "availability_percentage")
-
+  def keepInvalidColumnErrors(f: String): Boolean =
+    f.contains("no such field.")
 }

@@ -1,7 +1,11 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import org.specs2.Specification
 import scala.io.Source
+
+import io.circe.Json
+import io.circe.parser.parse
+
+import org.specs2.Specification
 
 class RecoverSpec extends Specification {
 
@@ -12,12 +16,11 @@ class RecoverSpec extends Specification {
 
   def e1 = {
     val in        = Source.fromResource("failed_inserts.json").mkString
-    val recovered = Recover.recover(Recover.parseJson(in)).getOrElse("")
-    val out       = Source.fromResource("payload_fixed.json").mkString
+    val recovered = Recover.recover(in)
+    val out       = parse(Source.fromResource("payload_fixed.json").mkString).getOrElse(Json.Null)
 
-    def normalize(s: String) = s.replace(" ", "").replace("\n", "")
-
-    normalize(recovered) ==== normalize(out)
+    recovered must beRight.like {
+      case Recover.IdAndEvent(_, event) => event must beEqualTo(out)
+    }
   }
-
 }

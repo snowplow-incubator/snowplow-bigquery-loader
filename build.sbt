@@ -142,3 +142,8 @@ lazy val repeater = project.in(file("repeater"))
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(BuildInfoPlugin)
   .dependsOn(common)
+
+lazy val benchmark = project
+  .in(file("benchmark"))
+  .enablePlugins(JmhPlugin)
+  .dependsOn(loader % "test->test")

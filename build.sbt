@@ -103,3 +103,10 @@ lazy val forwarder = project.in(file("forwarder"))
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(BuildInfoPlugin)
   .dependsOn(common)
+
+lazy val benchmark = project
+  .in(file("benchmark"))
+  .dependsOn(loader % "test->test")
+  .enablePlugins(JmhPlugin)
+  //.settings(scalaVersion := "2.11.12")
+

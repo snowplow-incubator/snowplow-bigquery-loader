@@ -42,7 +42,7 @@ object BuildSettings {
   )
 
   lazy val buildInfo = Seq(
-    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.generated",
+    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.generated"
   )
 
   lazy val macroSettings = Seq(
@@ -52,15 +52,15 @@ object BuildSettings {
 
   lazy val dockerSettings = Seq(
     // Use single entrypoint script for all apps
-    Universal / sourceDirectory := new java.io.File((baseDirectory in LocalRootProject).value, "docker"),
-    dockerRepository := Some("snowplow-docker-registry.bintray.io"),
-    dockerUsername := Some("snowplow"),
-    dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.1.0",
-    Docker / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
-    Docker / daemonUser := "root",  // Will be gosu'ed by docker-entrypoint.sh
-    dockerEnvVars := Map("SNOWPLOW_BIGQUERY_APP" -> name.value),
-    dockerCommands += ExecCmd("RUN", "cp", "/opt/docker/bin/docker-entrypoint.sh", "/usr/local/bin/"),
-    dockerEntrypoint := Seq("docker-entrypoint.sh"),
-    dockerCmd := Seq("--help")
+//    Universal / sourceDirectory := new java.io.File((baseDirectory in LocalRootProject).value, "docker"),
+//    dockerRepository := Some("snowplow-docker-registry.bintray.io"),
+//    dockerUsername := Some("snowplow"),
+//    dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.1.0",
+//    Docker / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
+//    Docker / daemonUser := "root",  // Will be gosu'ed by docker-entrypoint.sh
+//    dockerEnvVars := Map("SNOWPLOW_BIGQUERY_APP" -> name.value),
+//    dockerCommands += ExecCmd("RUN", "cp", "/opt/docker/bin/docker-entrypoint.sh", "/usr/local/bin/"),
+//    dockerEntrypoint := Seq("docker-entrypoint.sh"),
+//    dockerCmd := Seq("--help")
   )
 }

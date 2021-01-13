@@ -30,7 +30,7 @@ import com.snowplowanalytics.iglu.client.resolver.registries.Registry
 
 object SpecHelpers {
 
-  private val adClick = json"""{
+  val adClick = json"""{
     	"$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
     	"description": "Schema for an ad click event",
     	"type": "object",

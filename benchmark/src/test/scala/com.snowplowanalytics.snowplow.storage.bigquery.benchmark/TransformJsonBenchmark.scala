@@ -2,14 +2,15 @@ package com.snowplowanalytics.snowplow.storage.bigquery.benchmark
 
 import java.util.concurrent.TimeUnit
 import org.openjdk.jmh.annotations._
+
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.LoaderRow
 
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.AverageTime, Mode.Throughput))
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
-class FromJsonBenchmark {
+class TransformJsonBenchmark {
   @Benchmark
-  def fromJson(state: States.ExampleEventState): Unit = {
-    LoaderRow.fromJson(state.resolver)(state.baseEvent)
+  def transformJson(state: States.ExampleEventState): Unit = {
+    LoaderRow.transformJson(state.resolver)( state.adClickSchemaKey)(state.unstruct)
   }
 }

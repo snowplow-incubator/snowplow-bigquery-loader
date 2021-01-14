@@ -32,7 +32,7 @@ object SpecHelpers {
       Success(schemas.get(schemaKey))
   }
 
-  private val adClick = asJsonNode(parseJson("""{
+  val adClick = asJsonNode(parseJson("""{
     |	"$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
     |	"description": "Schema for an ad click event",
     |	"self": {	"vendor":"com.snowplowanalytics.snowplow","name":"ad_click","format":"jsonschema","version":"1-0-0"},

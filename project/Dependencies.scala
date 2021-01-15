@@ -25,7 +25,7 @@ object Dependencies {
     val googleCloudBigQuery = "1.102.0" // no upgrade before bumping pubsubFs2
     val googleCloudPubSub   = "1.102.0" // no upgrade before bumping pubsubFs2
     val googleCloudStorage  = "1.102.0" // no upgrade before bumping pubsubFs2
-    val metrics             = "4.1.11"
+    val metrics             = "4.1.17"
     val slf4j               = "1.7.30"
 
     // TODO: remove when libraries bringing in older versions are bumped

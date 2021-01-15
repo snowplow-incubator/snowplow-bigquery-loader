@@ -19,6 +19,28 @@ $ sbt "project mutator" test
 $ sbt "project repeater" test
 ```
 
+## Benchmarks
+
+This project comes with [sbt-jmh](https://github.com/ktoso/sbt-jmh).
+
+To run a specific benchmark test:
+
+```bash
+$ sbt 'project benchmark' '+jmh:run -i 20 -wi 10 -f2 -t3 .*TransformAtomic.*'
+```
+
+Or, to run all benchmark tests (once more are added):
+
+```bash
+$ sbt 'project benchmark' '+jmh:run -i 20 -wi 10 -f2 -t3'
+```
+
+The number of warm-ups and iterations is what the `sbt-jmh` project recommends but they can be lowered for faster runs.
+
+To see all `sbt-jmh` options: `jmh:run -h`.
+
+Add new benchmarks to [this module](./benchmark/src/test/scala/com.snowplowanalytics.snowplow.storage.bigquery/benchmark/).
+
 ## Find out more
 
 | **[Technical Docs][techdocs]**    | **[Setup Guide][setup]**    | **[Contributing][contributing]**          |

@@ -37,7 +37,7 @@ object SpecHelpers {
 
   val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
-  private val adClick        = json"""{
+  private[bigquery] val adClick = json"""{
     	"$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
     	"description": "Schema for an ad click event",
     	"type": "object",
@@ -57,7 +57,7 @@ object SpecHelpers {
     	"additionalProperties": false
     }
     """
-  private val geolocation100 = json"""{
+  private val geolocation100    = json"""{
      "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
      "description": "Schema for client geolocation contexts",
      "type": "object",
@@ -74,7 +74,7 @@ object SpecHelpers {
      "additionalProperties": false
      }
     """
-  private val geolocation110 = json"""
+  private val geolocation110    = json"""
       {
       "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
       "description": "Schema for client geolocation contexts",
@@ -92,7 +92,7 @@ object SpecHelpers {
       "additionalProperties": false
       }
     """
-  private val webPage        = json"""
+  private val webPage           = json"""
       {
       "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
       "description": "Schema for a web page context",

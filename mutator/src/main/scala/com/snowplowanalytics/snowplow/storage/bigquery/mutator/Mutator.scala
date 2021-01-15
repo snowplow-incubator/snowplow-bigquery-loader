@@ -20,18 +20,16 @@ import scala.util.control.NonFatal
 import scala.concurrent.duration._
 import cats.data.EitherT
 import cats.effect._
-import cats.effect.concurrent.MVar
+import cats.effect.concurrent.{MVar, MVar2}
 import cats.implicits._
 import io.circe.Json
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.client.{Client, ClientError}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field => DdlField}
-
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field              => DdlField}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema => LoaderSchema}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.Mutator._
@@ -47,7 +45,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.mutator.Mutator._
 class Mutator private (
   igluClient: Client[IO, Json],
   tableReference: TableReference,
-  state: MVar[IO, MutatorState],
+  state: MVar2[IO, MutatorState],
   verbose: Boolean
 ) {
 

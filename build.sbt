@@ -135,3 +135,10 @@ lazy val forwarder = project
     )
   )
   .dependsOn(common)
+
+// format: off
+lazy val benchmark = project
+  .in(file("benchmark"))
+  .enablePlugins(JmhPlugin)
+  .dependsOn(loader % "test->test")
+// format: on

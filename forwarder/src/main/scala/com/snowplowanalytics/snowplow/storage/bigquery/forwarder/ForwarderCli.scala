@@ -14,7 +14,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 package forwarder
 
 import cats.syntax.either._
-import cats.effect.{ IO, Clock }
+import cats.effect.{Clock, IO}
 
 import com.spotify.scio.Args
 import common.Config._
@@ -26,7 +26,7 @@ import common.Config._
   */
 @deprecated("This component is no longer supported", "Forwarder 0.5.0")
 object ForwarderCli {
-  private implicit val privateIoClock: Clock[IO] =
+  implicit private val privateIoClock: Clock[IO] =
     Clock.create[IO]
 
   case class ForwarderEnvironment(common: Environment, failedInserts: String) {

@@ -41,6 +41,16 @@ To see all `sbt-jmh` options: `jmh:run -h`.
 
 Add new benchmarks to [this module](./benchmark/src/test/scala/com.snowplowanalytics.snowplow.storage.bigquery/benchmark/).
 
+## Building fatjars
+
+You can build the `jar` files for Mutator, Repeater and Streamloader with [sbt](https://www.scala-sbt.org/) like so:
+
+```bash
+$ sbt clean 'project mutator' assembly
+$ sbt clean 'project repeater' assembly
+$ sbt clean 'project streamloader' assembly
+```
+
 ## Find out more
 
 | **[Technical Docs][techdocs]**    | **[Setup Guide][setup]**    | **[Contributing][contributing]**          |

@@ -1,0 +1,30 @@
+name: build
+
+on: push
+
+jobs:
+  test_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: coursier/cache-action@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v1
+        with:
+          java-version: 8
+      - name: Run tests
+        run: sbt test
+      - name: Create release binaries
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          sbt "project loader" universal:packageBin
+          sbt "project mutator" universal:packageBin
+          sbt "project repeater" universal:packageBin
+          sbt "project streamloader" universal:packageBin
+      - name: Upload release binaries
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: alexellis/upload-assets@0.2.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          asset_paths: '["./loader/target/universal/snowplow-bigquery-loader-*.zip", "./mutator/target/universal/snowplow-bigquery-mutator-*.zip", "./repeater/target/universal/snowplow-bigquery-repeater-*.zip", "./streamloader/target/universal/snowplow-bigquery-streamloader-*.zip"]'

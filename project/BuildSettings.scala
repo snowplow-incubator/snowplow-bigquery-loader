@@ -123,12 +123,12 @@ object BuildSettings {
 
   lazy val dockerSettings = Seq(
     // Use single entrypoint script for all apps
-    Universal / sourceDirectory := new java.io.File((baseDirectory in LocalRootProject).value, "docker"),
-    dockerRepository := Some("snowplow-docker-registry.bintray.io"),
+    sourceDirectory in Universal := new java.io.File((baseDirectory in LocalRootProject).value, "docker"),
+    maintainer in Docker := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
+    dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.2.1",
+    daemonUser in Docker := "root",
     dockerUsername := Some("snowplow"),
-    dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.1.0",
-    Docker / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
-    Docker / daemonUser := "root", // Will be gosu'ed by docker-entrypoint.sh
+    dockerUpdateLatest := true,
     dockerEnvVars := Map("SNOWPLOW_BIGQUERY_APP" -> name.value),
     dockerCommands += ExecCmd("RUN", "cp", "/opt/docker/bin/docker-entrypoint.sh", "/usr/local/bin/"),
     dockerEntrypoint := Seq("docker-entrypoint.sh"),

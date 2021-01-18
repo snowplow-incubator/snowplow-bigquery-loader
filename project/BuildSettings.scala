@@ -12,12 +12,15 @@
  */
 import sbt._
 import Keys._
+import com.typesafe.sbt.packager
 import com.typesafe.sbt.packager.Keys.{daemonUser, maintainer}
 import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
 import com.typesafe.sbt.packager.docker.ExecCmd
 import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
 import sbtbuildinfo._
 import sbtbuildinfo.BuildInfoKeys._
+import sbtassembly._
+import sbtassembly.AssemblyKeys._
 
 object BuildSettings {
   lazy val projectSettings = Seq(
@@ -123,16 +126,36 @@ object BuildSettings {
 
   lazy val dockerSettings = Seq(
     // Use single entrypoint script for all apps
-    Universal / sourceDirectory := new java.io.File((baseDirectory in LocalRootProject).value, "docker"),
-    dockerRepository := Some("snowplow-docker-registry.bintray.io"),
+    sourceDirectory in Universal := new java.io.File((baseDirectory in LocalRootProject).value, "docker"),
+    maintainer in Docker := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
+    dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.2.1",
+    daemonUser in Docker := "root",
     dockerUsername := Some("snowplow"),
-    dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.1.0",
-    Docker / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
-    Docker / daemonUser := "root", // Will be gosu'ed by docker-entrypoint.sh
+    dockerUpdateLatest := true,
     dockerEnvVars := Map("SNOWPLOW_BIGQUERY_APP" -> name.value),
     dockerCommands += ExecCmd("RUN", "cp", "/opt/docker/bin/docker-entrypoint.sh", "/usr/local/bin/"),
     dockerEntrypoint := Seq("docker-entrypoint.sh"),
     dockerCmd := Seq("--help")
+  )
+
+  lazy val assemblySettings = Seq(
+    assemblyJarName in assembly := { s"${moduleName.value}-${version.value}.jar" },
+    assemblyMergeStrategy in assembly := {
+      case PathList("META-INF", _ @_*) => MergeStrategy.discard
+      case _                           => MergeStrategy.first
+    }
+  )
+
+  lazy val universalPackagingSettings = Seq(
+    // removes all jar mappings in universal and appends the fat jar
+    mappings in Universal := {
+      val universalMappings = (mappings in Universal).value
+      val fatJar            = (assembly in Compile).value
+      val filtered = universalMappings.filter {
+        case (_, name) => !name.endsWith(".jar")
+      }
+      filtered :+ (fatJar -> ("lib/" + fatJar.getName))
+    }
   )
 
   lazy val buildSettings = Seq(
@@ -143,8 +166,8 @@ object BuildSettings {
 
   lazy val commonBuildSettings       = (commonProjectSettings ++ buildSettings).diff(dockerSettings)
   lazy val loaderBuildSettings       = loaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
-  lazy val streamloaderBuildSettings = streamloaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
-  lazy val mutatorBuildSettings      = mutatorProjectSettings ++ buildSettings
-  lazy val repeaterBuildSettings     = repeaterProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
+  lazy val streamloaderBuildSettings = streamloaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings ++ assemblySettings ++ universalPackagingSettings
+  lazy val mutatorBuildSettings      = mutatorProjectSettings ++ buildSettings ++ assemblySettings ++ universalPackagingSettings
+  lazy val repeaterBuildSettings     = repeaterProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings ++ assemblySettings ++ universalPackagingSettings
   lazy val forwarderBuildSettings    = forwarderProjectSettings ++ buildSettings ++ macroSettings
 }

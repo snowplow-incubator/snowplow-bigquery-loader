@@ -84,7 +84,7 @@ object BuildSettings {
           |object ProjectMetadata {
           |  val organization = "%s"
           |  val name = "%s"
-          |  val version = "%s"          
+          |  val version = "%s"
           |  val scalaVersion = "%s"
           |  val description = "%s"
           |}
@@ -141,8 +141,18 @@ object BuildSettings {
   lazy val assemblySettings = Seq(
     assemblyJarName in assembly := { s"${moduleName.value}-${version.value}.jar" },
     assemblyMergeStrategy in assembly := {
-      case PathList("META-INF", _ @_*) => MergeStrategy.discard
-      case _                           => MergeStrategy.first
+      // merge strategy for fixing netty conflict
+      case PathList("io", "netty", xs @ _*)                => MergeStrategy.first
+      case PathList("META-INF", "native-image", xs @ _*)   => MergeStrategy.discard
+      case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.discard
+      case x if x.endsWith("module-info.class")            => MergeStrategy.first
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
+    assemblyExcludedJars in assembly := {
+      val cp = (fullClasspath in assembly).value
+      cp.filter { _.data.getName == "activation-1.1.jar" }
     }
   )
 
@@ -162,9 +172,9 @@ object BuildSettings {
     Global / cancelable := true,
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
     addCompilerPlugin(("org.typelevel" %% "kind-projector" % Dependencies.V.kindProjector).cross(CrossVersion.full))
-  ) ++ compilerSettings ++ resolverSettings ++ dockerSettings
+  ) ++ compilerSettings ++ resolverSettings ++ dockerSettings ++ assemblySettings
 
-  lazy val commonBuildSettings       = (commonProjectSettings ++ buildSettings).diff(dockerSettings)
+  lazy val commonBuildSettings       = (commonProjectSettings ++ buildSettings).diff(dockerSettings).diff(assemblySettings)
   lazy val loaderBuildSettings       = loaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
   lazy val streamloaderBuildSettings = streamloaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings ++ assemblySettings ++ universalPackagingSettings
   lazy val mutatorBuildSettings      = mutatorProjectSettings ++ buildSettings ++ assemblySettings ++ universalPackagingSettings

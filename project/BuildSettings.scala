@@ -15,6 +15,7 @@ import Keys._
 import com.typesafe.sbt.packager.Keys.{daemonUser, maintainer}
 import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
 import com.typesafe.sbt.packager.docker.ExecCmd
+import sbtassembly.AssemblyPlugin.autoImport._
 import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
 import sbtbuildinfo._
 import sbtbuildinfo.BuildInfoKeys._
@@ -81,7 +82,7 @@ object BuildSettings {
           |object ProjectMetadata {
           |  val organization = "%s"
           |  val name = "%s"
-          |  val version = "%s"          
+          |  val version = "%s"
           |  val scalaVersion = "%s"
           |  val description = "%s"
           |}
@@ -135,13 +136,31 @@ object BuildSettings {
     dockerCmd := Seq("--help")
   )
 
+  lazy val sbtAssemblySettings = Seq(
+    assemblyJarName in assembly := { s"${moduleName.value}-${version.value}.jar" },
+    assemblyMergeStrategy in assembly := {
+      // merge strategy for fixing netty conflict
+      case PathList("io", "netty", xs @ _*)                => MergeStrategy.first
+      case PathList("META-INF", "native-image", xs @ _*)   => MergeStrategy.discard
+      case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.discard
+      case x if x.endsWith("module-info.class")            => MergeStrategy.first
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
+    assemblyExcludedJars in assembly := {
+      val cp = (fullClasspath in assembly).value
+      cp filter {_.data.getName == "activation-1.1.jar"}
+    }
+  )
+
   lazy val buildSettings = Seq(
     Global / cancelable := true,
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
     addCompilerPlugin(("org.typelevel" %% "kind-projector" % Dependencies.V.kindProjector).cross(CrossVersion.full))
-  ) ++ compilerSettings ++ resolverSettings ++ dockerSettings
+  ) ++ compilerSettings ++ resolverSettings ++ dockerSettings ++ sbtAssemblySettings
 
-  lazy val commonBuildSettings       = (commonProjectSettings ++ buildSettings).diff(dockerSettings)
+  lazy val commonBuildSettings       = (commonProjectSettings ++ buildSettings).diff(dockerSettings).diff(sbtAssemblySettings)
   lazy val loaderBuildSettings       = loaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
   lazy val streamloaderBuildSettings = streamloaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
   lazy val mutatorBuildSettings      = mutatorProjectSettings ++ buildSettings

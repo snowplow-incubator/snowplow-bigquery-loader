@@ -25,7 +25,7 @@ import sbtassembly.AssemblyKeys._
 object BuildSettings {
   lazy val projectSettings = Seq(
     organization := "com.snowplowanalytics",
-    version := "0.6.1",
+    version := "0.6.2-rc14",
     scalaVersion := "2.13.2",
     buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description, BuildInfoKey.action("userAgent") {
       s"${name.value}/${version.value}"

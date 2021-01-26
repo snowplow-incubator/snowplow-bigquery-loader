@@ -13,7 +13,7 @@
 import sbt._
 import Keys._
 import com.typesafe.sbt.packager
-import com.typesafe.sbt.packager.Keys.{daemonUser, maintainer}
+import com.typesafe.sbt.packager.Keys.{daemonUser, maintainer, packageName}
 import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
 import com.typesafe.sbt.packager.docker.ExecCmd
 import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
@@ -130,6 +130,7 @@ object BuildSettings {
     maintainer in Docker := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
     dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.2.1",
     daemonUser in Docker := "root",
+    packageName in Docker := s"${name.value}",
     dockerUsername := Some("snowplow"),
     dockerUpdateLatest := true,
     dockerEnvVars := Map("SNOWPLOW_BIGQUERY_APP" -> name.value),
@@ -156,18 +157,6 @@ object BuildSettings {
     }
   )
 
-  lazy val universalPackagingSettings = Seq(
-    // removes all jar mappings in universal and appends the fat jar
-    mappings in Universal := {
-      val universalMappings = (mappings in Universal).value
-      val fatJar            = (assembly in Compile).value
-      val filtered = universalMappings.filter {
-        case (_, name) => !name.endsWith(".jar")
-      }
-      filtered :+ (fatJar -> ("lib/" + fatJar.getName))
-    }
-  )
-
   lazy val buildSettings = Seq(
     Global / cancelable := true,
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % Dependencies.V.betterMonadicFor),
@@ -176,8 +165,8 @@ object BuildSettings {
 
   lazy val commonBuildSettings       = (commonProjectSettings ++ buildSettings).diff(dockerSettings).diff(assemblySettings)
   lazy val loaderBuildSettings       = loaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings
-  lazy val streamloaderBuildSettings = streamloaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings ++ assemblySettings ++ universalPackagingSettings
-  lazy val mutatorBuildSettings      = mutatorProjectSettings ++ buildSettings ++ assemblySettings ++ universalPackagingSettings
-  lazy val repeaterBuildSettings     = repeaterProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings ++ assemblySettings ++ universalPackagingSettings
+  lazy val streamloaderBuildSettings = streamloaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings ++ assemblySettings
+  lazy val mutatorBuildSettings      = mutatorProjectSettings ++ buildSettings ++ assemblySettings
+  lazy val repeaterBuildSettings     = repeaterProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings ++ assemblySettings
   lazy val forwarderBuildSettings    = forwarderProjectSettings ++ buildSettings ++ macroSettings
 }

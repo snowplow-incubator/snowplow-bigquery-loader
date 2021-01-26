@@ -46,15 +46,9 @@ Add new benchmarks to [this module](./benchmark/src/test/scala/com.snowplowanaly
 You can build the `jar` files for Mutator, Repeater and Streamloader like so:
 
 ```bash
-$ sbt universal:packageBin
-```
-
-You can then find `zip` archives containing the `jar` files, looking like this:
-
-```
-./mutator/target/universal/snowplow-bigquery-mutator-0.6.2.zip
-./repeater/target/universal/snowplow-bigquery-repeater-0.6.2.zip
-./streamloader/target/universal/snowplow-bigquery-streamloader-0.6.2.zip
+$ sbt clean 'project mutator' assembly
+$ sbt clean 'project repeater' assembly
+$ sbt clean 'project streamloader' assembly
 ```
 
 ## Find out more

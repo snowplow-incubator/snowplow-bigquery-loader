@@ -21,7 +21,7 @@ jobs:
       #    DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       #    DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       #  run: $GITHUB_WORKSPACE/.github/workflows/deploy.sh ${GITHUB_REF##*/}
-      - name: Build artefacts
+      - name: Build artifacts
         run: |
           sbt clean 'project mutator' assembly
           sbt clean 'project repeater' assembly
@@ -29,9 +29,9 @@ jobs:
       - name: Get current version
         id: ver
         run: |
-          export PROJECT_VERSION=$(sbt "project core" version -Dsbt.log.noformat=true | perl -ne 'print "$1\n" if /info.*(\d+\.\d+\.\d+[^\r\n]*)/' | tail -n 1 | tr -d '\n')
+          export PROJECT_VERSION=$(sbt "project common" version -Dsbt.log.noformat=true | perl -ne 'print "$1\n" if /info.*(\d+\.\d+\.\d+[^\r\n]*)/' | tail -n 1 | tr -d '\n')
           echo "::set-output name=project_version::$PROJECT_VERSION"
-      - name: Create GitHub release & Attach artifacts
+      - name: Create GitHub release and attach artifacts
         uses: softprops/action-gh-release@v1
         with:
           draft: true

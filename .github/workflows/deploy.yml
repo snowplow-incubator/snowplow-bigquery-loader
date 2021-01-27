@@ -15,28 +15,33 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 8
-      - name: Publish to Docker Hub
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        run: $GITHUB_WORKSPACE/.github/workflows/deploy.sh ${GITHUB_REF##*/}
+      #- name: Publish to Docker Hub
+      #  if: startsWith(github.ref, 'refs/tags/')
+      #  env:
+      #    DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      #    DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      #  run: $GITHUB_WORKSPACE/.github/workflows/deploy.sh ${GITHUB_REF##*/}
       - name: Build artefacts
         run: |
           sbt clean 'project mutator' assembly
           sbt clean 'project repeater' assembly
           sbt clean 'project streamloader' assembly
+      - name: Get current version
+        id: ver
+        run: |
+          export PROJECT_VERSION=$(sbt "project core" version -Dsbt.log.noformat=true | perl -ne 'print "$1\n" if /info.*(\d+\.\d+\.\d+[^\r\n]*)/' | tail -n 1 | tr -d '\n')
+          echo "::set-output name=project_version::$PROJECT_VERSION"
       - name: Create GitHub release & Attach artifacts
         uses: softprops/action-gh-release@v1
         with:
           draft: true
           prerelease: true
-          name: Version ${GITHUB_REF##*/}
-          tag_name: ${GITHUB_REF##*/}
-          fail_on_unmatched_files: true
+          name: Version ${{ steps.ver.outputs.project_version }}
+          tag_name: ${{ steps.ver.outputs.project_version }}
           files: |
-            mutator/target/scala-2.13/snowplow-bigquery-mutator-${GITHUB_REF##*/}.jar
-            repeater/target/scala-2.13/snowplow-bigquery-repeater-${GITHUB_REF##*/}.jar
-            streamloader/target/scala-2.13/snowplow-bigquery-streamloader-${GITHUB_REF##*/}.jar
+            mutator/target/scala-2.13/snowplow-bigquery-mutator-${{ steps.ver.outputs.project_version }}.jar
+            repeater/target/scala-2.13/snowplow-bigquery-repeater-${{ steps.ver.outputs.project_version }}.jar
+            streamloader/target/scala-2.13/snowplow-bigquery-streamloader-${{ steps.ver.outputs.project_version }}.jar
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

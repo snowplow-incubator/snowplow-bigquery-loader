@@ -1,3 +1,15 @@
+Version 0.6.2 (2021-01-27)
+--------------------------
+Add benchmark module (#148)
+Migrate from Travis to Github Actions (#149)
+Bump snowplow-scala-analytics-sdk to 2.1.0 (#150)
+Bump scio-core to 0.9.6 (#151)
+Bump metrics-core to 4.1.17 (#152)
+Bump cats-effect to 2.3.1 (#153)
+Bump fs2-core to 2.5.0 (#154)
+Bump http4s-async-http-client to 0.21.15 (#155)
+Extend copyright to 2021 (#158)
+
 Version 0.6.1 (2020-10-08)
 --------------------------
 Common: do not drop contexts when creating TableRow from enriched event (#136)

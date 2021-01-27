@@ -1,6 +1,6 @@
 # Snowplow BigQuery Loader
 
-[![Build Status][travis-image]][travis]
+[![Build Status][build-image]][build-wf]
 [![Release][release-image]][releases]
 [![License][license-image]][license]
 
@@ -78,10 +78,10 @@ limitations under the License.
 [license-image]: http://img.shields.io/badge/license-Apache--2-blue.svg?style=flat
 [license]: http://www.apache.org/licenses/LICENSE-2.0
 
-[travis]: https://travis-ci.org/snowplow-incubator/snowplow-bigquery-loader
-[travis-image]: https://travis-ci.org/snowplow-incubator/snowplow-bigquery-loader.png?branch=master
+[build-image]: https://github.com/snowplow-incubator/snowplow-bigquery-loader/workflows/build/badge.svg
+[build-wf]: https://github.com/snowplow-incubator/snowplow-bigquery-loader/actions?query=workflow%3Abuild
 
-[release-image]: http://img.shields.io/badge/release-0.6.1-blue.svg?style=flat
+[release-image]: http://img.shields.io/badge/release-0.6.2-blue.svg?style=flat
 [releases]: https://github.com/snowplow-incubator/snowplow-bigquery-loader
 
 [techdocs-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/techdocs.png

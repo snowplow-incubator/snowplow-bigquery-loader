@@ -23,9 +23,9 @@ jobs:
       #  run: $GITHUB_WORKSPACE/.github/workflows/deploy.sh ${GITHUB_REF##*/}
       - name: Build artifacts
         run: |
-          sbt clean 'project mutator' assembly
-          sbt clean 'project repeater' assembly
-          sbt clean 'project streamloader' assembly
+          sbt 'project mutator' assembly
+          sbt 'project repeater' assembly
+          sbt 'project streamloader' assembly
       - name: Get current version
         id: ver
         run: |

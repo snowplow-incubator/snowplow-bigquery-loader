@@ -36,11 +36,11 @@ jobs:
         with:
           draft: true
           prerelease: true
-          name: Version "${{ steps.ver.outputs.project_version }}"
+          name: Version ${{ steps.ver.outputs.project_version }}
           tag_name: ${{ steps.ver.outputs.project_version }}
           files: |
-            mutator/target/scala-2.13/snowplow-bigquery-mutator-"${{ steps.ver.outputs.project_version }}".jar
-            repeater/target/scala-2.13/snowplow-bigquery-repeater-"${{ steps.ver.outputs.project_version }}".jar
-            streamloader/target/scala-2.13/snowplow-bigquery-streamloader-"${{ steps.ver.outputs.project_version }}".jar
+            mutator/target/scala-2.13/snowplow-bigquery-mutator-${{ steps.ver.outputs.project_version }}.jar
+            repeater/target/scala-2.13/snowplow-bigquery-repeater-${{ steps.ver.outputs.project_version }}.jar
+            streamloader/target/scala-2.13/snowplow-bigquery-streamloader-${{ steps.ver.outputs.project_version }}.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

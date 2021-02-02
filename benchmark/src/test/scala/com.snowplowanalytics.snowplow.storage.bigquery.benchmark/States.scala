@@ -25,7 +25,12 @@ object States {
     val adClickSchemaKey =
       SchemaKey("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))
     val adClickJson = SpecHelpers.adClick
-    val unstruct =
+    val unstruct = {
       baseEvent.copy(unstruct_event = UnstructEvent(Some(SelfDescribingData(adClickSchemaKey, adClickJson))))
+    }
+    val contexts  = SpecHelpers.contexts
+    val resolver  = SpecHelpers.resolver
+    val processor = SpecHelpers.processor
+    val idClock   = SpecHelpers.IdInstances.idClock
   }
 }

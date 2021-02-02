@@ -14,13 +14,12 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import java.time.Instant
 import java.util.UUID
-
 import scala.concurrent.duration.{MILLISECONDS, NANOSECONDS, TimeUnit}
 import cats.Id
 import cats.effect.Clock
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.Registry
-import com.snowplowanalytics.iglu.core.{SchemaMap, SchemaVer, SelfDescribingSchema}
+import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaMap, SchemaVer, SelfDescribingData, SelfDescribingSchema}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
 import com.snowplowanalytics.snowplow.badrows.Processor
@@ -137,6 +136,21 @@ object SpecHelpers {
       "additionalProperties": false
       }
     """
+
+  private[bigquery] val contexts = Vector(
+    SelfDescribingData(
+      SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0)),
+      json"""{"latitude": 22, "longitude": 23.1, "latitudeLongitudeAccuracy": 23} """
+    ),
+    SelfDescribingData(
+      SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0)),
+      json"""{"latitude": 0, "longitude": 1.1}"""
+    ),
+    SelfDescribingData(
+      SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 1, 0)),
+      json"""{"latitude": 22, "longitude": 23.1, "latitudeLongitudeAccuracy": null}"""
+    )
+  )
 
   val schemas = Map(
     SchemaMap("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))            -> adClick,

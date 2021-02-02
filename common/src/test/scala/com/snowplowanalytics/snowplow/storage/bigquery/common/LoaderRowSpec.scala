@@ -25,20 +25,7 @@ import org.specs2.mutable.Specification
 class LoaderRowSpec extends Specification {
   "groupContexts" should {
     "group contexts with same version" >> {
-      val contexts = Vector(
-        SelfDescribingData(
-          SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0)),
-          json"""{"latitude": 22, "longitude": 23.1, "latitudeLongitudeAccuracy": 23} """
-        ),
-        SelfDescribingData(
-          SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0)),
-          json"""{"latitude": 0, "longitude": 1.1}"""
-        ),
-        SelfDescribingData(
-          SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 1, 0)),
-          json"""{"latitude": 22, "longitude": 23.1, "latitudeLongitudeAccuracy": null}"""
-        )
-      )
+      val contexts = SpecHelpers.contexts
 
       val result = LoaderRow
         .groupContexts(SpecHelpers.resolver, contexts)

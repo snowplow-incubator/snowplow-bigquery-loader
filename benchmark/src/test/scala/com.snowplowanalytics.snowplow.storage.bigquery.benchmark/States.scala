@@ -28,6 +28,8 @@ object States {
     val unstruct = {
       baseEvent.copy(unstruct_event = UnstructEvent(Some(SelfDescribingData(adClickSchemaKey, adClickJson))))
     }
-    val resolver = SpecHelpers.resolver
+    val resolver  = SpecHelpers.resolver
+    val processor = SpecHelpers.processor
+    val idClock   = SpecHelpers.IdInstances.idClock
   }
 }

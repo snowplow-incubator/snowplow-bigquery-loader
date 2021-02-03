@@ -15,18 +15,20 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common
 import java.util.{Base64, UUID}
 
 import cats.data.{EitherT, ValidatedNel}
-import cats.syntax.show._
-import cats.syntax.either._
 import cats.effect.{Clock, Sync}
+import cats.Monad
+import cats.syntax.either._
+import cats.syntax.show._
 import com.monovore.decline.Opts
 import io.circe.{Decoder, DecodingFailure, Json}
-import io.circe.parser.parse
 import io.circe.generic.semiauto._
+import io.circe.parser.parse
 
-import com.snowplowanalytics.iglu.core.SelfDescribingData
-import com.snowplowanalytics.iglu.core.circe.implicits._
+import com.snowplowanalytics.iglu.client.resolver.{InitListCache, InitSchemaCache}
 import com.snowplowanalytics.iglu.client.{Client, Resolver}
 import com.snowplowanalytics.iglu.client.validator.{CirceValidator => Validator}
+import com.snowplowanalytics.iglu.core.SelfDescribingData
+import com.snowplowanalytics.iglu.core.circe.implicits._
 
 /**
   * Main storage target configuration file
@@ -99,9 +101,11 @@ object Config {
 
   implicit val configCirceDecoder: Decoder[Config] = deriveDecoder[Config]
 
-  def transform[F[_]: Sync: Clock](config: EnvironmentConfig): EitherT[F, InitializationError, Environment] =
+  def transform[F[_]: Sync: Clock: Monad: InitSchemaCache: InitListCache](
+    config: EnvironmentConfig
+  ): EitherT[F, InitializationError, Environment] =
     for {
-      resolver <- EitherT[F, DecodingFailure, Resolver[F]](Resolver.parse(config.resolver)).leftMap(err =>
+      resolver <- EitherT[F, DecodingFailure, Resolver[F]](Resolver.parse[F](config.resolver)).leftMap(err =>
         InitializationError(err.show)
       )
       jsonConfig <- EitherT

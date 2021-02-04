@@ -128,7 +128,7 @@ object BuildSettings {
     // Use single entrypoint script for all apps
     sourceDirectory in Universal := new java.io.File((baseDirectory in LocalRootProject).value, "docker"),
     maintainer in Docker := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
-    dockerBaseImage := "snowplow-docker-registry.bintray.io/snowplow/base-debian:0.2.1",
+    dockerBaseImage := "snowplow/base-debian:0.2.2",
     daemonUser in Docker := "root",
     packageName in Docker := s"${name.value}",
     dockerUsername := Some("snowplow"),

@@ -108,6 +108,7 @@ object Loader {
     val common =
       BigQueryIO
         .write()
+        .optimizedWrites()
         .withFormatFunction(SerializeLoaderRow)
         .withCreateDisposition(CreateDisposition.CREATE_NEVER)
         .withWriteDisposition(WriteDisposition.WRITE_APPEND)

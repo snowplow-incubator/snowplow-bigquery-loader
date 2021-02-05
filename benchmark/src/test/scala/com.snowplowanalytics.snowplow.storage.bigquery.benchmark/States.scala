@@ -1,7 +1,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.benchmark
 
 import com.snowplowanalytics.iglu.client.Resolver
-import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
+import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Utils
 import org.json4s.JsonAST.JObject
 import org.json4s.jackson.JsonMethods.parse
@@ -51,5 +51,19 @@ object States {
       "br_cookies": false,
       "unstruct_event": $adClickJson
     }""").asInstanceOf[JObject])
+    val contexts = Vector(
+      SelfDescribingData(
+        SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0)),
+        Utils.toCirce(parse(s"""{"latitude": 22, "longitude": 23.1, "latitudeLongitudeAccuracy": 23} """).asInstanceOf[JObject])
+      ),
+      SelfDescribingData(
+        SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0)),
+        Utils.toCirce(parse(s"""{"latitude": 0, "longitude": 1.1}""").asInstanceOf[JObject])
+      ),
+      SelfDescribingData(
+        SchemaKey("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 1, 0)),
+        Utils.toCirce(parse(s"""{"latitude": 22, "longitude": 23.1, "latitudeLongitudeAccuracy": null}""").asInstanceOf[JObject])
+      )
+    )
   }
 }

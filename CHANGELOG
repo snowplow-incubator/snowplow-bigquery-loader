@@ -1,3 +1,10 @@
+Version 0.6.3 (2021-04-01)
+--------------------------
+Loader: use optimizedWrites (#172)
+Add TransformJsonBenchmark, FromEventBenchmark and GroupContextsBenchmark (#162)
+Bump iglu-scala-client to 1.0.2 (#163)
+Use snowplow/base-debian image from Docker Hub (#164)
+
 Version 0.6.2 (2021-01-27)
 --------------------------
 Add benchmark module (#148)

@@ -14,11 +14,6 @@ import sbt._
 
 object Dependencies {
 
-  val ResolutionRepos = Seq(
-    // Speed-up build
-    "snowplow".at("https://snowplow.bintray.com/snowplow-maven")
-  )
-
   object V {
     // Java
     val beam                = "2.24.0"
@@ -29,7 +24,6 @@ object Dependencies {
     val slf4j               = "1.7.30"
 
     // TODO: remove when libraries bringing in older versions are bumped
-    val jackson        = "2.9.10.6"     // iglu-scala-client & schema-ddl
     val nettyCodec     = "4.1.46.Final" // scio
     val nettyCodecHttp = "4.1.44.Final" // scio
     val fastjson       = "1.2.69"       // scio
@@ -59,7 +53,7 @@ object Dependencies {
     val badrows      = "2.1.0"
     val igluClient   = "1.0.2"
     val igluCore     = "1.0.0"
-    val schemaDdl    = "0.11.0"
+    val schemaDdl    = "0.13.0"
 
     // Scala (test only)
     val scalaCheck = "1.14.3"
@@ -81,7 +75,6 @@ object Dependencies {
   val directRunner   = "org.apache.beam"            % "beam-runners-direct-java"                % V.beam
   val metrics        = "io.dropwizard.metrics"      % "metrics-core"                            % V.metrics
   val slf4j          = "org.slf4j"                  % "slf4j-simple"                            % V.slf4j
-  val jackson        = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
   val nettyCodec     = "io.netty"                   % "netty-codec"                             % V.nettyCodec
   val nettyCodecHttp = "io.netty"                   % "netty-codec-http"                        % V.nettyCodecHttp
   val fastjson       = "com.alibaba"                % "fastjson"                                % V.fastjson

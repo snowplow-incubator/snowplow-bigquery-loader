@@ -121,7 +121,7 @@ object SpecHelpers {
       "additionalProperties": false
       }
     """
-  private val unstructEvent =
+  private val unstructEvent = {
     json"""
       {
       "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
@@ -136,6 +136,32 @@ object SpecHelpers {
       "additionalProperties": false
       }
     """
+  }
+  private val nullableArrayEvent =
+    json"""
+      {
+        "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+        "description": "Schema for an unstruct event with a field whose type is a nullable array",
+        "type": "object",
+        "properties": {
+          "entities": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                null,
+                "not-null"
+              ]
+            }
+          }
+        }
+      }"""
 
   private[bigquery] val contexts = Vector(
     SelfDescribingData(
@@ -153,12 +179,13 @@ object SpecHelpers {
   )
 
   val schemas = Map(
-    SchemaMap("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))            -> adClick,
-    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0)) -> geolocation100,
-    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 1, 0)) -> geolocation110,
-    SchemaMap("com.snowplowanalytics.snowplow", "web_page", "jsonschema", SchemaVer.Full(1, 0, 0))            -> webPage,
-    SchemaMap("com.snowplowanalytics.snowplow", "derived_context", "jsonschema", SchemaVer.Full(1, 0, 0))     -> derivedContext,
-    SchemaMap("com.snowplowanalytics.snowplow", "unstruct_event", "jsonschema", SchemaVer.Full(1, 0, 0))      -> unstructEvent
+    SchemaMap("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))             -> adClick,
+    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0))  -> geolocation100,
+    SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 1, 0))  -> geolocation110,
+    SchemaMap("com.snowplowanalytics.snowplow", "web_page", "jsonschema", SchemaVer.Full(1, 0, 0))             -> webPage,
+    SchemaMap("com.snowplowanalytics.snowplow", "derived_context", "jsonschema", SchemaVer.Full(1, 0, 0))      -> derivedContext,
+    SchemaMap("com.snowplowanalytics.snowplow", "unstruct_event", "jsonschema", SchemaVer.Full(1, 0, 0))       -> unstructEvent,
+    SchemaMap("com.snowplowanalytics.snowplow", "nullable_array_event", "jsonschema", SchemaVer.Full(1, 0, 0)) -> nullableArrayEvent
   )
 
   // format: off
@@ -179,6 +206,25 @@ object SpecHelpers {
     "bq-loader-test",
     "bq-loader-test"
   )
+
+  val nullableArrayUnstructData = """{"entities": null}"""
+  val nullableArrayUnstructJson =
+    json"""{
+      "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
+      "data": {
+       "schema": "iglu:com.snowplowanalytics.snowplow/nullable_array_event/jsonschema/1-0-0",
+       "data": $nullableArrayUnstructData
+      }
+    }"""
+  val nullableArrayUnstruct = UnstructEvent(
+    Some(
+      SelfDescribingData(
+        SchemaKey("com.snowplowanalytics.snowplow", "nullable_array_event", "jsonschema", SchemaVer.Full(1, 0, 0)),
+        nullableArrayUnstructJson
+      )
+    )
+  )
+  val nullableArrayUnstructEvent = ExampleEvent.copy(unstruct_event = nullableArrayUnstruct).toTsv
 
   object IdInstances {
     implicit val idClock: Clock[Id] = new Clock[Id] {

@@ -28,7 +28,7 @@ object singleton {
       if (instance == null) {
         synchronized {
           if (instance == null) {
-            instance = Resolver.parse(r).fold(e => throw new RuntimeException(e.toString), identity)
+            instance = Resolver.parse[Id](r).fold(e => throw new RuntimeException(e.toString), identity)
           }
         }
       }

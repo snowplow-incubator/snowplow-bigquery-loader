@@ -76,8 +76,8 @@ object BuildSettings {
 
   // Make package (build) metadata available within source code.
   lazy val scalifiedSettings = Seq(
-    sourceGenerators in Compile += Def.task {
-      val file = (sourceManaged in Compile).value / "settings.scala"
+    Compile / sourceGenerators += Def.task {
+      val file = (Compile / sourceManaged).value / "settings.scala"
       IO.write(
         file,
         """package %s
@@ -126,11 +126,11 @@ object BuildSettings {
 
   lazy val dockerSettings = Seq(
     // Use single entrypoint script for all apps
-    sourceDirectory in Universal := new java.io.File((baseDirectory in LocalRootProject).value, "docker"),
-    maintainer in Docker := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
+    Universal / sourceDirectory := new java.io.File((LocalRootProject / baseDirectory).value, "docker"),
+    Docker/ maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
     dockerBaseImage := "snowplow/base-debian:0.2.2",
-    daemonUser in Docker := "root",
-    packageName in Docker := s"${name.value}",
+    Docker / daemonUser := "root",
+    Docker / packageName := s"${name.value}",
     dockerUsername := Some("snowplow"),
     dockerUpdateLatest := true,
     dockerEnvVars := Map("SNOWPLOW_BIGQUERY_APP" -> name.value),
@@ -140,19 +140,19 @@ object BuildSettings {
   )
 
   lazy val assemblySettings = Seq(
-    assemblyJarName in assembly := { s"${moduleName.value}-${version.value}.jar" },
-    assemblyMergeStrategy in assembly := {
+    assembly / assemblyJarName := { s"${moduleName.value}-${version.value}.jar" },
+    assembly / assemblyMergeStrategy := {
       // merge strategy for fixing netty conflict
       case PathList("io", "netty", xs @ _*)                => MergeStrategy.first
       case PathList("META-INF", "native-image", xs @ _*)   => MergeStrategy.discard
       case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.discard
       case x if x.endsWith("module-info.class")            => MergeStrategy.first
       case x =>
-        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        val oldStrategy = (assembly / assemblyMergeStrategy).value
         oldStrategy(x)
     },
-    assemblyExcludedJars in assembly := {
-      val cp = (fullClasspath in assembly).value
+    assembly / assemblyExcludedJars := {
+      val cp = (assembly / fullClasspath).value
       cp.filter { _.data.getName == "activation-1.1.jar" }
     }
   )

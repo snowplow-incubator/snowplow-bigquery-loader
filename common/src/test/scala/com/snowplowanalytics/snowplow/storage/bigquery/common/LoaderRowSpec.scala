@@ -14,12 +14,15 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import org.joda.time.Instant
 import com.google.api.services.bigquery.model.TableRow
+import com.snowplowanalytics.iglu.core.SchemaVer.Full
 import io.circe.literal._
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Row.{Primitive, Record, Repeated}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.transformJson
 import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers._
+import io.circe.parser.parse
 import org.specs2.mutable.Specification
 
 class LoaderRowSpec extends Specification {
@@ -214,6 +217,25 @@ class LoaderRowSpec extends Specification {
       resultUeC must beRight(expectedUeC)
       resultUeDc must beRight(expectedUeDc)
       resultUeDcC must beRight(expectedUeDcC)
+    }
+  }
+
+  "transformJson should" >> {
+    "succeed with an event whose schema has an [array, null] property" >> {
+      val json = parse(nullableArrayUnstructData).getOrElse(json"""{"n": "a"}""")
+      val result =
+        transformJson(
+          resolver,
+          SchemaKey("com.snowplowanalytics.snowplow", "nullable_array_event", "jsonschema", Full(1, 0, 0))
+        )(json).toEither
+
+      result must beRight
+    }
+  }
+
+  "parse should" >> {
+    "succeed with an event whose schema has an [array, null] property" >> {
+      LoaderRow.parse(resolver, processor)(nullableArrayUnstructEvent) must beRight
     }
   }
 }

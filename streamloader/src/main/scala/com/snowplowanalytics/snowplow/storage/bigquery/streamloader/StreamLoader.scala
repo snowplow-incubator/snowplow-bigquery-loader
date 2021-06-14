@@ -18,7 +18,6 @@ import cats.implicits._
 import cats.effect.{Clock, Concurrent, ContextShift, IO, Timer}
 
 import fs2.Pipe
-import fs2.concurrent.Queue
 
 import com.snowplowanalytics.iglu.client.Resolver
 
@@ -50,23 +49,18 @@ object StreamLoader {
   private val MaxConcurrency = Runtime.getRuntime.availableProcessors * 16
   private val GroupByN       = 10
   private val TimeWindow     = 30.seconds
-  private val QueueSize      = 1024
 
   def run(e: Environment)(implicit CS: ContextShift[IO], C: Concurrent[IO], T: Timer[IO]): IO[Unit] =
     Resources.acquire(e).use { resources =>
       val eventStream = resources.source.evalMap(parse(resources.igluClient.resolver))
 
-      for {
-        queue <- Queue.bounded[IO, Set[ShreddedType]](QueueSize)
-        sinkBadGood = eventStream
-          .observeEither[StreamBadRow[IO], StreamLoaderRow[IO]](
-            resources.badRowsSink,
-            goodSink(resources, queue)
-          )
-          .void
-        sinkTypes = queue.dequeue.through(aggregateTypes(GroupByN, TimeWindow)).through(resources.typesSink)
-        _ <- sinkBadGood.merge(sinkTypes).compile.drain
-      } yield ()
+      eventStream
+        .observeEither[StreamBadRow[IO], StreamLoaderRow[IO]](
+          resources.badRowsSink,
+          goodSink(resources)
+        )
+        .compile
+        .drain
     }
 
   /** Parse a PubSub message into a `LoaderRow` (or `BadRow`) and attach `ack` action to be used after sink. */
@@ -76,20 +70,14 @@ object StreamLoader {
       case Left(row)  => StreamBadRow[IO](row, payload.ack).asLeft[StreamLoaderRow[IO]]
     }
 
-  /**
-    * Enqueue observed types to a pre-aggregation queue and then route rows through a BigQuery sink.
-    *
-    * @param types A queue in which observed types will be put.
-    * @return      A sink that combines enqueueing observed types with sinking rows to BigQuery and failed inserts to Pub/Sub.
-    */
-  def goodSink(
-    r: Resources[IO],
-    types: Queue[IO, Set[ShreddedType]]
-  )(implicit CS: ContextShift[IO]): Pipe[IO, StreamLoaderRow[IO], Unit] =
-    _.parEvalMapUnordered(MaxConcurrency) { slrow =>
-      types.enqueue1(slrow.row.inventory) *>
-        r.blocker.blockOn(Bigquery.insert(r, slrow.row) *> slrow.ack)
+  /** Write good events through a BigQuery sink and pipe observed types through a Pub/Sub sink. */
+  def goodSink(r: Resources[IO])(implicit CS: ContextShift[IO], T: Timer[IO]): Pipe[IO, StreamLoaderRow[IO], Unit] = {
+    val goodPipe: Pipe[IO, StreamLoaderRow[IO], Unit] = _.parEvalMapUnordered(MaxConcurrency) { slrow =>
+      r.blocker.blockOn(Bigquery.insert(r, slrow.row) *> slrow.ack)
     }
+
+    _.observe(goodPipe).map(_.row.inventory).through(aggregateTypes(GroupByN, TimeWindow)).through(r.typesSink)
+  }
 
   /**
     * Aggregate observed types when a specific number is reached or time passes, whichever happens first.

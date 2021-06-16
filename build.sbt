@@ -111,27 +111,6 @@ lazy val repeater = project
   )
   .dependsOn(common)
 
-lazy val forwarder = project
-  .in(file("forwarder"))
-  .enablePlugins(BuildInfoPlugin)
-  .enablePlugins(JavaAppPackaging)
-  .settings(BuildSettings.forwarderBuildSettings)
-  .settings(
-    libraryDependencies ++= Seq(
-      Dependencies.dataflowRunner,
-      Dependencies.directRunner,
-      Dependencies.slf4j,
-      Dependencies.scioCore,
-      Dependencies.scioBigQuery,
-      Dependencies.specs2,
-      Dependencies.scalaCheck,
-      Dependencies.nettyCodecHttp,
-      Dependencies.fastjson,
-      Dependencies.googleOauth
-    )
-  )
-  .dependsOn(common)
-
 // format: off
 lazy val benchmark = project
   .in(file("benchmark"))

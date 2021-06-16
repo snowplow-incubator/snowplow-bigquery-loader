@@ -63,12 +63,6 @@ object BuildSettings {
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.repeater.generated"
   )
 
-  lazy val forwarderProjectSettings = projectSettings ++ Seq(
-    name := "snowplow-bigquery-forwarder",
-    description := "This component is deprecated from version 0.5.0 on. Use BigQuery Repeater instead.",
-    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.forwarder.generated"
-  )
-
   // TODO: remove?
   lazy val buildInfoSettings = Seq(
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.generated"
@@ -127,7 +121,7 @@ object BuildSettings {
   lazy val dockerSettings = Seq(
     // Use single entrypoint script for all apps
     Universal / sourceDirectory := new java.io.File((LocalRootProject / baseDirectory).value, "docker"),
-    Docker/ maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
+    Docker    / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
     dockerBaseImage := "snowplow/base-debian:0.2.2",
     Docker / daemonUser := "root",
     Docker / packageName := s"${name.value}",
@@ -168,5 +162,4 @@ object BuildSettings {
   lazy val streamloaderBuildSettings = streamloaderProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings ++ assemblySettings
   lazy val mutatorBuildSettings      = mutatorProjectSettings ++ buildSettings ++ assemblySettings
   lazy val repeaterBuildSettings     = repeaterProjectSettings ++ buildSettings ++ scalifiedSettings ++ macroSettings ++ assemblySettings
-  lazy val forwarderBuildSettings    = forwarderProjectSettings ++ buildSettings ++ macroSettings
 }

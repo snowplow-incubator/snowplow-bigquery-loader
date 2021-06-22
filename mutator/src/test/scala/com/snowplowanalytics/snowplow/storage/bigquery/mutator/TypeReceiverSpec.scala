@@ -12,7 +12,7 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import org.specs2.Specification
+import org.specs2.mutable.Specification
 
 import io.circe.Json
 
@@ -20,37 +20,35 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
 
 class TypeReceiverSpec extends Specification {
-  def is = s2"""
-  TypeReceiver decodes legacy inventory items $e1
-  """
-
-  def e1 = {
-    val input = Json.fromValues(
-      List(
-        Json.fromFields(
-          List(
-            "schema" -> Json.fromString("iglu:com.snowplowanalytics/event/jsonschema/1-0-0"),
-            "type"   -> Json.fromString("UNSTRUCT_EVENT")
-          )
-        ),
-        Json.fromFields(
-          List(
-            "schema" -> Json.fromString("iglu:com.snowplowanalytics/context/jsonschema/1-0-0"),
-            "type"   -> Json.fromString("CONTEXTS")
+  "TypeReceiver" should {
+    "decode legacy inventory items" in {
+      val input = Json.fromValues(
+        List(
+          Json.fromFields(
+            List(
+              "schema" -> Json.fromString("iglu:com.snowplowanalytics/event/jsonschema/1-0-0"),
+              "type"   -> Json.fromString("UNSTRUCT_EVENT")
+            )
+          ),
+          Json.fromFields(
+            List(
+              "schema" -> Json.fromString("iglu:com.snowplowanalytics/context/jsonschema/1-0-0"),
+              "type"   -> Json.fromString("CONTEXTS")
+            )
           )
         )
       )
-    )
 
-    val result = TypeReceiver.decodeItems(input)
-    val expected = List(
-      ShreddedType(UnstructEvent, SchemaKey("com.snowplowanalytics", "event", "jsonschema", SchemaVer.Full(1, 0, 0))),
-      ShreddedType(
-        Contexts(CustomContexts),
-        SchemaKey("com.snowplowanalytics", "context", "jsonschema", SchemaVer.Full(1, 0, 0))
+      val result = TypeReceiver.decodeItems(input)
+      val expected = List(
+        ShreddedType(UnstructEvent, SchemaKey("com.snowplowanalytics", "event", "jsonschema", SchemaVer.Full(1, 0, 0))),
+        ShreddedType(
+          Contexts(CustomContexts),
+          SchemaKey("com.snowplowanalytics", "context", "jsonschema", SchemaVer.Full(1, 0, 0))
+        )
       )
-    )
 
-    result must beRight(expected)
+      result must beRight(expected)
+    }
   }
 }

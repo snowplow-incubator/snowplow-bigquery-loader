@@ -10,67 +10,57 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery
-package loader
-
-import cats.Id
+package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
 import com.google.api.services.bigquery.model.TableReference
-
 import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
-
 import org.joda.time.{Duration, Instant}
-
 import org.slf4j.LoggerFactory
 
+import cats.Id
 import com.spotify.scio.ScioContext
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
 import com.spotify.scio.coders.Coder
-
 import io.circe.Json
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
-
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.metrics._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.IdInstances._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.LoadMode
 
 object Loader {
   implicit val coderBadRow: Coder[BadRow] = Coder.kryo[BadRow]
 
-  val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
+  private val processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
-  val OutputWindow: Duration =
-    Duration.millis(10000)
+  /** Write events every 10 secs */
+  private val OutputWindow: Duration = Duration.millis(10000)
 
-  val OutputWindowOptions = WindowOptions(
+  private val OutputWindowOptions = WindowOptions(
     Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane()),
     AccumulationMode.DISCARDING_FIRED_PANES,
     Duration.ZERO
   )
 
   /** Side output for shredded types */
-  val ObservedTypesOutput: SideOutput[Set[ShreddedType]] =
-    SideOutput[Set[ShreddedType]]()
+  private val ObservedTypesOutput: SideOutput[Set[ShreddedType]] = SideOutput[Set[ShreddedType]]()
 
   /** Emit observed types every 1 minute */
-  val TypesWindow: Duration =
-    Duration.millis(60000)
+  private val TypesWindow: Duration = Duration.millis(60000)
 
   /** Side output for rows failed transformation */
-  val BadRowsOutput: SideOutput[BadRow] =
-    SideOutput[BadRow]()
+  val BadRowsOutput: SideOutput[BadRow] = SideOutput[BadRow]()
 
   /** Run whole pipeline */
-  def run(env: Environment, sc: ScioContext): Unit = {
-    val (mainOutput, sideOutputs) = getData(env.resolverJson, sc, env.config.getFullInput)
+  def run(env: LoaderEnvironment, sc: ScioContext): Unit = {
+    val (mainOutput, sideOutputs) = getData(env.resolverJson, sc, env.getFullSubName(env.config.input.subscription))
       .withSideOutputs(ObservedTypesOutput, BadRowsOutput)
       .withName("splitGoodBad")
       .flatMap {
@@ -89,22 +79,26 @@ object Loader {
       }
 
     // Emit all types observed in 1 minute
-    aggregateTypes(sideOutputs(ObservedTypesOutput)).saveAsPubsub(env.config.getFullTypesTopic)
+    aggregateTypes(sideOutputs(ObservedTypesOutput)).saveAsPubsub(env.getFullTopicName(env.config.output.types.topic))
 
     // Sink bad rows
-    sideOutputs(BadRowsOutput).map(_.compact).saveAsPubsub(env.config.getFullBadRowsTopic)
+    sideOutputs(BadRowsOutput).map(_.compact).saveAsPubsub(env.getFullTopicName(env.config.output.bad.topic))
 
     // Unwrap LoaderRow collection to get failed inserts
     val mainOutputInternal = mainOutput.internal
-    val remaining          = getOutput(env.config.load).to(getTableReference(env)).expand(mainOutputInternal).getFailedInserts
+    val remaining =
+      getOutput(env.config.loadMode).to(getTableReference(env)).expand(mainOutputInternal).getFailedInserts
 
     // Sink good rows and forward failed inserts to PubSub
-    sc.wrap(remaining).withName("failedInsertsSink").saveAsPubsub(env.config.getFullFailedInsertsTopic)
+    sc.wrap(remaining)
+      .withName("failedInsertsSink")
+      .saveAsPubsub(env.getFullTopicName(env.config.output.failedInserts.topic))
+
     ()
   }
 
   /** Default BigQuery output options */
-  def getOutput(loadMode: LoadMode): BigQueryIO.Write[LoaderRow] = {
+  private def getOutput(loadMode: LoadMode): BigQueryIO.Write[LoaderRow] = {
     val common =
       BigQueryIO
         .write()
@@ -130,7 +124,7 @@ object Loader {
   }
 
   /** Group types into smaller chunks */
-  def aggregateTypes(types: SCollection[Set[ShreddedType]]): SCollection[String] =
+  private def aggregateTypes(types: SCollection[Set[ShreddedType]]): SCollection[String] =
     types
       .withFixedWindows(TypesWindow, options = OutputWindowOptions)
       .withName("aggregateTypes")
@@ -147,16 +141,16 @@ object Loader {
       }
 
   /** Read data from PubSub topic and transform to ready to load rows */
-  def getData(resolver: Json, sc: ScioContext, input: String): SCollection[Either[BadRow, LoaderRow]] =
+  private def getData(resolver: Json, sc: ScioContext, input: String): SCollection[Either[BadRow, LoaderRow]] =
     sc.pubsubSubscription[String](input)
       .map(parse(resolver))
       .withFixedWindows(OutputWindow, options = OutputWindowOptions)
 
-  def getTableReference(env: Environment): TableReference =
+  private def getTableReference(env: LoaderEnvironment): TableReference =
     new TableReference()
-      .setProjectId(env.config.projectId)
-      .setDatasetId(env.config.datasetId)
-      .setTableId(env.config.tableId)
+      .setProjectId(env.projectId)
+      .setDatasetId(env.config.output.good.datasetId)
+      .setTableId(env.config.output.good.tableId)
 
   /**
     * Parse enriched TSV into a loader row, ready to be loaded into bigquery
@@ -168,7 +162,7 @@ object Loader {
     * @param record enriched TSV line
     * @return either bad with error messages or entity ready to be loaded
     */
-  def parse(resolverJson: Json)(record: String): Either[BadRow, LoaderRow] = {
+  private def parse(resolverJson: Json)(record: String): Either[BadRow, LoaderRow] = {
     val resolver = singleton.ResolverSingleton.get(resolverJson)
     LoaderRow.parse[Id](resolver, processor)(record)
   }

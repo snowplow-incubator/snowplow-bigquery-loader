@@ -11,13 +11,13 @@ lazy val common = project
       Dependencies.circeLiteral,
       Dependencies.circeParser,
       Dependencies.decline,
+      Dependencies.circeConfig,
       Dependencies.analyticsSdk,
       Dependencies.badrows,
       Dependencies.igluClient,
       Dependencies.igluCoreCirce,
       Dependencies.schemaDdl,
       Dependencies.specs2,
-      Dependencies.scalaCheck,
       Dependencies.nettyCodec,
       Dependencies.nettyCodecHttp,
       Dependencies.googleOauth
@@ -40,8 +40,6 @@ lazy val loader = project
       Dependencies.scioCore,
       Dependencies.scioBigQuery,
       Dependencies.specs2,
-      Dependencies.scalaCheck,
-      Dependencies.specs2ScalaCheck,
       Dependencies.scioTest,
       Dependencies.nettyCodecHttp,
       Dependencies.fastjson,
@@ -80,7 +78,6 @@ lazy val mutator = project
       Dependencies.fs2,
       Dependencies.igluClient,
       Dependencies.specs2,
-      Dependencies.scalaCheck,
       Dependencies.googleOauth
     )
   )
@@ -104,8 +101,6 @@ lazy val repeater = project
       Dependencies.logging,
       Dependencies.fs2,
       Dependencies.specs2,
-      Dependencies.scalaCheck,
-      Dependencies.specs2ScalaCheck,
       Dependencies.googleOauth
     )
   )

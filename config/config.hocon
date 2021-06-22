@@ -1,0 +1,86 @@
+{
+  # The GCP project in which all required Pub/Sub, BigQuery and GCS resources are hosted
+  "projectId": "com-acme"
+
+  "loader": {
+    # Enriched events subscription consumed by Loader and Streamloader
+    "input": {
+      "type": "PubSub"
+      "subscription": "enriched-sub"
+    }
+
+    "output": {
+      # Events that pass validation are written to BigQuery
+      "good": {
+        "type": "BigQuery"
+        "datasetId": "snowplow"
+        "tableId": "events"
+      }
+
+      # Events that fail validation are written to Pub/Sub
+      "bad": {
+        "type": "PubSub"
+        "topic": "bad-topic"
+      }
+
+      # Observed types are regularly written to Pub/Sub
+      # Consumed by Mutator
+      "types": {
+        "type": "PubSub"
+        "topic": "types-topic"
+      }
+
+      # Validated events that cannot be loaded into BigQuery are written to Pub/Sub
+      # Consumed by Repeater
+      "failedInserts": {
+        "type": "PubSub"
+        "topic": "failed-inserts-topic"
+      }
+    }
+
+    # Specifies the loading mode
+    "loadMode": {
+      # Streaming Inserts API, recommended
+      "type": "StreamingInserts"
+      "retry": false
+
+      # Load jobs API, experimental
+      # "type": "FileLoads"
+      # "frequency": 60000
+    }
+  }
+
+  "mutator": {
+    # Observed types subscription consumed by Mutator
+    # Must be attached to the loader.output.types.topic
+    "input": {
+      "type": "PubSub"
+      "subscription": "types-sub"
+    }
+
+    "output": {
+      # Mutator will update the table to which Loader / Streamloader writes
+      "good": ${loader.output.good}
+    }
+  }
+
+  "repeater": {
+    "input": {
+      # Failed inserts subscription consumed by Repeater
+      # Must be attached to the loader.output.failedInserts.topic
+      "type": "PubSub"
+      "subscription": "failed-inserts-sub"
+    }
+
+    "output": {
+      # Repeater writes events to the same table as Loader / Streamloader
+      "good": ${loader.output.good}
+
+      # Failed inserts that repeatedly fail to be inserted into BigQuery are stored on GCS
+      "deadLetters": {
+        "type": "Gcs"
+        "bucket": "gs://dead-letter-bucket"
+      }
+    }
+  }
+}

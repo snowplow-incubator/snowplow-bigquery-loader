@@ -27,8 +27,8 @@ import fs2.concurrent.Queue
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.iglu.core.circe.implicits._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.MutatorEnvironment
 
 /**
   * PubSub consumer, listening for shredded types and
@@ -102,9 +102,9 @@ object TypeReceiver {
   def apply(queue: Queue[IO, List[ShreddedType]], verbose: Boolean): TypeReceiver =
     new TypeReceiver(queue, verbose)
 
-  def startSubscription(config: Config, listener: TypeReceiver): IO[Unit] =
+  def startSubscription(env: MutatorEnvironment, listener: TypeReceiver): IO[Unit] =
     IO {
-      val subscription = ProjectSubscriptionName.of(config.projectId, config.typesSubscription)
+      val subscription = ProjectSubscriptionName.of(env.projectId, env.config.input.subscription)
       val subscriber   = Subscriber.newBuilder(subscription, listener).setHeaderProvider(UserAgent).build()
       subscriber.startAsync().awaitRunning(10L, TimeUnit.SECONDS)
     }

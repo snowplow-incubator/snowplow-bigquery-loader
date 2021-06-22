@@ -37,16 +37,16 @@ object Dependencies {
     val fs2        = "2.5.0"
     val httpClient = "0.21.15"
     val logging    = "1.1.1"
-
-    /**
-      * After 1.102.0 the Google Cloud Java SDK versions diverge.
-      * It becomes harder to know what versions are compatible with each other.
-      * Bumping pubsubFs2 to 0.16.0 calls for googleCloudPubSub 1.107.0,
-      * but it's unclear to what versions the other two SDKs need to be bumped.
-      * Runtime errors occur when the versions are incompatible.
-      */
-    val pubsubFs2 = "0.15.0"
-    val scio      = "0.9.6"
+    // =========================================================================
+    // After 1.102.0 the Google Cloud Java SDK versions diverge.
+    // It becomes harder to know what versions are compatible with each other.
+    // Bumping pubsubFs2 to 0.16.0 calls for googleCloudPubSub 1.107.0,
+    // but it's unclear to what versions the other two SDKs need to be bumped.
+    // Runtime errors occur when the versions are incompatible.
+    // =========================================================================
+    val pubsubFs2   = "0.15.0"
+    val scio        = "0.9.6"
+    val circeConfig = "0.8.0"
 
     // Scala Snowplow
     val analyticsSdk = "2.1.0"
@@ -71,14 +71,14 @@ object Dependencies {
   val gcs      = "com.google.cloud" % "google-cloud-storage"  % V.googleCloudStorage
 
   // Java
-  val dataflowRunner = "org.apache.beam"            % "beam-runners-google-cloud-dataflow-java" % V.beam
-  val directRunner   = "org.apache.beam"            % "beam-runners-direct-java"                % V.beam
-  val metrics        = "io.dropwizard.metrics"      % "metrics-core"                            % V.metrics
-  val slf4j          = "org.slf4j"                  % "slf4j-simple"                            % V.slf4j
-  val nettyCodec     = "io.netty"                   % "netty-codec"                             % V.nettyCodec
-  val nettyCodecHttp = "io.netty"                   % "netty-codec-http"                        % V.nettyCodecHttp
-  val fastjson       = "com.alibaba"                % "fastjson"                                % V.fastjson
-  val googleOauth    = "com.google.oauth-client"    % "google-oauth-client"                     % V.googleOauth
+  val dataflowRunner = "org.apache.beam"         % "beam-runners-google-cloud-dataflow-java" % V.beam
+  val directRunner   = "org.apache.beam"         % "beam-runners-direct-java"                % V.beam
+  val metrics        = "io.dropwizard.metrics"   % "metrics-core"                            % V.metrics
+  val slf4j          = "org.slf4j"               % "slf4j-simple"                            % V.slf4j
+  val nettyCodec     = "io.netty"                % "netty-codec"                             % V.nettyCodec
+  val nettyCodecHttp = "io.netty"                % "netty-codec-http"                        % V.nettyCodecHttp
+  val fastjson       = "com.alibaba"             % "fastjson"                                % V.fastjson
+  val googleOauth    = "com.google.oauth-client" % "google-oauth-client"                     % V.googleOauth
 
   // Scala third-party
   val cats          = "org.typelevel"     %% "cats-core"                % V.cats
@@ -96,6 +96,7 @@ object Dependencies {
   val scioBigQuery  = "com.spotify"       %% "scio-bigquery"            % V.scio
   val scioCore      = "com.spotify"       %% "scio-core"                % V.scio
   val scioRepl      = "com.spotify"       %% "scio-repl"                % V.scio
+  val circeConfig   = "io.circe"          %% "circe-config"             % V.circeConfig
 
   // Scala Snowplow
   val analyticsSdk  = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk

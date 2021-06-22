@@ -12,7 +12,7 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import org.specs2.Specification
+import org.specs2.mutable.Specification
 
 import io.circe.Json
 import io.circe.syntax._
@@ -28,84 +28,7 @@ object PayloadParserSpec {
 }
 
 class PayloadParserSpec extends Specification {
-  def is = s2"""
-  minimal payload without any context or unstruct event can be parsed successfully $e1
-  parse payload with context array which has flatten schema key prefixed with "contexts" $e2
-  parse payload with context array which has flatten schema key prefixed randomly $e3
-  parse payload with more than one context array which has flatten schema key prefixed with "contexts" $e4
-  parse payload with unstruct event which has flatten schema key prefixed with "unstruct_event" $e5
-  parse payload with unstruct event and context array $e6
-  parse payload which one of required event field is missing $e7
-  """
   import PayloadParserSpec._
-
-  def e1 = {
-    val event    = SpecHelpers.exampleMinimalEvent
-    val expected = Right(ReconstructedEvent(event, List()))
-    PayloadParser.parse(event.asJsonObject) mustEqual expected
-  }
-
-  def e2 = {
-    val event = SpecHelpers.exampleMinimalEvent
-    val (res, expected) = parseEventWithContext(
-      event,
-      contextFlattenSchemaKeys = List(flattenSchemaKeyContexts)
-    )
-    res mustEqual expected
-  }
-
-  def e3 = {
-    val event = SpecHelpers.exampleMinimalEvent
-    val (res, expected) = parseEventWithContext(
-      event,
-      contextFlattenSchemaKeys = List(flattenSchemaKeyRandomPrefix)
-    )
-    res mustNotEqual expected
-  }
-
-  def e4 = {
-    val event = SpecHelpers.exampleMinimalEvent
-    val (res, expected) = parseEventWithContext(
-      event,
-      contextFlattenSchemaKeys = List(
-        s"${flattenSchemaKeyContexts}_1",
-        s"${flattenSchemaKeyContexts}_2"
-      )
-    )
-    res mustEqual expected
-  }
-
-  def e5 = {
-    val event = SpecHelpers.exampleMinimalEvent
-    val (res, expected) = parseEventWithContext(
-      event,
-      unstructEventFlattenSchemaKeys = List(flattenSchemaKeyUnstructEvent)
-    )
-    res mustEqual expected
-  }
-
-  def e6 = {
-    val event = SpecHelpers.exampleMinimalEvent
-    val (res, expected) = parseEventWithContext(
-      event,
-      contextFlattenSchemaKeys       = List(flattenSchemaKeyContexts),
-      unstructEventFlattenSchemaKeys = List(flattenSchemaKeyUnstructEvent)
-    )
-    res mustEqual expected
-  }
-
-  def e7 = {
-    val eventJson    = SpecHelpers.requiredFieldMissingEventJson
-    val eventJsonStr = Payload.RawPayload(eventJson.noSpaces)
-    val info = FailureDetails
-      .LoaderRecoveryError
-      .ParsingError("Attempt to decode value on failed cursor", List("DownField(v_etl)"))
-    val failure = Failure.LoaderRecoveryFailure(info)
-    PayloadParser.parse(eventJson.asObject.get) match {
-      case Left(BadRow.LoaderRecoveryError(_, `failure`, `eventJsonStr`)) => ok
-      case _                                                              => ko("Unexpected parsing result")
-    }
-  }
 
   private def parseEventWithContext(
     event: Event,
@@ -144,4 +67,74 @@ class PayloadParserSpec extends Specification {
       )
       (json, selfDescribingEntity)
     }
+
+  "parse" should {
+    "succeed with minimal payload without any context or unstruct event" in {
+      val event    = SpecHelpers.exampleMinimalEvent
+      val expected = Right(ReconstructedEvent(event, List()))
+      PayloadParser.parse(event.asJsonObject) mustEqual expected
+    }
+
+    "succeed with context array which has flattened schema key prefixed with 'contexts'" in {
+      val event = SpecHelpers.exampleMinimalEvent
+      val (res, expected) = parseEventWithContext(
+        event,
+        contextFlattenSchemaKeys = List(flattenSchemaKeyContexts)
+      )
+      res mustEqual expected
+    }
+
+    "succeed with context array which has flattened schema key with random prefix" in {
+      val event = SpecHelpers.exampleMinimalEvent
+      val (res, expected) = parseEventWithContext(
+        event,
+        contextFlattenSchemaKeys = List(flattenSchemaKeyRandomPrefix)
+      )
+      res mustNotEqual expected
+    }
+
+    "succeed with more than one context array which has flattened schema key prefixed with 'contexts'" in {
+      val event = SpecHelpers.exampleMinimalEvent
+      val (res, expected) = parseEventWithContext(
+        event,
+        contextFlattenSchemaKeys = List(
+          s"${flattenSchemaKeyContexts}_1",
+          s"${flattenSchemaKeyContexts}_2"
+        )
+      )
+      res mustEqual expected
+    }
+
+    "succeed with unstruct event which has flattened schema key prefixed with 'unstruct_event'" in {
+      val event = SpecHelpers.exampleMinimalEvent
+      val (res, expected) = parseEventWithContext(
+        event,
+        unstructEventFlattenSchemaKeys = List(flattenSchemaKeyUnstructEvent)
+      )
+      res mustEqual expected
+    }
+
+    "succeed with unstruct event and context array" in {
+      val event = SpecHelpers.exampleMinimalEvent
+      val (res, expected) = parseEventWithContext(
+        event,
+        contextFlattenSchemaKeys       = List(flattenSchemaKeyContexts),
+        unstructEventFlattenSchemaKeys = List(flattenSchemaKeyUnstructEvent)
+      )
+      res mustEqual expected
+    }
+
+    "succeed with payload in which one required event field is missing" in {
+      val eventJson    = SpecHelpers.requiredFieldMissingEventJson
+      val eventJsonStr = Payload.RawPayload(eventJson.noSpaces)
+      val info = FailureDetails
+        .LoaderRecoveryError
+        .ParsingError("Attempt to decode value on failed cursor", List("DownField(v_etl)"))
+      val failure = Failure.LoaderRecoveryFailure(info)
+      PayloadParser.parse(eventJson.asObject.get) match {
+        case Left(BadRow.LoaderRecoveryError(_, `failure`, `eventJsonStr`)) => ok
+        case _                                                              => ko("Unexpected parsing result")
+      }
+    }
+  }
 }

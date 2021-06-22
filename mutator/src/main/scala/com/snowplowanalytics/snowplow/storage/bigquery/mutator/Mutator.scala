@@ -10,28 +10,29 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery
-package mutator
+package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import java.time.Instant
 import com.google.cloud.bigquery.Field
 
-import scala.util.control.NonFatal
 import scala.concurrent.duration._
+import scala.util.control.NonFatal
+
 import cats.data.EitherT
 import cats.effect._
 import cats.effect.concurrent.{MVar, MVar2}
 import cats.implicits._
 import io.circe.Json
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
+
 import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.client.{Client, ClientError}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field              => DdlField}
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field => DdlField}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema => LoaderSchema}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.MutatorEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.Mutator._
 
 /**
@@ -138,10 +139,14 @@ object Mutator {
   def filterFields(existingColumns: Vector[String], newItems: List[ShreddedType]): List[ShreddedType] =
     newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
 
-  def initialize(env: Environment, verbose: Boolean)(implicit c: Concurrent[IO]): IO[Either[String, Mutator]] =
+  def initialize(env: MutatorEnvironment, verbose: Boolean)(implicit c: Concurrent[IO]): IO[Either[String, Mutator]] =
     for {
       bqClient <- TableReference.BigQueryTable.getClient
-      table = new TableReference.BigQueryTable(bqClient, env.config.datasetId, env.config.tableId)
+      table = new TableReference.BigQueryTable(
+        bqClient,
+        env.config.output.good.datasetId,
+        env.config.output.good.tableId
+      )
       fields     <- table.getFields
       state      <- MVar.of(MutatorState(fields, 0))
       igluClient <- Client.parseDefault[IO](env.resolverJson).value.flatMap(IO.fromEither)

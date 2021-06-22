@@ -10,32 +10,70 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery
-package repeater
+package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
+import cats.data.ValidatedNel
 import cats.implicits._
 import com.monovore.decline._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.RepeaterEnvironment
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config._
+/** Repeater-specific CLI configuration */
+object RepeaterCli {
+  private val GcsPrefix          = "gs://"
+  private val DefaultBufferSize  = 20
+  private val DefaultTimeout     = 30
+  private val DefaultBackoffTime = 900
 
-/** Repeater-specific CLI configuration (actually copy of Mutator's) */
-object RepeaterCli { // TODO: factor out into a common module
-  private val GcsPrefix = "gs://"
+  final case class GcsPath(bucket: String, path: String)
 
-  val DefaultWindow      = 30
-  val DefaultBufferSize  = 20
-  val DefaultBackoffTime = 900
-
-  case class GcsPath(bucket: String, path: String)
-
-  private val options = (resolverOpt, configOpt).mapN { (resolver, config) =>
-    EnvironmentConfig(resolver, config)
+  private val options: Opts[RepeaterEnvironment] = (configOpt, resolverOpt).mapN { (config, resolver) =>
+    Environment(config.repeater, resolver, config.projectId)
   }
 
-  val failedInsertsSub = Opts.option[String]("failedInsertsSub", "Provide debug output")
-  val deadEndBucket = Opts.option[String]("deadEndBucket", "GCS path to sink failed events").mapValidated { s =>
+  private val bufferSize = Opts
+    .option[Int](
+      "bufferSize",
+      "Some failed inserts cannot be written to BigQuery, even after multiple attempts. " +
+        "These events are buffered and ultimately sunk to GCS." +
+        "The buffer is flushed when uninsertableBufferSize is reached or when uninsertableTimeout passes."
+    )
+    .validate("Buffer size must be greater than 0.") { _ > 0 }
+    .withDefault(DefaultBufferSize)
+
+  private val timeout = Opts
+    .option[Int](
+      "timeout",
+      "Some failed inserts cannot be written to BigQuery, even after multiple attempts. " +
+        "These events are buffered and ultimately sunk to GCS." +
+        "The buffer is flushed when uninsertableBufferSize is reached or when uninsertableTimeout passes."
+    )
+    .validate("Timeout must be greater than 0.") { _ > 0 }
+    .withDefault(DefaultTimeout)
+
+  private val backoffPeriod = Opts
+    .option[Int]("backoffPeriod", "Time (in seconds) to wait before trying to re-insert the record(s).")
+    .validate("Backoff period must be greater than 0.") { _ > 0 }
+    .withDefault(DefaultBackoffTime)
+
+  private val verbose: Opts[Boolean] = Opts.flag("verbose", "Provide debug output").orFalse
+
+  case class ListenCommand(
+    env: RepeaterEnvironment,
+    bufferSize: Int,
+    timeout: Int,
+    backoffPeriod: Int,
+    verbose: Boolean
+  )
+
+  val command: Command[ListenCommand] = Command(generated.BuildInfo.name, generated.BuildInfo.description) {
+    (options, bufferSize, timeout, backoffPeriod, verbose).mapN(ListenCommand.apply)
+  }
+
+  def validateBucket(s: String): ValidatedNel[String, GcsPath] =
     if (s.startsWith(GcsPrefix)) {
       s.drop(GcsPrefix.length).split("/").toList match {
+        case h :: _ if h.isEmpty => "GCS bucket cannot be empty".invalidNel
         case bucket :: path =>
           val p = path.mkString("/")
           GcsPath(bucket, if (p.endsWith("/")) p else p ++ "/").validNel
@@ -44,43 +82,6 @@ object RepeaterCli { // TODO: factor out into a common module
     } else {
       s"GCS bucket must start with $GcsPrefix".invalidNel
     }
-  }
-  val bufferSize = Opts
-    .option[Int](
-      "desperatesBufferSize",
-      "Amount of items that failed re-insertion that " +
-        "will be buffered before sinking them to GCS, complementary to desperatesWindow"
-    )
-    .validate("Buffer size needs to be greater than 0") { _ > 0 }
-    .withDefault(DefaultBufferSize)
-  val window = Opts
-    .option[Int](
-      "desperatesWindow",
-      "Amount of seconds to wait until dump desperates to GCS. " +
-        "Complementary to desperatesBufferSize"
-    )
-    .validate("Time needs to be greater than 0") { _ > 0 }
-    .withDefault(DefaultWindow)
-  val backoffPeriod = Opts
-    .option[Int]("backoffPeriod", "Amount of seconds to wait until re-insertion attempt will be made.")
-    .validate("Time needs to be greater than 0") { _ > 0 }
-    .withDefault(DefaultBackoffTime)
 
-  val verbose = Opts.flag("verbose", "Provide debug output").orFalse
-
-  case class ListenCommand(
-    config: EnvironmentConfig,
-    failedInsertsSub: String,
-    deadEndBucket: GcsPath,
-    verbose: Boolean,
-    bufferSize: Int,
-    window: Int,
-    backoff: Int
-  )
-
-  val command = Command(generated.BuildInfo.name, generated.BuildInfo.description) {
-    (options, failedInsertsSub, deadEndBucket, verbose, bufferSize, window, backoffPeriod).mapN(ListenCommand.apply)
-  }
-
-  def parse(args: Seq[String]) = command.parse(args)
+  def parse(args: Seq[String]): Either[Help, ListenCommand] = command.parse(args)
 }

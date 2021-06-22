@@ -10,14 +10,22 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
+package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import cats.effect._
+import com.spotify.scio.ContextAndArgs
+import org.specs2.mutable.Specification
 
-object Main extends IOApp {
-  override def run(args: List[String]): IO[ExitCode] =
-    StreamLoaderCli.parse(args) match {
-      case Right(env) => StreamLoader.run(env).as(ExitCode.Success)
-      case Left(help) => IO.delay(System.err.println(help.toString)).as(ExitCode.Error)
+class LoaderCliSpec extends Specification {
+  "parse" should {
+    val cliArgs   = Array(s"--config=${SpecHelpers.base64Config}", s"--resolver=${SpecHelpers.base64Resolver}")
+    val (_, args) = ContextAndArgs(cliArgs)
+
+    "extract valid Loader configuration" in {
+      val expected = SpecHelpers.loaderEnv
+      val result =
+        LoaderCli.parse(args)
+
+      result must beRight(expected)
     }
+  }
 }

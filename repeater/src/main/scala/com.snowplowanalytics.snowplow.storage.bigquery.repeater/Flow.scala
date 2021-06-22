@@ -30,11 +30,11 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.services.Storage
 object Flow {
 
   /**
-    * Main sink, processing data parsed from `failedInserts`
-    * Attempts to insert a record into BigQuery. If insertion fails - turn it into a `Desperate`
-    * and forward to a specific queue, which later will be sinked into GCS
-    * @param resources all application resources
-    * @param events stream of events from PubSub
+    * Main sink processing data parsed from `failedInserts` topic.
+    * Attempt to insert a record into BigQuery. If insertion fails, turn it into an `Uninsertable`
+    * and forward to a dedicated queue, which will later be sunk to GCS.
+    * @param resources All application resources
+    * @param events Stream of events from Pub/Sub
     */
   def sink[F[_]: Logger: Timer: Concurrent: ContextShift](
     resources: Resources[F]
@@ -42,36 +42,39 @@ object Flow {
     events.parEvalMapUnordered(resources.concurrency) { event =>
       val insert = checkAndInsert[F](
         resources.bigQuery,
-        resources.env.config.datasetId,
-        resources.env.config.tableId,
-        resources.backoffTime
+        resources.env.config.output.good.datasetId,
+        resources.env.config.output.good.tableId,
+        resources.backoffPeriod
       )(event)
       resources.insertBlocker.blockOn(insert).flatMap {
         case Right(_) => resources.logInserted
         // format: off
-        case Left(d) => resources.logAbandoned *> resources.desperates.enqueue1(d)
+        case Left(d) => resources.logAbandoned *> resources.uninsertable.enqueue1(d)
         // format: on
       }
     }
 
-  /** Process dequeueing desperates and sinking them to GCS */
-  def dequeueDesperates[F[_]: Timer: Concurrent: Logger](
+  /** Dequeue uninsertable events and sink them to GCS */
+  def dequeueUninsertable[F[_]: Timer: Concurrent: Logger](
     resources: Resources[F]
   ): Stream[F, Unit] =
     resources
-      .desperates
+      .uninsertable
       .dequeueChunk(resources.bufferSize)
-      .groupWithin(resources.bufferSize, resources.windowTime.seconds)
+      .groupWithin(resources.bufferSize, resources.timeout.seconds)
       .evalMap(sinkBadChunk(resources.counter, resources.bucket))
 
-  /** Sink whole chunk of desperates into a filename, composed of time and chunk number */
+  /**
+    * Sink whole chunk of uninsertable events to a file.
+    * The filename is composed of time and chunk number.
+    */
   def sinkBadChunk[F[_]: Timer: Sync: Logger](
     counter: Ref[F, Int],
     bucket: GcsPath
   )(chunk: Chunk[BadRow]): F[Unit] =
     for {
       time <- getTime
-      _    <- Logger[F].debug(s"Preparing for sinking a chunk, $time")
+      _    <- Logger[F].debug(s"Preparing to sink chunk, $time")
       _    <- counter.update(_ + 1)
       i    <- counter.get
       file = Storage.getFileName(bucket.path, i)
@@ -81,23 +84,19 @@ object Flow {
 
   def checkAndInsert[F[_]: Sync: Logger](
     client: BigQuery,
-    dataset: String,
-    table: String,
+    datasetId: String,
+    tableId: String,
     backoffTime: Int
   )(event: EventRecord[F]): F[Either[BadRow, Unit]] = {
     val res = for {
       ready <- EitherT.right(event.value.isReady(backoffTime.toLong))
       result <- EitherT[F, BadRow, Unit] {
-        if (ready)
-          event.ack >>
-            EitherT(
-              services.Database.insert[F](client, dataset, table, event.value)
-            ).value
-        else
-          Logger[F].debug(
-            s"Event ${event.value.eventId}/${event.value.etlTstamp} is not ready yet. Nack"
-          ) >>
+        if (ready) {
+          event.ack >> EitherT(services.Database.insert[F](client, datasetId, tableId, event.value)).value
+        } else {
+          Logger[F].debug(s"Event ${event.value.eventId}/${event.value.etlTstamp} is not ready yet. Nack") >>
             event.nack.map(_.asRight)
+        }
       }
     } yield result
     res.value

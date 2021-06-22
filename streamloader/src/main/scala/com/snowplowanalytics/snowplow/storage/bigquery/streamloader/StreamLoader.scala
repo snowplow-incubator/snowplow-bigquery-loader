@@ -16,33 +16,28 @@ import scala.concurrent.duration._
 
 import cats.implicits._
 import cats.effect.{Clock, Concurrent, ContextShift, IO, Timer}
-
 import fs2.Pipe
 
 import com.snowplowanalytics.iglu.client.Resolver
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
-
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
 
 object StreamLoader {
-
-  val processor: Processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
+  private val processor: Processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
   /**
     * PubSub message with successfully parsed row, ready to be inserted into BQ.
     * Includes an `ack` action to be performed after the event is sunk.
     */
-  case class StreamLoaderRow[F[_]](row: LoaderRow, ack: F[Unit])
+  final case class StreamLoaderRow[F[_]](row: LoaderRow, ack: F[Unit])
 
   /**
     * PubSub message with a row that failed parsing (a `BadRow`).
     * Includes an `ack` action to be performed after the bad row is sunk.
     */
-  case class StreamBadRow[F[_]](row: BadRow, ack: F[Unit])
+  final case class StreamBadRow[F[_]](row: BadRow, ack: F[Unit])
 
   type Parsed = Either[StreamBadRow[IO], StreamLoaderRow[IO]]
 
@@ -50,7 +45,7 @@ object StreamLoader {
   private val GroupByN       = 10
   private val TimeWindow     = 30.seconds
 
-  def run(e: Environment)(implicit CS: ContextShift[IO], C: Concurrent[IO], T: Timer[IO]): IO[Unit] =
+  def run(e: LoaderEnvironment)(implicit CS: ContextShift[IO], C: Concurrent[IO], T: Timer[IO]): IO[Unit] =
     Resources.acquire(e).use { resources =>
       val eventStream = resources.source.evalMap(parse(resources.igluClient.resolver))
 

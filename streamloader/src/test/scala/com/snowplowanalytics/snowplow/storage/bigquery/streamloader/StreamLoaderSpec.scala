@@ -27,17 +27,18 @@ class StreamLoaderSpec extends Specification {
   implicit val C: Concurrent[IO]    = IO.ioConcurrentEffect
   implicit val T: Timer[IO]         = IO.timer(concurrent.ExecutionContext.global)
 
-  def mkShreddedType(n: Int): ShreddedType = {
+  private def mkShreddedType(n: Int): ShreddedType = {
     val schemaKey = SchemaKey("com.acme", "example", "jsonschema", SchemaVer.Full(1, 0, n))
     ShreddedType(UnstructEvent, schemaKey)
   }
 
-  def mkShreddedTypes(seeds: List[Set[Int]]): List[Set[ShreddedType]] = seeds.map(set => set.map(mkShreddedType))
+  private def mkShreddedTypes(seeds: List[Set[Int]]): List[Set[ShreddedType]] =
+    seeds.map(set => set.map(mkShreddedType))
 
   "aggregateTypes" should {
     import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.aggregateTypes
 
-    "produce one element per group" >> {
+    "produce one element per group" in {
       val random = new Random
 
       val inputSizes = (1 to 50).toList
@@ -73,7 +74,7 @@ class StreamLoaderSpec extends Specification {
       })(_ must beTrue)
     }
 
-    "produce the correct aggregates over a number of elements" >> {
+    "produce the correct aggregates over a number of elements" in {
       val seeds     = List(Set(1, 2), Set(3, 4), Set(1, 4), Set(1, 5), Set(2, 6), Set(2, 7))
       val values    = mkShreddedTypes(seeds)
       val input     = Stream.emits(values).covary[IO].take(6)
@@ -101,7 +102,7 @@ class StreamLoaderSpec extends Specification {
       })(_ must beTrue)
     }
 
-    "produce the correct aggregates over a time window" >> {
+    "produce the correct aggregates over a time window" in {
       val seeds  = List(Set(1, 2), Set(3, 4), Set(1, 4), Set(1, 5), Set(2, 6), Set(2, 7))
       val values = mkShreddedTypes(seeds)
 

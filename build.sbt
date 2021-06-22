@@ -11,6 +11,7 @@ lazy val common = project
       Dependencies.circeLiteral,
       Dependencies.circeParser,
       Dependencies.decline,
+      Dependencies.circeConfig,
       Dependencies.analyticsSdk,
       Dependencies.badrows,
       Dependencies.igluClient,

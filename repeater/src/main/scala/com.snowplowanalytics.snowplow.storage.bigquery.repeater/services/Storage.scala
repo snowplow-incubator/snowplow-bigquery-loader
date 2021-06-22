@@ -27,7 +27,7 @@ object Storage {
   // TODO: this is certainly non-RT
   private val storage = StorageOptions.getDefaultInstance.getService
 
-  val TimestampFormat = DateTimeFormat.forPattern("YYYY-MM-dd-HHmmssSSS")
+  private val TimestampFormat = DateTimeFormat.forPattern("YYYY-MM-dd-HHmmssSSS")
 
   def getFileName(base: String, n: Int): String =
     base ++ DateTime.now(DateTimeZone.UTC).toString(TimestampFormat) ++ n.toString
@@ -36,7 +36,7 @@ object Storage {
     val blobInfo = BlobInfo.newBuilder(bucketName, fileName).build()
     val content  = Stream.chunk(rows).map(_.compact).intersperse("\n").through(text.utf8Encode).compile.to(Array)
 
-    Logger[F].info(s"Preparing write to a $fileName with ${rows.size} items") *>
+    Logger[F].info(s"Preparing write to $fileName with ${rows.size} items") *>
       Sync[F].delay(storage.create(blobInfo, content)) *>
       Logger[F].info(s"Written ${blobInfo.getName} of ${content.size} bytes")
   }

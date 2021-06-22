@@ -27,7 +27,7 @@ import org.specs2.mutable.Specification
 
 class LoaderRowSpec extends Specification {
   "groupContexts" should {
-    "group contexts with same version" >> {
+    "group contexts with same version" in {
       val contexts = SpecHelpers.contexts
 
       val result = LoaderRow
@@ -45,7 +45,7 @@ class LoaderRowSpec extends Specification {
   }
 
   "fromEvent" should {
-    "transform all JSON types into their AnyRef counterparts" >> {
+    "transform all JSON types into their AnyRef counterparts" in {
       // INPUTS
       val contexts = Contexts(
         List(
@@ -220,8 +220,8 @@ class LoaderRowSpec extends Specification {
     }
   }
 
-  "transformJson should" >> {
-    "succeed with an event whose schema has an [array, null] property" >> {
+  "transformJson" should {
+    "succeed with an event whose schema has an [array, null] property" in {
       val json = parse(nullableArrayUnstructData).getOrElse(json"""{"n": "a"}""")
       val result =
         transformJson(
@@ -233,8 +233,8 @@ class LoaderRowSpec extends Specification {
     }
   }
 
-  "parse should" >> {
-    "succeed with an event whose schema has an [array, null] property" >> {
+  "parse" should {
+    "succeed with an event whose schema has an [array, null] property" in {
       LoaderRow.parse(resolver, processor)(nullableArrayUnstructEvent) must beRight
     }
   }

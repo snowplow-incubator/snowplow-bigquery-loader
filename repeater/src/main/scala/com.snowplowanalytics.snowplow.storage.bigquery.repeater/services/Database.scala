@@ -15,6 +15,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 import com.google.cloud.bigquery.{Option => _, _}
 
 import scala.jdk.CollectionConverters._
+
 import cats.effect.Sync
 import cats.syntax.all._
 import io.chrisdavenport.log4cats.Logger
@@ -68,9 +69,9 @@ object Database {
       .flatTap {
         case Right(_) =>
           Logger[F].debug(s"Event ${eventContainer.eventId}/${eventContainer.etlTstamp} successfully inserted")
-        case Left(desperate) =>
+        case Left(uninsertable) =>
           Logger[F].debug(
-            s"Event ${eventContainer.eventId}/${eventContainer.etlTstamp} could not be inserted. $desperate"
+            s"Event ${eventContainer.eventId}/${eventContainer.etlTstamp} could not be inserted. $uninsertable"
           )
       }
   }
@@ -81,7 +82,7 @@ object Database {
   private def buildRequest(dataset: String, table: String, event: EventContainer) =
     InsertAllRequest.newBuilder(TableId.of(dataset, table)).addRow(event.eventId.toString, event.decompose).build()
 
-  private def recoveryRuntimeFailure(e: BigQueryError) = {
+  private def recoveryRuntimeFailure(e: BigQueryError): Failure.LoaderRecoveryFailure = {
     val info = FailureDetails.LoaderRecoveryError.RuntimeError(e.getMessage, Option(e.getLocation), Option(e.getReason))
     Failure.LoaderRecoveryFailure(info)
   }

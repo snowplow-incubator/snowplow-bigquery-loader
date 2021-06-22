@@ -29,11 +29,11 @@ import com.snowplowanalytics.iglu.client.Client
 import com.snowplowanalytics.iglu.client.resolver.{InitListCache, InitSchemaCache}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Config.Environment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.StreamBadRow
 
-class Resources[F[_]](
-  val environment: Environment,
+final class Resources[F[_]](
+  val env: LoaderEnvironment,
   val igluClient: Client[F, Json],
   val blocker: Blocker,
   val source: Stream[F, Payload[F]],
@@ -52,7 +52,7 @@ object Resources {
     * @return allocated `Resources`
     */
   def acquire[F[_]: Concurrent: ContextShift: InitSchemaCache: InitListCache](
-    env: Environment
+    env: LoaderEnvironment
   ): Resource[F, Resources[F]] = {
     val clientF: F[Client[F, Json]] = Client.parseDefault[F](env.resolverJson).value.flatMap {
       case Right(client) =>
@@ -65,12 +65,12 @@ object Resources {
     for {
       client         <- Resource.liftF[F, Client[F, Json]](clientF)
       blocker        <- Blocker[F]
-      source         = Source.getStream[F](env.config.projectId, env.config.input, blocker)
+      source         = Source.getStream[F](env.projectId, env.config.input.subscription, blocker)
       maxConcurrency <- Resource.liftF[F, Int](Sync[F].delay(Runtime.getRuntime.availableProcessors * 8))
-      badRows        <- mkBadRowsSink[F](env.config.projectId, env.config.badRows, maxConcurrency)
-      types          <- mkTypesSink[F](env.config.projectId, env.config.typesTopic, maxConcurrency)
+      badRows        <- mkBadRowsSink[F](env.projectId, env.config.output.bad.topic, maxConcurrency)
+      types          <- mkTypesSink[F](env.projectId, env.config.output.types.topic, maxConcurrency)
       bigquery       <- Resource.liftF[F, BigQuery](Bigquery.getClient)
-      failedInserts  <- mkProducer[F, Bigquery.FailedInsert](env.config.projectId, env.config.failedInserts, 8L, 2.seconds)
+      failedInserts  <- mkProducer[F, Bigquery.FailedInsert](env.projectId, env.config.output.failedInserts.topic, 8L, 2.seconds)
     } yield new Resources[F](env, client, blocker, source, badRows, types, bigquery, failedInserts)
     // format: on
   }
@@ -96,11 +96,11 @@ object Resources {
 
   // Acks the event after processing it as a `BadRow`
   def mkBadRowsSink[F[_]: Concurrent](
-    project: String,
+    projectId: String,
     topic: String,
     maxConcurrency: Int
   ): Resource[F, Pipe[F, StreamBadRow[F], Unit]] =
-    mkProducer[F, BadRow](project, topic, 8L, 2.seconds).map { p =>
+    mkProducer[F, BadRow](projectId, topic, 8L, 2.seconds).map { p =>
       _.parEvalMapUnordered(maxConcurrency) { badRow =>
         p.produce(badRow.row) *> badRow.ack
       }
@@ -108,11 +108,11 @@ object Resources {
 
   // Does not ack the event -- it still needs to end up in one of the other targets
   def mkTypesSink[F[_]: Concurrent](
-    project: String,
+    projectId: String,
     topic: String,
     maxConcurrency: Int
   ): Resource[F, Pipe[F, Set[ShreddedType], Unit]] =
-    mkProducer[F, Set[ShreddedType]](project, topic, 4L, 200.millis).map { p =>
+    mkProducer[F, Set[ShreddedType]](projectId, topic, 4L, 200.millis).map { p =>
       _.parEvalMapUnordered(maxConcurrency) { types =>
         p.produce(types).void
       }

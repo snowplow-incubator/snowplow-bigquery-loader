@@ -25,7 +25,7 @@ import fs2.Stream
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer, Repeater}
 
-/** Module responsible for reading PubSub */
+/** Module responsible for reading Pub/Sub */
 object PubSub {
 
   /** Read events from `failedInserts` topic */
@@ -33,20 +33,20 @@ object PubSub {
     blocker: Blocker,
     projectId: String,
     subscription: String,
-    desperates: Queue[F, BadRow]
+    uninsertable: Queue[F, BadRow]
   ): Stream[F, ConsumerRecord[F, EventContainer]] =
     PubsubGoogleConsumer.subscribe[F, EventContainer](
       blocker,
       Model.ProjectId(projectId),
       Model.Subscription(subscription),
-      (msg, err, ack, _) => callback[F](msg, err, ack, desperates),
-      PubsubGoogleConsumerConfig[F](onFailedTerminate = t => Logger[F].error(s"Terminating consumer due $t"))
+      (msg, err, ack, _) => callback[F](msg, err, ack, uninsertable),
+      PubsubGoogleConsumerConfig[F](onFailedTerminate = t => Logger[F].error(s"Terminating consumer due to $t"))
     )
 
-  private def callback[F[_]: Sync](msg: PubsubMessage, err: Throwable, ack: F[Unit], desperates: Queue[F, BadRow]) = {
+  private def callback[F[_]: Sync](msg: PubsubMessage, err: Throwable, ack: F[Unit], uninsertable: Queue[F, BadRow]) = {
     val info    = FailureDetails.LoaderRecoveryError.ParsingError(err.toString, Nil)
     val failure = Failure.LoaderRecoveryFailure(info)
     val badRow  = BadRow.LoaderRecoveryError(Repeater.processor, failure, Payload.RawPayload(msg.toString))
-    desperates.enqueue1(badRow) >> ack
+    uninsertable.enqueue1(badRow) >> ack
   }
 }

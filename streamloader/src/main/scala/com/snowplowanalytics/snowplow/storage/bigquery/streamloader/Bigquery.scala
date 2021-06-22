@@ -31,7 +31,8 @@ object Bigquery {
     * @param loaderRow Parsed row to insert
     */
   def insert(resources: Resources[IO], loaderRow: LoaderRow): IO[Unit] = {
-    val request = buildRequest(resources.environment.config.datasetId, resources.environment.config.tableId, loaderRow)
+    val request =
+      buildRequest(resources.env.config.output.good.datasetId, resources.env.config.output.good.tableId, loaderRow)
     IO.delay(resources.bigQuery.insertAll(request)).attempt.flatMap {
       case Right(response) if response.hasErrors =>
         loaderRow.data.setFactory(new JacksonFactory)

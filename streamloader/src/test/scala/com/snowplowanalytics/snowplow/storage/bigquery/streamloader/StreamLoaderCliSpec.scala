@@ -12,12 +12,16 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import cats.effect._
+import org.specs2.mutable.Specification
 
-object Main extends IOApp {
-  override def run(args: List[String]): IO[ExitCode] =
-    StreamLoaderCli.parse(args) match {
-      case Right(env) => StreamLoader.run(env).as(ExitCode.Success)
-      case Left(help) => IO.delay(System.err.println(help.toString)).as(ExitCode.Error)
+class StreamLoaderCliSpec extends Specification {
+  "parse" should {
+    "extract valid Loader configuration" in {
+      val expected = SpecHelpers.loaderEnv
+      val result =
+        StreamLoaderCli.parse(Seq("--config", SpecHelpers.base64Config, "--resolver", SpecHelpers.base64Resolver))
+
+      result must beRight(expected)
     }
+  }
 }

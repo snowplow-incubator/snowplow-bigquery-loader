@@ -12,11 +12,13 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.benchmark
 
-import java.util.concurrent.TimeUnit
-import org.openjdk.jmh.annotations._
-import cats.Id
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.IdInstances.idClock
+import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.implicits.idClock
+
+import cats.Id
+import org.openjdk.jmh.annotations._
+
+import java.util.concurrent.TimeUnit
 
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.AverageTime, Mode.Throughput))

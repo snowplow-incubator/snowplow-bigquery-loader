@@ -12,18 +12,17 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 
-import com.google.pubsub.v1.PubsubMessage
+import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer, Repeater}
 
 import cats.effect._
 import cats.syntax.all._
-import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
+import com.google.pubsub.v1.PubsubMessage
 import com.permutive.pubsub.consumer.{ConsumerRecord, Model}
-import io.chrisdavenport.log4cats.Logger
+import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
 import fs2.concurrent.Queue
 import fs2.Stream
-
-import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
-import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer, Repeater}
+import io.chrisdavenport.log4cats.Logger
 
 /** Module responsible for reading Pub/Sub */
 object PubSub {

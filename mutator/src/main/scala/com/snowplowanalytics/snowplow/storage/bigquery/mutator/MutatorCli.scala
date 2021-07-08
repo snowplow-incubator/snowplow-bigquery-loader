@@ -12,19 +12,19 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import cats.implicits._
-import com.monovore.decline._
-
 import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.MutatorEnvironment
 
+import cats.implicits._
+import com.monovore.decline._
+
 /** Mutator-specific CLI configuration */
 object MutatorCli {
   private val options: Opts[MutatorEnvironment] = (configOpt, resolverOpt).mapN { (config, resolver) =>
-    Environment(config.mutator, resolver, config.projectId)
+    Environment(config.mutator, resolver, config.projectId, config.monitoring)
   }
 
   private val schema: Opts[SchemaKey] = Opts.option[String]("schema", "Iglu URI to add to the table").mapValidated {

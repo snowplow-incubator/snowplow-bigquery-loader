@@ -12,7 +12,10 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common.config
 
-import java.util.Base64
+import com.snowplowanalytics.iglu.client.Resolver
+import com.snowplowanalytics.iglu.client.resolver.{InitListCache, InitSchemaCache}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model._
+
 import cats.{Id, Monad}
 import cats.data.{EitherT, ValidatedNel}
 import cats.implicits.toShow
@@ -23,19 +26,19 @@ import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import io.circe.config.parser
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.parser.parse
-import com.snowplowanalytics.iglu.client.Resolver
-import com.snowplowanalytics.iglu.client.resolver.{InitListCache, InitSchemaCache}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model._
+
+import java.util.Base64
 
 final case class CliConfig(
   projectId: String,
   loader: Config.Loader,
   mutator: Config.Mutator,
-  repeater: Config.Repeater
+  repeater: Config.Repeater,
+  monitoring: Monitoring
 )
 
 object CliConfig {
-  final case class Environment[A](config: A, resolverJson: Json, projectId: String) {
+  final case class Environment[A](config: A, resolverJson: Json, projectId: String, monitoring: Monitoring) {
     def getFullSubName(sub: String): String     = s"projects/$projectId/subscriptions/$sub"
     def getFullTopicName(topic: String): String = s"projects/$projectId/topics/$topic"
   }

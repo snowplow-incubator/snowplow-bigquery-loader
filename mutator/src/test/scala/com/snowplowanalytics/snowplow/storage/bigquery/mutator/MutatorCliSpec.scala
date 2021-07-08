@@ -12,45 +12,121 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
+import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.MutatorCli._
 
 import org.specs2.mutable.Specification
 
 class MutatorCliSpec extends Specification {
   "parse" should {
-    "extract valid configuration for listen subcommand" in {
-      val expected = MutatorCommand.Listen(SpecHelpers.mutatorEnv, false)
-      val result =
-        MutatorCli.parse(Seq("listen", "--config", SpecHelpers.base64Config, "--resolver", SpecHelpers.base64Resolver))
+    val validHoconB64        = SpecHelpers.configs.validHoconB64
+    val validResolverJsonB64 = SpecHelpers.configs.validResolverJsonB64
 
-      result must beRight(expected)
-    }
+    "extract valid configuration" in {
+      val mutatorEnv = SpecHelpers.configs.mutatorEnv
 
-    "extract valid configuration for create subcommand" in {
-      val expected = MutatorCommand.Create(SpecHelpers.mutatorEnv)
-      val result =
-        MutatorCli.parse(Seq("create", "--config", SpecHelpers.base64Config, "--resolver", SpecHelpers.base64Resolver))
+      "for listen subcommand" in {
+        val expected = MutatorCommand.Listen(mutatorEnv, false)
+        val result =
+          MutatorCli.parse(Seq("listen", "--config", validHoconB64, "--resolver", validResolverJsonB64))
 
-      result must beRight(expected)
-    }
+        result must beRight(expected)
+      }
 
-    "extract valid configuration for add-column subcommand" in {
-      val expected = MutatorCommand.AddColumn(SpecHelpers.mutatorEnv, SpecHelpers.schema, SpecHelpers.property)
-      val result = MutatorCli.parse(
-        Seq(
-          "add-column",
-          "--config",
-          SpecHelpers.base64Config,
-          "--resolver",
-          SpecHelpers.base64Resolver,
-          "--schema",
-          "iglu:com.vendor/schema_name/jsonschema/1-0-0",
-          "--shred-property",
-          "UNSTRUCT_EVENT"
+      "for create subcommand" in {
+        val expected = MutatorCommand.Create(mutatorEnv)
+        val result =
+          MutatorCli.parse(Seq("create", "--config", validHoconB64, "--resolver", validResolverJsonB64))
+
+        result must beRight(expected)
+      }
+
+      "for add-column subcommand" in {
+        val expected = MutatorCommand.AddColumn(mutatorEnv, SpecHelpers.iglu.adClickSchemaKey, Data.UnstructEvent)
+        val result = MutatorCli.parse(
+          Seq(
+            "add-column",
+            "--config",
+            validHoconB64,
+            "--resolver",
+            validResolverJsonB64,
+            "--schema",
+            "iglu:com.snowplowanalytics.snowplow/ad_click/jsonschema/1-0-0",
+            "--shred-property",
+            "UNSTRUCT_EVENT"
+          )
         )
-      )
 
-      result must beRight(expected)
+        result must beRight(expected)
+      }
+    }
+
+    "fail to extract valid configuration" in {
+      "with invalid HOCON" in {
+        val invalidHoconB64 = SpecHelpers.configs.invalidHoconB64
+        val listenRes       = MutatorCli.parse(Seq("listen", "--config", invalidHoconB64, "--resolver", validResolverJsonB64))
+        val createRes       = MutatorCli.parse(Seq("create", "--config", invalidHoconB64, "--resolver", validResolverJsonB64))
+        val addColumnRes = MutatorCli.parse(
+          Seq(
+            "add-column",
+            "--config",
+            invalidHoconB64,
+            "--resolver",
+            validResolverJsonB64,
+            "--schema",
+            "iglu:com.snowplowanalytics.snowplow/ad_click/jsonschema/1-0-0",
+            "--shred-property",
+            "UNSTRUCT_EVENT"
+          )
+        )
+
+        List(listenRes, createRes, addColumnRes).forall(_ must beLeft)
+      }
+
+      "with malformed JSON" in {
+        val malformedResolverJsonB64 = SpecHelpers.configs.malformedResolverJsonB64
+        val listenRes =
+          MutatorCli.parse(Seq("listen", "--config", validHoconB64, "--resolver", malformedResolverJsonB64))
+        val createRes =
+          MutatorCli.parse(Seq("create", "--config", validHoconB64, "--resolver", malformedResolverJsonB64))
+        val addColumnRes = MutatorCli.parse(
+          Seq(
+            "add-column",
+            "--config",
+            validHoconB64,
+            "--resolver",
+            malformedResolverJsonB64,
+            "--schema",
+            "iglu:com.snowplowanalytics.snowplow/ad_click/jsonschema/1-0-0",
+            "--shred-property",
+            "UNSTRUCT_EVENT"
+          )
+        )
+
+        List(listenRes, createRes, addColumnRes).forall(_ must beLeft)
+      }
+
+      "with invalid self-describing JSON" in {
+        val invalidResolverJsonB64 = SpecHelpers.configs.invalidResolverJsonB64
+        val listenRes              = MutatorCli.parse(Seq("listen", "--config", validHoconB64, "--resolver", invalidResolverJsonB64))
+        val createRes              = MutatorCli.parse(Seq("create", "--config", validHoconB64, "--resolver", invalidResolverJsonB64))
+        val addColumnRes = MutatorCli.parse(
+          Seq(
+            "add-column",
+            "--config",
+            validHoconB64,
+            "--resolver",
+            invalidResolverJsonB64,
+            "--schema",
+            "iglu:com.snowplowanalytics.snowplow/ad_click/jsonschema/1-0-0",
+            "--shred-property",
+            "UNSTRUCT_EVENT"
+          )
+        )
+
+        List(listenRes, createRes, addColumnRes).forall(_ must beLeft)
+      }
     }
   }
 }

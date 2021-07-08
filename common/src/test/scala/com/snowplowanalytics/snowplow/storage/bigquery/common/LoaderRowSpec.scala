@@ -12,26 +12,32 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
-import org.joda.time.Instant
-import com.google.api.services.bigquery.model.TableRow
+import com.snowplowanalytics.iglu.client.resolver.Resolver
+import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.core.SchemaVer.Full
-import io.circe.literal._
-import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Row.{Primitive, Record, Repeated}
-import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
+import com.snowplowanalytics.snowplow.badrows.Processor
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.transformJson
-import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.implicits.idClock
+
+import cats.Id
+import com.google.api.services.bigquery.model.TableRow
+import io.circe.literal._
 import io.circe.parser.parse
+import org.joda.time.Instant
 import org.specs2.mutable.Specification
 
 class LoaderRowSpec extends Specification {
+  val processor: Processor   = SpecHelpers.meta.processor
+  val resolver: Resolver[Id] = SpecHelpers.iglu.resolver
+
   "groupContexts" should {
     "group contexts with same version" in {
-      val contexts = SpecHelpers.contexts
+      val contexts = SpecHelpers.events.geoContexts
 
       val result = LoaderRow
-        .groupContexts(SpecHelpers.resolver, contexts)
+        .groupContexts(resolver, contexts)
         .toEither
         .map(x => x.map { case (k, v) => (k, v.asInstanceOf[java.util.List[String]].size()) }.toMap)
 
@@ -47,92 +53,58 @@ class LoaderRowSpec extends Specification {
   "fromEvent" should {
     "transform all JSON types into their AnyRef counterparts" in {
       // INPUTS
-      val contexts = Contexts(
-        List(
-          SelfDescribingData(
-            SchemaKey("com.snowplowanalytics.snowplow", "web_page", "jsonschema", SchemaVer.Full(1, 0, 0)),
-            json"""{"id": "deadbeef-0000-1111-2222-deadbeef3333"}"""
-          )
-        )
-      )
-      val derivedContexts = Contexts(
-        List(
-          SelfDescribingData(
-            SchemaKey("com.snowplowanalytics.snowplow", "derived_context", "jsonschema", SchemaVer.Full(1, 0, 0)),
-            json"""{"a": "b"}"""
-          )
-        )
-      )
-      val unstructEvent = UnstructEvent(
-        Some(
-          SelfDescribingData(
-            SchemaKey("com.snowplowanalytics.snowplow", "unstruct_event", "jsonschema", SchemaVer.Full(1, 0, 0)),
-            json"""{"c": "d"}"""
-          )
-        )
-      )
+      val event           = SpecHelpers.events.exampleEvent
+      val contexts        = SpecHelpers.events.contexts
+      val derivedContexts = SpecHelpers.events.derivedContexts
+      val unstructEvent   = SpecHelpers.events.unstructEvent
 
-      val inputPlain = SpecHelpers
-        .ExampleEvent
-        .copy(
-          br_cookies        = Some(false),
-          domain_sessionidx = Some(3)
-        )
-      val inputC = SpecHelpers
-        .ExampleEvent
-        .copy(
-          contexts          = contexts,
-          br_cookies        = Some(false),
-          domain_sessionidx = Some(3)
-        )
-      val inputDc = SpecHelpers
-        .ExampleEvent
-        .copy(
-          br_cookies        = Some(false),
-          domain_sessionidx = Some(3),
-          derived_contexts  = derivedContexts
-        )
-      val inputUe = SpecHelpers
-        .ExampleEvent
-        .copy(
-          br_cookies        = Some(false),
-          domain_sessionidx = Some(3),
-          unstruct_event    = unstructEvent
-        )
-      val inputUeC = SpecHelpers
-        .ExampleEvent
-        .copy(
-          contexts          = contexts,
-          br_cookies        = Some(false),
-          domain_sessionidx = Some(3),
-          unstruct_event    = unstructEvent
-        )
-      val inputUeDc = SpecHelpers
-        .ExampleEvent
-        .copy(
-          br_cookies        = Some(false),
-          domain_sessionidx = Some(3),
-          unstruct_event    = unstructEvent,
-          derived_contexts  = derivedContexts
-        )
-      val inputUeDcC = SpecHelpers
-        .ExampleEvent
-        .copy(
-          contexts          = contexts,
-          br_cookies        = Some(false),
-          domain_sessionidx = Some(3),
-          unstruct_event    = unstructEvent,
-          derived_contexts  = derivedContexts
-        )
+      val inputPlain = event.copy(
+        br_cookies        = Some(false),
+        domain_sessionidx = Some(3)
+      )
+      val inputC = event.copy(
+        contexts          = contexts,
+        br_cookies        = Some(false),
+        domain_sessionidx = Some(3)
+      )
+      val inputDc = event.copy(
+        br_cookies        = Some(false),
+        domain_sessionidx = Some(3),
+        derived_contexts  = derivedContexts
+      )
+      val inputUe = event.copy(
+        br_cookies        = Some(false),
+        domain_sessionidx = Some(3),
+        unstruct_event    = unstructEvent
+      )
+      val inputUeC = event.copy(
+        contexts          = contexts,
+        br_cookies        = Some(false),
+        domain_sessionidx = Some(3),
+        unstruct_event    = unstructEvent
+      )
+      val inputUeDc = event.copy(
+        br_cookies        = Some(false),
+        domain_sessionidx = Some(3),
+        unstruct_event    = unstructEvent,
+        derived_contexts  = derivedContexts
+      )
+      val inputUeDcC = event.copy(
+        contexts          = contexts,
+        br_cookies        = Some(false),
+        domain_sessionidx = Some(3),
+        unstruct_event    = unstructEvent,
+        derived_contexts  = derivedContexts
+      )
 
       // OUTPUTS
-      val resultPlain = LoaderRow.fromEvent(SpecHelpers.resolver, processor)(inputPlain)
-      val resultC     = LoaderRow.fromEvent(SpecHelpers.resolver, processor)(inputC)
-      val resultDc    = LoaderRow.fromEvent(SpecHelpers.resolver, processor)(inputDc)
-      val resultUe    = LoaderRow.fromEvent(SpecHelpers.resolver, processor)(inputUe)
-      val resultUeC   = LoaderRow.fromEvent(SpecHelpers.resolver, processor)(inputUeC)
-      val resultUeDc  = LoaderRow.fromEvent(SpecHelpers.resolver, processor)(inputUeDc)
-      val resultUeDcC = LoaderRow.fromEvent(SpecHelpers.resolver, processor)(inputUeDcC)
+      val resultPlain = LoaderRow.fromEvent(resolver, processor)(inputPlain)
+      val resultC     = LoaderRow.fromEvent(resolver, processor)(inputC)
+      val resultDc    = LoaderRow.fromEvent(resolver, processor)(inputDc)
+      val resultUe    = LoaderRow.fromEvent(resolver, processor)(inputUe)
+      val resultUeC   = LoaderRow.fromEvent(resolver, processor)(inputUeC)
+      val resultUeDc  = LoaderRow.fromEvent(resolver, processor)(inputUeDc)
+      val resultUeDcC = LoaderRow.fromEvent(resolver, processor)(inputUeDcC)
 
       // EXPECTATIONS
       val cValue  = adaptRow(Repeated(List(Record(List(("id", Primitive("deadbeef-0000-1111-2222-deadbeef3333")))))))
@@ -200,13 +172,15 @@ class LoaderRowSpec extends Specification {
         .set("contexts_com_snowplowanalytics_snowplow_derived_context_1_0_0", dcValue)
 
       // format: off
-      val expectedPlain = LoaderRow(new Instant(SpecHelpers.ExampleEvent.collector_tstamp.toEpochMilli), tableRowPlain, inputPlain.inventory)
-      val expectedC     = LoaderRow(new Instant(SpecHelpers.ExampleEvent.collector_tstamp.toEpochMilli), tableRowC, inputC.inventory)
-      val expectedDc    = LoaderRow(new Instant(SpecHelpers.ExampleEvent.collector_tstamp.toEpochMilli), tableRowDc, inputDc.inventory)
-      val expectedUe    = LoaderRow(new Instant(SpecHelpers.ExampleEvent.collector_tstamp.toEpochMilli), tableRowUe, inputUe.inventory)
-      val expectedUeC   = LoaderRow(new Instant(SpecHelpers.ExampleEvent.collector_tstamp.toEpochMilli), tableRowUeC, inputUeC.inventory)
-      val expectedUeDc  = LoaderRow(new Instant(SpecHelpers.ExampleEvent.collector_tstamp.toEpochMilli), tableRowUeDc, inputUeDc.inventory)
-      val expectedUeDcC = LoaderRow(new Instant(SpecHelpers.ExampleEvent.collector_tstamp.toEpochMilli), tableRowUeDcC, inputUeDcC.inventory)
+      val tstamp = event.collector_tstamp.toEpochMilli
+      
+      val expectedPlain = LoaderRow(new Instant(tstamp), tableRowPlain, inputPlain.inventory)
+      val expectedC     = LoaderRow(new Instant(tstamp), tableRowC, inputC.inventory)
+      val expectedDc    = LoaderRow(new Instant(tstamp), tableRowDc, inputDc.inventory)
+      val expectedUe    = LoaderRow(new Instant(tstamp), tableRowUe, inputUe.inventory)
+      val expectedUeC   = LoaderRow(new Instant(tstamp), tableRowUeC, inputUeC.inventory)
+      val expectedUeDc  = LoaderRow(new Instant(tstamp), tableRowUeDc, inputUeDc.inventory)
+      val expectedUeDcC = LoaderRow(new Instant(tstamp), tableRowUeDcC, inputUeDcC.inventory)
       // format: on
 
       // OUTCOMES
@@ -222,7 +196,7 @@ class LoaderRowSpec extends Specification {
 
   "transformJson" should {
     "succeed with an event whose schema has an [array, null] property" in {
-      val json = parse(nullableArrayUnstructData).getOrElse(json"""{"n": "a"}""")
+      val json = parse(SpecHelpers.events.nullableArrayUnstructData).getOrElse(json"""{"n": "a"}""")
       val result =
         transformJson(
           resolver,
@@ -235,7 +209,7 @@ class LoaderRowSpec extends Specification {
 
   "parse" should {
     "succeed with an event whose schema has an [array, null] property" in {
-      LoaderRow.parse(resolver, processor)(nullableArrayUnstructEvent) must beRight
+      LoaderRow.parse(resolver, processor)(SpecHelpers.events.nullableArrayUnstructEvent) must beRight
     }
   }
 }

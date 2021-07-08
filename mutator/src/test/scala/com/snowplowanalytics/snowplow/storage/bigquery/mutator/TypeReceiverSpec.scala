@@ -12,12 +12,11 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import org.specs2.mutable.Specification
+import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 
 import io.circe.Json
-
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
-import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
+import org.specs2.mutable.Specification
 
 class TypeReceiverSpec extends Specification {
   "TypeReceiver" should {

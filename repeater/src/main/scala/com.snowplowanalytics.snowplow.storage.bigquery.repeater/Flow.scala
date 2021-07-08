@@ -12,20 +12,20 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import com.google.cloud.bigquery._
-import org.joda.time.DateTime
-
-import scala.concurrent.duration._
-import cats.effect._
-import cats.effect.concurrent.Ref
-import cats.data.EitherT
-import cats.syntax.all._
-import io.chrisdavenport.log4cats.Logger
-import fs2.{Chunk, Stream}
-
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.GcsPath
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.services.Storage
+
+import cats.data.EitherT
+import cats.effect._
+import cats.effect.concurrent.Ref
+import cats.syntax.all._
+import com.google.cloud.bigquery._
+import fs2.{Chunk, Stream}
+import io.chrisdavenport.log4cats.Logger
+import org.joda.time.DateTime
+
+import scala.concurrent.duration._
 
 object Flow {
 

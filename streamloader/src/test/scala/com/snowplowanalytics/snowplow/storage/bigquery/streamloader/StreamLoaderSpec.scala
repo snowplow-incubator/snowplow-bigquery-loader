@@ -13,13 +13,15 @@
 
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import cats.effect.{Concurrent, ContextShift, IO, Timer}
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.{ShreddedType, UnstructEvent}
-import org.specs2.mutable.Specification
+
+import cats.effect.{Concurrent, ContextShift, IO, Timer}
 import fs2.Stream
-import scala.util.Random
+import org.specs2.mutable.Specification
+
 import scala.concurrent.duration._
+import scala.util.Random
 
 class StreamLoaderSpec extends Specification {
 

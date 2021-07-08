@@ -12,10 +12,11 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.benchmark
 
-import java.util.concurrent.TimeUnit
-import org.openjdk.jmh.annotations.{Benchmark, BenchmarkMode, Mode, OutputTimeUnit, Scope, State}
-
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
+
+import org.openjdk.jmh.annotations._
+
+import java.util.concurrent.TimeUnit
 
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.AverageTime, Mode.Throughput))

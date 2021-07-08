@@ -12,24 +12,23 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import java.util.concurrent.Executors
-import org.joda.time.Instant
-import com.google.cloud.bigquery._
-
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext
+import com.snowplowanalytics.snowplow.badrows.BadRow
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.RepeaterEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.{GcsPath, validateBucket}
 
 import cats.Show
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import io.chrisdavenport.log4cats.Logger
+import com.google.cloud.bigquery._
 import fs2.{Chunk, Stream}
 import fs2.concurrent.{Queue, SignallingRef}
+import io.chrisdavenport.log4cats.Logger
+import org.joda.time.Instant
 
-import com.snowplowanalytics.snowplow.badrows.BadRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.RepeaterEnvironment
-import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.{GcsPath, validateBucket}
+import java.util.concurrent.Executors
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext
 
 /**
   * @param bigQuery BigQuery client provided by SDK

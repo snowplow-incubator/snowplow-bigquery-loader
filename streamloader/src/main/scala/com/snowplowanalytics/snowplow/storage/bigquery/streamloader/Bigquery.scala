@@ -12,12 +12,11 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import com.google.api.client.json.jackson2.JacksonFactory
-import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, TableId}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 
 import cats.effect.{IO, Sync}
-
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
+import com.google.api.client.json.jackson2.JacksonFactory
+import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, TableId}
 
 object Bigquery {
 

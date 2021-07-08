@@ -12,21 +12,23 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import cats.data.NonEmptyList
+import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.{GcsPath, ListenCommand, validateBucket}
+
+import cats.data.NonEmptyList
 import org.specs2.mutable.Specification
 
 class RepeaterCliSpec extends Specification {
   "parse" should {
     "extract valid Repeater configuration" in {
-      val expected = ListenCommand(SpecHelpers.repeaterEnv, 20, 30, 900, false)
+      val expected = ListenCommand(SpecHelpers.configs.repeaterEnv, 20, 30, 900, false)
       val result =
         RepeaterCli.parse(
           Seq(
             "--config",
-            SpecHelpers.base64Config,
+            SpecHelpers.configs.validHoconB64,
             "--resolver",
-            SpecHelpers.base64Resolver,
+            SpecHelpers.configs.validResolverJsonB64,
             "--bufferSize",
             "20",
             "--timeout",
@@ -37,6 +39,53 @@ class RepeaterCliSpec extends Specification {
         )
 
       result must beRight(expected)
+    }
+
+    "fail to extract valid configuration" in {
+      val invalidHoconRes = RepeaterCli.parse(
+        Seq(
+          "--config",
+          SpecHelpers.configs.invalidHoconB64,
+          "--resolver",
+          SpecHelpers.configs.validResolverJsonB64,
+          "--bufferSize",
+          "20",
+          "--timeout",
+          "30",
+          "--backoffPeriod",
+          "900"
+        )
+      )
+      val malformedJsonRes = RepeaterCli.parse(
+        Seq(
+          "--config",
+          SpecHelpers.configs.validHoconB64,
+          "--resolver",
+          SpecHelpers.configs.malformedResolverJsonB64,
+          "--bufferSize",
+          "20",
+          "--timeout",
+          "30",
+          "--backoffPeriod",
+          "900"
+        )
+      )
+      val invalidJsonRes = RepeaterCli.parse(
+        Seq(
+          "--config",
+          SpecHelpers.configs.validHoconB64,
+          "--resolver",
+          SpecHelpers.configs.invalidResolverJsonB64,
+          "--bufferSize",
+          "20",
+          "--timeout",
+          "30",
+          "--backoffPeriod",
+          "900"
+        )
+      )
+
+      List(invalidHoconRes, malformedJsonRes, invalidJsonRes).forall(_ must beLeft)
     }
   }
 

@@ -12,10 +12,10 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
+import com.snowplowanalytics.iglu.client.Resolver
+
 import cats.Id
 import io.circe.Json
-
-import com.snowplowanalytics.iglu.client.Resolver
 
 object singleton {
 

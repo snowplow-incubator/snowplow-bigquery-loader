@@ -12,24 +12,25 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
-import cats.Monad
-import cats.data.{NonEmptyList, Validated, ValidatedNel}
-import cats.implicits._
-import cats.effect.Clock
-import org.joda.time.Instant
-import com.google.api.services.bigquery.model.TableRow
-import io.circe.{Encoder, Json}
-import io.circe.syntax._
-import io.circe.generic.semiauto._
-import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.RegistryLookup
+import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
+import com.snowplowanalytics.iglu.schemaddl.bigquery._
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{Schema => DdlSchema}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{CastError, Field, Mode, Row, Type}
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload, Processor}
+
+import cats.Monad
+import cats.data.{NonEmptyList, Validated, ValidatedNel}
+import cats.effect.Clock
+import cats.implicits._
+import com.google.api.services.bigquery.model.TableRow
+import io.circe.{Encoder, Json}
+import io.circe.generic.semiauto._
+import io.circe.syntax._
+import org.joda.time.Instant
 
 /** Row ready to be passed into Loader stream and Mutator topic */
 case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])

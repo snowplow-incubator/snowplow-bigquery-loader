@@ -12,25 +12,26 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import com.google.cloud.bigquery.BigQuery
-
-import scala.concurrent.duration._
+import com.snowplowanalytics.iglu.client.Client
+import com.snowplowanalytics.iglu.client.resolver.{InitListCache, InitSchemaCache}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
+import com.snowplowanalytics.snowplow.badrows.BadRow
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring
+import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.StreamBadRow
+import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.metrics.Metrics
 
 import cats.Applicative
-import cats.effect.{Async, Blocker, Concurrent, ContextShift, Resource, Sync}
+import cats.effect.{Async, Blocker, Concurrent, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
 import cats.implicits._
+import com.google.cloud.bigquery.BigQuery
 import com.permutive.pubsub.producer.{Model, PubsubProducer}
 import com.permutive.pubsub.producer.encoder.MessageEncoder
 import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerConfig}
 import fs2.{Pipe, Stream}
 import io.circe.Json
 
-import com.snowplowanalytics.iglu.client.Client
-import com.snowplowanalytics.iglu.client.resolver.{InitListCache, InitSchemaCache}
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-import com.snowplowanalytics.snowplow.badrows.BadRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
-import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.StreamBadRow
+import scala.concurrent.duration._
 
 final class Resources[F[_]](
   val env: LoaderEnvironment,
@@ -40,7 +41,8 @@ final class Resources[F[_]](
   val badRowsSink: Pipe[F, StreamBadRow[F], Unit],
   val typesSink: Pipe[F, Set[ShreddedType], Unit],
   val bigQuery: BigQuery,
-  val failedInsertsProducer: PubsubProducer[F, Bigquery.FailedInsert]
+  val failedInsertsProducer: PubsubProducer[F, Bigquery.FailedInsert],
+  val metrics: Metrics[F]
 )
 
 object Resources {
@@ -51,7 +53,7 @@ object Resources {
     * @tparam F effect type that can allocate Iglu cache
     * @return allocated `Resources`
     */
-  def acquire[F[_]: Concurrent: ContextShift: InitSchemaCache: InitListCache](
+  def acquire[F[_]: Concurrent: ContextShift: InitSchemaCache: InitListCache: ConcurrentEffect: Timer](
     env: LoaderEnvironment
   ): Resource[F, Resources[F]] = {
     val clientF: F[Client[F, Json]] = Client.parseDefault[F](env.resolverJson).value.flatMap {
@@ -71,7 +73,8 @@ object Resources {
       types          <- mkTypesSink[F](env.projectId, env.config.output.types.topic, maxConcurrency)
       bigquery       <- Resource.liftF[F, BigQuery](Bigquery.getClient)
       failedInserts  <- mkProducer[F, Bigquery.FailedInsert](env.projectId, env.config.output.failedInserts.topic, 8L, 2.seconds)
-    } yield new Resources[F](env, client, blocker, source, badRows, types, bigquery, failedInserts)
+      metrics        <- Resource.liftF(mkMetricsReporter[F](blocker, env.monitoring))
+    } yield new Resources[F](env, client, blocker, source, badRows, types, bigquery, failedInserts, metrics)
     // format: on
   }
 
@@ -117,4 +120,10 @@ object Resources {
         p.produce(types).void
       }
     }
+
+  def mkMetricsReporter[F[_]: ConcurrentEffect: ContextShift: Timer](
+    blocker: Blocker,
+    monitoringConfig: Monitoring
+  ): F[Metrics[F]] =
+    Metrics.build[F](blocker, monitoringConfig.statsd)
 }

@@ -12,16 +12,34 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
+import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers
+
 import org.specs2.mutable.Specification
 
 class StreamLoaderCliSpec extends Specification {
   "parse" should {
     "extract valid Loader configuration" in {
-      val expected = SpecHelpers.loaderEnv
+      val expected = SpecHelpers.configs.loaderEnv
       val result =
-        StreamLoaderCli.parse(Seq("--config", SpecHelpers.base64Config, "--resolver", SpecHelpers.base64Resolver))
+        StreamLoaderCli.parse(
+          Seq("--config", SpecHelpers.configs.validHoconB64, "--resolver", SpecHelpers.configs.validResolverJsonB64)
+        )
 
       result must beRight(expected)
+    }
+
+    "fail to extract Loader configuration from invalid inputs" in {
+      val invalidHoconRes = StreamLoaderCli.parse(
+        Seq("--config", SpecHelpers.configs.invalidHoconB64, "--resolver", SpecHelpers.configs.validResolverJsonB64)
+      )
+      val malformedJsonRes = StreamLoaderCli.parse(
+        Seq("--config", SpecHelpers.configs.validHoconB64, "--resolver", SpecHelpers.configs.malformedResolverJsonB64)
+      )
+      val invalidJsonRes = StreamLoaderCli.parse(
+        Seq("--config", SpecHelpers.configs.validHoconB64, "--resolver", SpecHelpers.configs.invalidResolverJsonB64)
+      )
+
+      List(invalidHoconRes, malformedJsonRes, invalidJsonRes).forall(_ must beLeft)
     }
   }
 }

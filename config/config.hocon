@@ -83,4 +83,27 @@
       }
     }
   }
+
+  # Optional
+  "monitoring": {
+    # For StreamLoader deployments
+    "statsd": {
+      "hostname": "statsd.acme.gl"
+      "port": 1024
+      "tags": {
+        # You can use environment variables
+        # "worker": ${HOST}
+      }
+      # Reporting period in seconds
+      "period": "1"
+      # Optional
+      "prefix": "snowplow.monitoring"
+    }
+
+    # For Loader deployments
+    # "dropwizard": {
+    #   # Reporting period in seconds
+    #   "period": "1"
+    # }
+    }
 }

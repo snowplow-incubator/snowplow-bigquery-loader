@@ -12,28 +12,27 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
+import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{LoadMode, Monitoring}
+import com.snowplowanalytics.snowplow.storage.bigquery.loader.metrics._
+import com.snowplowanalytics.snowplow.storage.bigquery.loader.IdInstances._
+
+import cats.Id
 import com.google.api.services.bigquery.model.TableReference
-import org.apache.beam.sdk.transforms.windowing._
+import com.spotify.scio.ScioContext
+import com.spotify.scio.coders.Coder
+import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
+import io.circe.Json
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
+import org.apache.beam.sdk.transforms.windowing._
 import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 import org.joda.time.{Duration, Instant}
 import org.slf4j.LoggerFactory
-
-import cats.Id
-import com.spotify.scio.ScioContext
-import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
-import com.spotify.scio.coders.Coder
-import io.circe.Json
-
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
-import com.snowplowanalytics.snowplow.storage.bigquery.loader.metrics._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
-import com.snowplowanalytics.snowplow.storage.bigquery.loader.IdInstances._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.LoadMode
 
 object Loader {
   implicit val coderBadRow: Coder[BadRow] = Coder.kryo[BadRow]
@@ -60,18 +59,15 @@ object Loader {
 
   /** Run whole pipeline */
   def run(env: LoaderEnvironment, sc: ScioContext): Unit = {
+    startReporter(reporter, env)
+
     val (mainOutput, sideOutputs) = getData(env.resolverJson, sc, env.getFullSubName(env.config.input.subscription))
       .withSideOutputs(ObservedTypesOutput, BadRowsOutput)
       .withName("splitGoodBad")
       .flatMap {
         case (Right(row), ctx) =>
           ctx.output(ObservedTypesOutput, row.inventory)
-          val diff = Instant.now().getMillis - row.collectorTstamp.getMillis
-          latency.update(diff) match {
-            case Right(upd) => upd
-            // We can get a Left if an exception is thrown.
-            case Left(e) => LoggerFactory.getLogger("non-fatal").debug("Non-fatal exception:\n", e)
-          }
+          updateMetrics(row.collectorTstamp, env.monitoring)
           Some(row)
         case (Left(row), ctx) =>
           ctx.output(BadRowsOutput, row)
@@ -165,5 +161,17 @@ object Loader {
   private def parse(resolverJson: Json)(record: String): Either[BadRow, LoaderRow] = {
     val resolver = singleton.ResolverSingleton.get(resolverJson)
     LoaderRow.parse[Id](resolver, processor)(record)
+  }
+
+  private def updateMetrics(cTstamp: Instant, monitoring: Monitoring) = monitoring match {
+    case Monitoring(_, Some(_)) =>
+      val diff = Instant.now().getMillis - cTstamp.getMillis
+      latency.update(diff) match {
+        case Right(upd) => upd
+        // We can get a Left if an exception is thrown.
+        case Left(e) => LoggerFactory.getLogger("non-fatal").debug("Non-fatal exception:\n", e)
+      }
+      ()
+    case _ => ()
   }
 }

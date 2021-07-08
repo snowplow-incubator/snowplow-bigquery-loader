@@ -12,10 +12,10 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import java.util.concurrent.TimeUnit
-
 import cats.Id
 import cats.effect.Clock
+
+import java.util.concurrent.TimeUnit
 
 object IdInstances {
   implicit val idClock: Clock[Id] = new Clock[Id] {

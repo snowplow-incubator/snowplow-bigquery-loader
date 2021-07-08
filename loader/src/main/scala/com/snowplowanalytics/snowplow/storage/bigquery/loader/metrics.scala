@@ -12,18 +12,26 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import java.util.concurrent.TimeUnit
-import org.slf4j.LoggerFactory
-import com.codahale.metrics.{Gauge, MetricRegistry, Slf4jReporter}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.Dropwizard
 
 import cats.syntax.either._
+import com.codahale.metrics.{Gauge, MetricRegistry, Slf4jReporter}
+import org.slf4j.LoggerFactory
+
+import java.util.concurrent.TimeUnit
 
 object metrics {
   private val metrics = new MetricRegistry()
-  val latency         = new MetricRegistryOps(metrics)
   private val logger  = LoggerFactory.getLogger("bigquery.loader.metrics")
-  // Take the latest value every 1 second.
-  private val reporter = Slf4jReporter.forRegistry(metrics).outputTo(logger).build().start(1, TimeUnit.SECONDS)
+  val reporter        = Slf4jReporter.forRegistry(metrics).outputTo(logger).build()
+  val latency         = new MetricRegistryOps(metrics)
+
+  // Take the latest value every 'period' second.
+  def startReporter(reporter: Slf4jReporter, env: LoaderEnvironment): Unit = env.monitoring.dropwizard match {
+    case Some(Dropwizard(period)) => reporter.start(period.toSeconds, TimeUnit.SECONDS)
+    case _                        => ()
+  }
 
   /** Operations performed on a `MetricRegistry` */
   final class MetricRegistryOps(registry: MetricRegistry) {
@@ -40,8 +48,6 @@ object metrics {
     // `getValue` can throw an exception.
     def update(diff: Long): Either[Throwable, Long] =
       Either.catchNonFatal(this.gauge("bigquery.loader.latency", diff).getValue)
-
-    def startReporter(): Unit = reporter // To avoid 'unused private val' compile-time error
   }
 
   /** The default `Gauge` has no way to pass in a value. */

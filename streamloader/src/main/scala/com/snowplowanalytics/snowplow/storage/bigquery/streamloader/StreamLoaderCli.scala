@@ -12,15 +12,15 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig._
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+
 import cats.implicits._
 import com.monovore.decline._
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig._
-
 object StreamLoaderCli {
   private val options: Opts[LoaderEnvironment] = (configOpt, resolverOpt).mapN { (config, resolver) =>
-    Environment(config.loader, resolver, config.projectId)
+    Environment(config.loader, resolver, config.projectId, config.monitoring)
   }
 
   val command: Command[LoaderEnvironment] = Command(generated.BuildInfo.name, generated.BuildInfo.description)(options)

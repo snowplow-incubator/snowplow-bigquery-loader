@@ -12,12 +12,12 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field => DdlField, _}
+
 import com.google.api.services.bigquery.model.TableRow
 import com.google.cloud.bigquery.{Field, FieldList, LegacySQLTypeName}
 
 import scala.jdk.CollectionConverters._
-
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field => DdlField, _}
 
 /** Transform dependency-free schema-ddl AST into Google Cloud Java definitions */
 object Adapter {

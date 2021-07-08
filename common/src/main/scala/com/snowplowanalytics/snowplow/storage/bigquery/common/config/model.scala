@@ -13,8 +13,11 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.common.config
 
 import cats.implicits.toFunctorOps
+import cats.syntax.either._
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+
+import scala.concurrent.duration.FiniteDuration
 
 object model {
   sealed trait Config extends Product with Serializable {
@@ -91,5 +94,35 @@ object model {
       deriveDecoder[StreamingInserts].widen,
       deriveDecoder[FileLoads].widen
     ).reduceLeft(_.or(_))
+  }
+
+  final case class Monitoring(statsd: Option[Monitoring.Statsd], dropwizard: Option[Monitoring.Dropwizard])
+  object Monitoring {
+    final case class Statsd(
+      hostname: String,
+      port: Int,
+      tags: Map[String, String],
+      period: FiniteDuration,
+      prefix: Option[String]
+    )
+    final case class Dropwizard(period: FiniteDuration)
+
+    implicit val monitoringEncoder: Encoder[Monitoring] = deriveEncoder[Monitoring]
+    implicit val monitoringDecoder: Decoder[Monitoring] = deriveDecoder[Monitoring]
+
+    implicit val monitoringStatsdEncoder: Encoder[Statsd] = deriveEncoder[Statsd]
+    implicit val monitoringStatsdDecoder: Decoder[Statsd] = deriveDecoder[Statsd]
+
+    implicit val monitoringDropwizardEncoder: Encoder[Dropwizard] = deriveEncoder[Dropwizard]
+    implicit val monitoringDropwizardDecoder: Decoder[Dropwizard] = deriveDecoder[Dropwizard]
+
+    implicit val finiteDurationEncoder: Encoder[FiniteDuration] =
+      implicitly[Encoder[String]].contramap(_.toString)
+    implicit val finiteDurationDecoder: Decoder[FiniteDuration] =
+      implicitly[Decoder[String]].emap { s =>
+        val strSplit       = s.split(" ")
+        val (length, unit) = (strSplit(0).toLong, strSplit(1))
+        Either.catchOnly[NumberFormatException](FiniteDuration(length, unit)).leftMap(_.toString)
+      }
   }
 }

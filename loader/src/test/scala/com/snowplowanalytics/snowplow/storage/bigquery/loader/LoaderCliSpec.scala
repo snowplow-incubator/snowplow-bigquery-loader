@@ -12,20 +12,57 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
+import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers
+
 import com.spotify.scio.ContextAndArgs
 import org.specs2.mutable.Specification
 
 class LoaderCliSpec extends Specification {
   "parse" should {
-    val cliArgs   = Array(s"--config=${SpecHelpers.base64Config}", s"--resolver=${SpecHelpers.base64Resolver}")
+    val cliArgs =
+      Array(s"--config=${SpecHelpers.configs.validHoconB64}", s"--resolver=${SpecHelpers.configs.validResolverJsonB64}")
     val (_, args) = ContextAndArgs(cliArgs)
 
     "extract valid Loader configuration" in {
-      val expected = SpecHelpers.loaderEnv
-      val result =
-        LoaderCli.parse(args)
+      val expected = SpecHelpers.configs.loaderEnv
+      val result   = LoaderCli.parse(args)
 
       result must beRight(expected)
+    }
+
+    "fail to extract Loader configuration from invalid inputs" in {
+      "invalid HOCON" in {
+        val cliArgs =
+          Array(
+            s"--config=${SpecHelpers.configs.invalidHoconB64}",
+            s"--resolver=${SpecHelpers.configs.validResolverJsonB64}"
+          )
+        val (_, args) = ContextAndArgs(cliArgs)
+
+        LoaderCli.parse(args) must beLeft
+      }
+
+      "malformed JSON" in {
+        val cliArgs =
+          Array(
+            s"--config=${SpecHelpers.configs.validHoconB64}",
+            s"--resolver=${SpecHelpers.configs.malformedResolverJsonB64}"
+          )
+        val (_, args) = ContextAndArgs(cliArgs)
+
+        LoaderCli.parse(args) must beLeft
+      }
+
+      "invalid self-describing JSON" in {
+        val cliArgs =
+          Array(
+            s"--config=${SpecHelpers.configs.validHoconB64}",
+            s"--resolver=${SpecHelpers.configs.invalidResolverJsonB64}"
+          )
+        val (_, args) = ContextAndArgs(cliArgs)
+
+        LoaderCli.parse(args) must beLeft
+      }
     }
   }
 }

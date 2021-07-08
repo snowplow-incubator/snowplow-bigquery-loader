@@ -10,22 +10,21 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-import sbt._
-import Keys._
-import com.typesafe.sbt.packager
 import com.typesafe.sbt.packager.Keys.{daemonUser, maintainer, packageName}
 import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
 import com.typesafe.sbt.packager.docker.ExecCmd
 import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
-import sbtbuildinfo._
-import sbtbuildinfo.BuildInfoKeys._
+import sbt._
+import sbt.Keys._
 import sbtassembly._
 import sbtassembly.AssemblyKeys._
+import sbtbuildinfo._
+import sbtbuildinfo.BuildInfoKeys._
 
 object BuildSettings {
   lazy val projectSettings = Seq(
     organization := "com.snowplowanalytics",
-    version := "0.6.4",
+    version := "1.0.0-rc1",
     scalaVersion := "2.13.2",
     buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description, BuildInfoKey.action("userAgent") {
       s"${name.value}/${version.value}"

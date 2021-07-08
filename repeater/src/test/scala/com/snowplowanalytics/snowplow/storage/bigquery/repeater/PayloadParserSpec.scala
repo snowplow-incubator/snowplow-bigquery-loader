@@ -12,14 +12,14 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import org.specs2.mutable.Specification
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
+import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.PayloadParser.{ReconstructedEvent, SelfDescribingEntity}
 
 import io.circe.Json
 import io.circe.syntax._
-
-import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
-import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
-import com.snowplowanalytics.snowplow.storage.bigquery.repeater.PayloadParser.{ReconstructedEvent, SelfDescribingEntity}
+import org.specs2.mutable.Specification
 
 object PayloadParserSpec {
   val flattenSchemaKeyContexts      = "contexts_com_snowplowanalytics_snowplow_web_page_1_0_0"
@@ -35,9 +35,9 @@ class PayloadParserSpec extends Specification {
     contextFlattenSchemaKeys: List[String]       = List(),
     unstructEventFlattenSchemaKeys: List[String] = List()
   ) = {
-    val contexts = createJsonAndSelfDescribingEntityPair(SpecHelpers.createContexts, contextFlattenSchemaKeys)
+    val contexts = createJsonAndSelfDescribingEntityPair(SpecHelpers.utils.createContexts, contextFlattenSchemaKeys)
     val unstructEvents =
-      createJsonAndSelfDescribingEntityPair(SpecHelpers.createUnstructEvent, unstructEventFlattenSchemaKeys)
+      createJsonAndSelfDescribingEntityPair(SpecHelpers.utils.createUnstructEvent, unstructEventFlattenSchemaKeys)
     val unifiedEventJsonObject = (contexts ++ unstructEvents)
       .map(_._1)
       .foldLeft(event.asJsonObject.toMap - "unstruct_event" - "contexts" - "derived_contexts") { (c, i) =>
@@ -69,14 +69,14 @@ class PayloadParserSpec extends Specification {
     }
 
   "parse" should {
+    val event = SpecHelpers.events.exampleEvent
+
     "succeed with minimal payload without any context or unstruct event" in {
-      val event    = SpecHelpers.exampleMinimalEvent
       val expected = Right(ReconstructedEvent(event, List()))
       PayloadParser.parse(event.asJsonObject) mustEqual expected
     }
 
     "succeed with context array which has flattened schema key prefixed with 'contexts'" in {
-      val event = SpecHelpers.exampleMinimalEvent
       val (res, expected) = parseEventWithContext(
         event,
         contextFlattenSchemaKeys = List(flattenSchemaKeyContexts)
@@ -85,7 +85,6 @@ class PayloadParserSpec extends Specification {
     }
 
     "succeed with context array which has flattened schema key with random prefix" in {
-      val event = SpecHelpers.exampleMinimalEvent
       val (res, expected) = parseEventWithContext(
         event,
         contextFlattenSchemaKeys = List(flattenSchemaKeyRandomPrefix)
@@ -94,7 +93,6 @@ class PayloadParserSpec extends Specification {
     }
 
     "succeed with more than one context array which has flattened schema key prefixed with 'contexts'" in {
-      val event = SpecHelpers.exampleMinimalEvent
       val (res, expected) = parseEventWithContext(
         event,
         contextFlattenSchemaKeys = List(
@@ -106,7 +104,6 @@ class PayloadParserSpec extends Specification {
     }
 
     "succeed with unstruct event which has flattened schema key prefixed with 'unstruct_event'" in {
-      val event = SpecHelpers.exampleMinimalEvent
       val (res, expected) = parseEventWithContext(
         event,
         unstructEventFlattenSchemaKeys = List(flattenSchemaKeyUnstructEvent)
@@ -115,7 +112,6 @@ class PayloadParserSpec extends Specification {
     }
 
     "succeed with unstruct event and context array" in {
-      val event = SpecHelpers.exampleMinimalEvent
       val (res, expected) = parseEventWithContext(
         event,
         contextFlattenSchemaKeys       = List(flattenSchemaKeyContexts),
@@ -125,7 +121,7 @@ class PayloadParserSpec extends Specification {
     }
 
     "succeed with payload in which one required event field is missing" in {
-      val eventJson    = SpecHelpers.requiredFieldMissingEventJson
+      val eventJson    = SpecHelpers.events.requiredFieldMissingEventJson
       val eventJsonStr = Payload.RawPayload(eventJson.noSpaces)
       val info = FailureDetails
         .LoaderRecoveryError

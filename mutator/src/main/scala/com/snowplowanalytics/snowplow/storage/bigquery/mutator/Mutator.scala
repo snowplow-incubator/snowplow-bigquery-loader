@@ -12,28 +12,27 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import java.time.Instant
-import com.google.cloud.bigquery.Field
-
-import scala.concurrent.duration._
-import scala.util.control.NonFatal
-
-import cats.data.EitherT
-import cats.effect._
-import cats.effect.concurrent.{MVar, MVar2}
-import cats.implicits._
-import io.circe.Json
-
-import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.client.{Client, ClientError}
+import com.snowplowanalytics.iglu.core.SchemaKey
+import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field => DdlField}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field => DdlField}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema => LoaderSchema}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.MutatorEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.Mutator._
+
+import cats.data.EitherT
+import cats.effect._
+import cats.effect.concurrent.{MVar, MVar2}
+import cats.implicits._
+import com.google.cloud.bigquery.Field
+import io.circe.Json
+
+import java.time.Instant
+import scala.concurrent.duration._
+import scala.util.control.NonFatal
 
 /**
   * Mutator is stateful worker that emits `alter table` requests.

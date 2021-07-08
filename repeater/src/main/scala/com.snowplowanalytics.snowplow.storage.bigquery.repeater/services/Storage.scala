@@ -12,16 +12,15 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 
-import org.joda.time.{DateTime, DateTimeZone}
-import org.joda.time.format.DateTimeFormat
-import com.google.cloud.storage.{BlobInfo, StorageOptions}
+import com.snowplowanalytics.snowplow.badrows.BadRow
 
 import cats.effect.Sync
 import cats.implicits._
-import io.chrisdavenport.log4cats.Logger
+import com.google.cloud.storage.{BlobInfo, StorageOptions}
 import fs2.{Chunk, Stream, text}
-
-import com.snowplowanalytics.snowplow.badrows.BadRow
+import io.chrisdavenport.log4cats.Logger
+import org.joda.time.{DateTime, DateTimeZone}
+import org.joda.time.format.DateTimeFormat
 
 object Storage {
   // TODO: this is certainly non-RT

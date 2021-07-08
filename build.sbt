@@ -1,3 +1,16 @@
+/*
+ * Copyright (c) 2018-2021 Snowplow Analytics Ltd. All rights reserved.
+ *
+ * This program is licensed to you under the Apache License Version 2.0,
+ * and you may not use this file except in compliance with the Apache License Version 2.0.
+ * You may obtain a copy of the Apache License Version 2.0 at http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the Apache License Version 2.0 is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
+ */
+
 lazy val common = project
   .in(file("common"))
   .enablePlugins(BuildInfoPlugin)
@@ -46,7 +59,7 @@ lazy val loader = project
       Dependencies.googleOauth
     )
   )
-  .dependsOn(common)
+  .dependsOn(common % "compile->compile;test->test")
 
 lazy val streamloader = project
   .in(file("streamloader"))
@@ -62,7 +75,7 @@ lazy val streamloader = project
       Dependencies.googleOauth
     )
   )
-  .dependsOn(common)
+  .dependsOn(common % "compile->compile;test->test")
 
 lazy val mutator = project
   .in(file("mutator"))
@@ -81,7 +94,7 @@ lazy val mutator = project
       Dependencies.googleOauth
     )
   )
-  .dependsOn(common)
+  .dependsOn(common % "compile->compile;test->test")
 
 lazy val repeater = project
   .in(file("repeater"))
@@ -104,7 +117,7 @@ lazy val repeater = project
       Dependencies.googleOauth
     )
   )
-  .dependsOn(common)
+  .dependsOn(common % "compile->compile;test->test")
 
 // format: off
 lazy val benchmark = project

@@ -12,11 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import java.time.Instant
-import java.util
-import java.util.{UUID, List => JList, Map => JMap}
-
-import scala.jdk.CollectionConverters._
+import com.snowplowanalytics.snowplow.badrows.BadRow
+import com.snowplowanalytics.snowplow.storage.bigquery.repeater.PayloadParser.ReconstructedEvent
 
 import cats.effect.Sync
 import cats.syntax.either._
@@ -25,8 +22,10 @@ import io.circe.{Decoder, Encoder, Json, JsonObject}
 import io.circe.generic.semiauto._
 import io.circe.parser.parse
 
-import com.snowplowanalytics.snowplow.badrows.BadRow
-import com.snowplowanalytics.snowplow.storage.bigquery.repeater.PayloadParser.ReconstructedEvent
+import java.time.Instant
+import java.util
+import java.util.{UUID, List => JList, Map => JMap}
+import scala.jdk.CollectionConverters._
 
 /**
   * Primary data type for events parsed from `failedInserts` PubSub subscription

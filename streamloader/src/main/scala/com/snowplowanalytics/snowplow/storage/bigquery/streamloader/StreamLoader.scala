@@ -12,17 +12,17 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import scala.concurrent.duration._
-
-import cats.implicits._
-import cats.effect.{Clock, Concurrent, ContextShift, IO, Timer}
-import fs2.Pipe
-
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+
+import cats.effect.{Clock, Concurrent, ContextShift, IO, Timer}
+import cats.implicits._
+import fs2.Pipe
+
+import scala.concurrent.duration._
 
 object StreamLoader {
   private val processor: Processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
@@ -49,13 +49,14 @@ object StreamLoader {
     Resources.acquire(e).use { resources =>
       val eventStream = resources.source.evalMap(parse(resources.igluClient.resolver))
 
-      eventStream
-        .observeEither[StreamBadRow[IO], StreamLoaderRow[IO]](
-          resources.badRowsSink,
-          goodSink(resources)
-        )
-        .compile
-        .drain
+      val load = eventStream.observeEither[StreamBadRow[IO], StreamLoaderRow[IO]](
+        resources.badRowsSink,
+        goodSink(resources)
+      )
+
+      val metrics = resources.metrics.report
+
+      load.merge(metrics).compile.drain
     }
 
   /** Parse a PubSub message into a `LoaderRow` (or `BadRow`) and attach `ack` action to be used after sink. */
@@ -68,7 +69,10 @@ object StreamLoader {
   /** Write good events through a BigQuery sink and pipe observed types through a Pub/Sub sink. */
   def goodSink(r: Resources[IO])(implicit CS: ContextShift[IO], T: Timer[IO]): Pipe[IO, StreamLoaderRow[IO], Unit] = {
     val goodPipe: Pipe[IO, StreamLoaderRow[IO], Unit] = _.parEvalMapUnordered(MaxConcurrency) { slrow =>
-      r.blocker.blockOn(Bigquery.insert(r, slrow.row) *> slrow.ack)
+      r.blocker
+        .blockOn(
+          Bigquery.insert(r, slrow.row) *> slrow.ack *> r.metrics.latency(slrow.row.collectorTstamp.getMillis)
+        )
     }
 
     _.observe(goodPipe).map(_.row.inventory).through(aggregateTypes(GroupByN, TimeWindow)).through(r.typesSink)

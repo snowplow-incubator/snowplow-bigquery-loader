@@ -12,11 +12,10 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import org.apache.beam.sdk.transforms.SerializableFunction
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 
 import com.spotify.scio.bigquery.TableRow
-
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
+import org.apache.beam.sdk.transforms.SerializableFunction
 
 /** Extract TableRow from raw row */
 object SerializeLoaderRow extends SerializableFunction[LoaderRow, TableRow] {

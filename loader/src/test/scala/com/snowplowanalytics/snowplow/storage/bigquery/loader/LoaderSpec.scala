@@ -19,13 +19,3 @@ class LoaderSpec extends PipelineSpec {
     // TODO
   }
 }
-
-object LoaderSpec {
-  val resolverJson =
-    """{"schema":"iglu:com.snowplowanalytics.iglu/resolver-config/jsonschema/1-0-1","data":{"cacheSize":500,"repositories":[{"name":"Iglu Central","priority":0,"vendorPrefixes":["com.snowplowanalytics"],"connection":{"http":{"uri":"http://iglucentral.com"}}}]}}"""
-  val resolver = java.util.Base64.getEncoder.encode(resolverJson.getBytes())
-
-  val configJson =
-    """{"schema":"iglu:com.snowplowanalytics.snowplow.storage/bigquery_config/jsonschema/1-0-0","data":{"name":"Alpha BigQuery test","id":"91a251ad-d319-4023-aaae-97698238d808","projectId":"test-sandbox","datasetId":"atomic","tableId":"events","load":{"mode":"STREAMING_INSERTS","retry":false},"typesTopic":"bq-test-types","typesSubscription":"bq-test-types-sub","input":"enriched-good-sub","badRows":"bq-test-bad-rows","failedInserts":"bq-test-bad-inserts","purpose":"ENRICHED_EVENTS"}}"""
-  val config = java.util.Base64.getEncoder.encode(configJson.getBytes())
-}

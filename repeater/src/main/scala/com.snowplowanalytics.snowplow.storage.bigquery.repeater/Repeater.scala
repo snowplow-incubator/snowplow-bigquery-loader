@@ -12,16 +12,16 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import scala.concurrent.duration._
-import scala.util.control.NonFatal
+import com.snowplowanalytics.snowplow.badrows.Processor
 
 import cats.effect._
 import cats.syntax.all._
+import fs2.Stream
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
-import fs2.Stream
 
-import com.snowplowanalytics.snowplow.badrows.Processor
+import scala.concurrent.duration._
+import scala.util.control.NonFatal
 
 object Repeater extends SafeIOApp {
   private val StreamConcurrency = 4

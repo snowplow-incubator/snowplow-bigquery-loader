@@ -12,8 +12,9 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import scala.concurrent.duration.Duration
 import com.spotify.scio._
+
+import scala.concurrent.duration.Duration
 
 object Main {
   def main(cliArgs: Array[String]): Unit = {

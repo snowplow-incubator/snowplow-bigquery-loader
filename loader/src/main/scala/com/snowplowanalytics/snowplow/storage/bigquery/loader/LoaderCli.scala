@@ -12,13 +12,14 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import com.spotify.scio.Args
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.{
   Environment,
   decodeBase64Hocon,
   decodeBase64Json
 }
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+
+import com.spotify.scio.Args
 
 /**
   * Loader specific CLI configuration.
@@ -29,6 +30,6 @@ object LoaderCli {
     for {
       c <- decodeBase64Hocon(args("config"))
       r <- decodeBase64Json(args("resolver"))
-      e = Environment(c.loader, r, c.projectId)
+      e = Environment(c.loader, r, c.projectId, c.monitoring)
     } yield e
 }

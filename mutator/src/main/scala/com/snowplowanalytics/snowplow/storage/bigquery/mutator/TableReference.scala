@@ -12,13 +12,12 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter
+
+import cats.effect.IO
 import com.google.cloud.bigquery.{Schema => BqSchema, _}
 
 import scala.jdk.CollectionConverters._
-
-import cats.effect.IO
-
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter
 
 /** Stateless object, responsible for making API calls to a table or mock */
 trait TableReference {

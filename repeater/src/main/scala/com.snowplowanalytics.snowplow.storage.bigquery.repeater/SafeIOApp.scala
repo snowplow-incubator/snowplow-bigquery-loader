@@ -12,11 +12,10 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
+import cats.effect.{IOApp, Resource, SyncIO}
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.ExecutionContext
-
-import cats.effect.{IOApp, Resource, SyncIO}
 
 trait SafeIOApp extends IOApp.WithContext {
 

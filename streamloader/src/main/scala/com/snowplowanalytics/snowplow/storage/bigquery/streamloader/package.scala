@@ -12,14 +12,14 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery
 
-import com.permutive.pubsub.consumer.ConsumerRecord
-import com.permutive.pubsub.consumer.decoder.MessageDecoder
-import com.permutive.pubsub.producer.encoder.MessageEncoder
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.FailedInsert
+
+import com.permutive.pubsub.consumer.ConsumerRecord
+import com.permutive.pubsub.consumer.decoder.MessageDecoder
+import com.permutive.pubsub.producer.encoder.MessageEncoder
 
 package object streamloader {
 

@@ -12,9 +12,10 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import cats.effect.{ExitCode, IO, IOApp}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.MutatorCli.MutatorCommand
+
+import cats.effect.{ExitCode, IO, IOApp}
 
 object Main extends IOApp {
   private val MaxConcurrency = 4

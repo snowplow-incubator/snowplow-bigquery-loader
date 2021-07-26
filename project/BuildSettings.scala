@@ -12,7 +12,9 @@
  */
 import com.typesafe.sbt.packager.Keys.{daemonUser, maintainer, packageName}
 import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
+
 import com.typesafe.sbt.packager.docker.ExecCmd
+import com.typesafe.sbt.packager.linux.LinuxPlugin.autoImport._
 import com.typesafe.sbt.packager.universal.UniversalPlugin.autoImport._
 import sbt._
 import sbt.Keys._
@@ -28,7 +30,9 @@ object BuildSettings {
     scalaVersion := "2.13.2",
     buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description, BuildInfoKey.action("userAgent") {
       s"${name.value}/${version.value}"
-    })
+    }),
+    // Do not warn about Docker keys not being used by any other settings/tasks
+    Global / lintUnusedKeysOnLoad := false
   )
 
   lazy val commonProjectSettings = projectSettings ++ Seq(
@@ -118,17 +122,13 @@ object BuildSettings {
   )
 
   lazy val dockerSettings = Seq(
-    // Use single entrypoint script for all apps
-    Universal / sourceDirectory := new java.io.File((LocalRootProject / baseDirectory).value, "docker"),
-    Docker    / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
-    dockerBaseImage := "snowplow/base-debian:0.2.2",
-    Docker / daemonUser := "root",
-    Docker / packageName := s"${name.value}",
+    Docker / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
+    Docker / daemonUser := "daemon",
+    Docker / daemonUserUid := None,
+    Docker / defaultLinuxInstallLocation := "/opt/snowplow",
+    dockerBaseImage := "adoptopenjdk:8-jre-hotspot-focal",
     dockerUsername := Some("snowplow"),
     dockerUpdateLatest := true,
-    dockerEnvVars := Map("SNOWPLOW_BIGQUERY_APP" -> name.value),
-    dockerCommands += ExecCmd("RUN", "cp", "/opt/docker/bin/docker-entrypoint.sh", "/usr/local/bin/"),
-    dockerEntrypoint := Seq("docker-entrypoint.sh"),
     dockerCmd := Seq("--help")
   )
 

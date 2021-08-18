@@ -48,70 +48,73 @@ object Metrics {
     def report(snapshot: MetricsSnapshot): F[Unit]
   }
 
-  final case class MetricsSnapshot(
-    latency: Option[Long],
-    goodCount: Int,
-    failedInsertCount: Int,
-    badCount: Int,
-    uninsertableCount: Int
-  )
+  sealed trait MetricsSnapshot
+  object MetricsSnapshot {
+    final case class LoaderMetricsSnapshot(
+      latency: Option[Long],
+      goodCount: Int,
+      failedInsertCount: Int,
+      badCount: Int
+    ) extends MetricsSnapshot
+
+    final case class RepeaterMetricsSnapshot(uninsertableCount: Int) extends MetricsSnapshot
+  }
+
+  sealed trait ReportingApp
+  object ReportingApp {
+    final case object StreamLoader extends ReportingApp
+    final case object Repeater extends ReportingApp
+  }
 
   final private case class MetricsRefs[F[_]](
-    // A ref of when event was last processed, and its collector timestamp
-    timestamps: Ref[F, Option[(Long, Long)]],
+    latency: Ref[F, Option[Long]],
     goodCount: Ref[F, Int],
     failedInsertCount: Ref[F, Int],
     badCount: Ref[F, Int],
     uninsertableCount: Ref[F, Int]
   )
   private object MetricsRefs {
+    import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.MetricsSnapshot._
+
     def init[F[_]: Sync]: F[MetricsRefs[F]] =
       for {
-        timestamps        <- Ref.of[F, Option[(Long, Long)]](None)
+        latency           <- Ref.of[F, Option[Long]](None)
         goodCount         <- Ref.of[F, Int](0)
         failedInsertCount <- Ref.of[F, Int](0)
         badCount          <- Ref.of[F, Int](0)
         uninsertableCount <- Ref.of[F, Int](0)
-      } yield MetricsRefs(timestamps, goodCount, failedInsertCount, badCount, uninsertableCount)
+      } yield MetricsRefs(latency, goodCount, failedInsertCount, badCount, uninsertableCount)
 
-    def snapshot[F[_]: Monad](refs: MetricsRefs[F], minTime: Long): F[MetricsSnapshot] =
+    def snapshot[F[_]: Monad](refs: MetricsRefs[F], app: ReportingApp): F[MetricsSnapshot] =
       for {
-        maybeTstamps      <- refs.timestamps.get
+        maybeLatency      <- refs.latency.getAndSet(None)
         goodCount         <- refs.goodCount.getAndSet(0)
         failedInsertCount <- refs.failedInsertCount.getAndSet(0)
         badCount          <- refs.badCount.getAndSet(0)
         uninsertableCount <- refs.uninsertableCount.getAndSet(0)
-      } yield {
-        // Only report the latency if it was recorded more recently than minTime
-        val latency = maybeTstamps match {
-          case Some((processedTstamp, collectorTstamp)) if processedTstamp > minTime =>
-            Some(processedTstamp - collectorTstamp)
-          case _ => None
-        }
-        MetricsSnapshot(latency, goodCount, failedInsertCount, badCount, uninsertableCount)
+      } yield app match {
+        case ReportingApp.StreamLoader => LoaderMetricsSnapshot(maybeLatency, goodCount, failedInsertCount, badCount)
+        case ReportingApp.Repeater     => RepeaterMetricsSnapshot(uninsertableCount)
       }
   }
 
   def build[F[_]: ContextShift: ConcurrentEffect: Timer](
     blocker: Blocker,
-    monitoringConfig: Option[Statsd]
+    monitoringConfig: Option[Statsd],
+    app: ReportingApp
   ): F[Metrics[F]] =
     monitoringConfig match {
       case None => noop[F].pure[F]
-      case Some(_) =>
+      case Some(statsd) =>
         MetricsRefs.init[F].map { refs =>
           new Metrics[F] {
             def report: Stream[F, Unit] =
-              monitoringConfig
-                .map { mc =>
-                  reporterStream(StatsDReporter.make[F](blocker, monitoringConfig), refs, mc.period)
-                }
-                .getOrElse(Stream.never[F])
+              reporterStream(StatsDReporter.make[F](blocker, monitoringConfig), refs, statsd.period, app)
 
             def latency(collectorTstamp: Long): F[Unit] =
               for {
                 now <- Clock[F].realTime(MILLISECONDS)
-                _   <- refs.timestamps.set(Some(now -> collectorTstamp))
+                _   <- refs.latency.set(Some(now - collectorTstamp))
               } yield ()
 
             def goodCount: F[Unit] = refs.goodCount.update(_ + 1)
@@ -138,14 +141,13 @@ object Metrics {
   private def reporterStream[F[_]: Sync: Timer: ContextShift](
     reporter: Resource[F, Reporter[F]],
     metrics: MetricsRefs[F],
-    period: FiniteDuration
+    period: FiniteDuration,
+    app: ReportingApp
   ): Stream[F, Unit] =
     for {
-      rep           <- Stream.resource(reporter)
-      lastReportRef <- Stream.eval(Clock[F].realTime(MILLISECONDS)).evalMap(Ref.of(_))
-      _             <- Stream.fixedDelay[F](period)
-      lastReport    <- Stream.eval(Clock[F].realTime(MILLISECONDS)).evalMap(lastReportRef.getAndSet)
-      snapshot      <- Stream.eval(MetricsRefs.snapshot(metrics, lastReport))
-      _             <- Stream.eval(rep.report(snapshot))
+      rep      <- Stream.resource(reporter)
+      _        <- Stream.fixedDelay[F](period)
+      snapshot <- Stream.eval(MetricsRefs.snapshot(metrics, app))
+      _        <- Stream.eval(rep.report(snapshot))
     } yield ()
 }

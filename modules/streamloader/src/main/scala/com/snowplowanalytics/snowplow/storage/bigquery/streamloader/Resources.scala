@@ -20,6 +20,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.E
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Monitoring, Output}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.{StreamBadRow, StreamLoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
+import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.FailedInsert
 
 import cats.Applicative
@@ -159,5 +160,5 @@ object Resources {
     blocker: Blocker,
     monitoringConfig: Monitoring
   ): F[Metrics[F]] =
-    Metrics.build[F](blocker, monitoringConfig.statsd)
+    Metrics.build[F](blocker, monitoringConfig.statsd, ReportingApp.StreamLoader)
 }

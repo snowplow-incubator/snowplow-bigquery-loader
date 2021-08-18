@@ -94,16 +94,16 @@
         # You can use environment variables
         # "worker": ${HOST}
       }
-      # Reporting period in seconds
-      "period": "1"
+      # Reporting period with time unit
+      "period": "1 sec"
       # Optional
       "prefix": "snowplow.monitoring"
     }
 
     # For Loader deployments
     # "dropwizard": {
-    #   # Reporting period in seconds
-    #   "period": "1"
+    #   # Reporting period with time unit
+    #   "period": "1000 ms"
     # }
     }
 }

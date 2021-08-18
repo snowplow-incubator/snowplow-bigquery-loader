@@ -16,6 +16,7 @@ import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.RepeaterEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
+import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.{GcsPath, validateBucket}
 
 import cats.Show
@@ -145,7 +146,7 @@ object Resources {
     blocker: Blocker,
     monitoringConfig: Monitoring
   ): F[Metrics[F]] =
-    Metrics.build[F](blocker, monitoringConfig.statsd)
+    Metrics.build[F](blocker, monitoringConfig.statsd, ReportingApp.Repeater)
 
   /**
     * Try to get uninsertable events into the queue all at once,

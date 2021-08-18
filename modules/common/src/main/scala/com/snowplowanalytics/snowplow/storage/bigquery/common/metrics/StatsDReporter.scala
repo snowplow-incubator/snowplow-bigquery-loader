@@ -14,6 +14,10 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common.metrics
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.Statsd
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.MetricsSnapshot
+import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.MetricsSnapshot.{
+  LoaderMetricsSnapshot,
+  RepeaterMetricsSnapshot
+}
 
 import cats.effect.{Blocker, ContextShift, Resource, Sync, Timer}
 import cats.implicits._
@@ -86,13 +90,15 @@ object StatsDReporter {
   private def serializeMetrics(snapshot: MetricsSnapshot, monitoringConfig: Statsd): List[String] =
     kvs(snapshot).map(statsDFormat(monitoringConfig))
 
-  private def kvs(snapshot: MetricsSnapshot): List[KeyValueMetric] =
-    List(
-      GoodCountName         -> snapshot.goodCount.toString,
-      FailedInsertCountName -> snapshot.failedInsertCount.toString,
-      BadCountName          -> snapshot.badCount.toString,
-      UninsertableName      -> snapshot.uninsertableCount.toString
-    ) ++ snapshot.latency.map(l => LatencyGaugeName -> l.toString)
+  private def kvs(snapshot: MetricsSnapshot): List[KeyValueMetric] = snapshot match {
+    case lms: LoaderMetricsSnapshot =>
+      List(
+        GoodCountName         -> lms.goodCount.toString,
+        FailedInsertCountName -> lms.failedInsertCount.toString,
+        BadCountName          -> lms.badCount.toString
+      ) ++ lms.latency.map(l => LatencyGaugeName -> l.toString)
+    case rms: RepeaterMetricsSnapshot => List(UninsertableName -> rms.uninsertableCount.toString)
+  }
 
   private def statsDFormat(monitoringConfig: Statsd): KeyValueMetric => String = {
     val tagStr = monitoringConfig.tags.map { case (k, v) => s"$k:$v" }.mkString(",")

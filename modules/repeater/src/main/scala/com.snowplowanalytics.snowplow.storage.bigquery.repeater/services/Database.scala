@@ -78,6 +78,9 @@ object Database {
   def getClient[F[_]: Sync]: F[BigQuery] =
     Sync[F].delay(BigQueryOptions.getDefaultInstance.getService)
 
+  /** The first argument passed to addRow is an ID used to deduplicate inserts.
+    * If there are multiple failed inserts with the same event_id, only one will be inserted in BigQuery.
+    */
   private def buildRequest(dataset: String, table: String, event: EventContainer) =
     InsertAllRequest.newBuilder(TableId.of(dataset, table)).addRow(event.eventId.toString, event.decompose).build()
 

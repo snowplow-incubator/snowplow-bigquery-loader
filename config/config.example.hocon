@@ -1,0 +1,78 @@
+{
+  "projectId": "com-acme"
+
+  "loader": {
+    "input": {
+      "type": "PubSub"
+      "subscription": "enriched-sub"
+    }
+
+    "output": {
+      "good": {
+        "type": "BigQuery"
+        "datasetId": "snowplow"
+        "tableId": "events"
+      }
+
+      "bad": {
+        "type": "PubSub"
+        "topic": "bad-topic"
+      }
+
+      "types": {
+        "type": "PubSub"
+        "topic": "types-topic"
+      }
+
+      "failedInserts": {
+        "type": "PubSub"
+        "topic": "failed-inserts-topic"
+      }
+    }
+
+    "loadMode": {
+      "type": "StreamingInserts"
+      "retry": false
+      }
+  }
+
+  "mutator": {
+    "input": {
+      "type": "PubSub"
+      "subscription": "types-sub"
+    }
+
+    "output": {
+      "good": ${loader.output.good}
+    }
+  }
+
+  "repeater": {
+    "input": {
+      "type": "PubSub"
+      "subscription": "failed-inserts-sub"
+    }
+
+    "output": {
+      "good": ${loader.output.good}
+
+      "deadLetters": {
+        "type": "Gcs"
+        "bucket": "gs://dead-letter-bucket"
+      }
+    }
+  }
+
+  "monitoring": {
+    "statsd": {
+      "hostname": "statsd.acme.gl"
+      "port": 1024
+      "tags": {
+        # You can use environment variables
+        # "worker": ${HOST}
+      }
+      "period": "1 sec"
+      "prefix": "snowplow.monitoring"
+    }
+  }
+}

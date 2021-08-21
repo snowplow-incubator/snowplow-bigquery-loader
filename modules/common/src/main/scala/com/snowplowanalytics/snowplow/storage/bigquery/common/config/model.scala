@@ -24,7 +24,13 @@ object model {
     val input: Input
   }
   object Config {
-    final case class Loader(input: Input.PubSub, output: LoaderOutputs, loadMode: LoadMode) extends Config
+    final case class Loader(
+      input: Input.PubSub,
+      output: LoaderOutputs,
+      loadMode: LoadMode,
+      consumerSettings: ConsumerSettings,
+      sinkSettings: SinkSettings
+    ) extends Config
     final case class Mutator(input: Input.PubSub, output: MutatorOutput) extends Config
     final case class Repeater(input: Input.PubSub, output: RepeaterOutputs) extends Config
 
@@ -96,6 +102,62 @@ object model {
     ).reduceLeft(_.or(_))
   }
 
+  final case class ConsumerSettings(
+    maxQueueSize: Int,
+    parallelPullCount: Int,
+    maxAckExtensionPeriod: FiniteDuration,
+    awaitTerminatePeriod: FiniteDuration
+  )
+  object ConsumerSettings {
+    implicit val consumerSettingsEncoder: Encoder[ConsumerSettings] = deriveEncoder[ConsumerSettings]
+    implicit val consumerSettingsDecoder: Decoder[ConsumerSettings] = deriveDecoder[ConsumerSettings]
+  }
+
+  final case class SinkSettings(
+    good: SinkSettings.Good,
+    bad: SinkSettings.Bad,
+    types: SinkSettings.Types,
+    failedInserts: SinkSettings.FailedInserts
+  )
+  object SinkSettings {
+    final case class Good(
+      bqWriteRequestThreshold: Int,
+      bqWriteRequestTimeout: FiniteDuration,
+      bqWriteRequestSizeLimit: Int,
+      bqWriteRequestOverflowQueueMaxSize: Int,
+      sinkConcurrency: Int
+    )
+
+    final case class Bad(producerBatchSize: Long, producerDelayThreshold: FiniteDuration, sinkConcurrency: Int)
+
+    final case class Types(
+      batchThreshold: Int,
+      batchTimeout: FiniteDuration,
+      producerBatchSize: Long,
+      producerDelayThreshold: FiniteDuration,
+      sinkConcurrency: Int
+    )
+
+    final case class FailedInserts(producerBatchSize: Long, producerDelayThreshold: FiniteDuration)
+
+    implicit val sinkSettingsEncoder: Encoder[SinkSettings] = deriveEncoder[SinkSettings]
+    implicit val sinkSettingsDecoder: Decoder[SinkSettings] = deriveDecoder[SinkSettings]
+
+    implicit val sinkSettingsGoodEncoder: Encoder[SinkSettings.Good] = deriveEncoder[SinkSettings.Good]
+    implicit val sinkSettingsGoodDecoder: Decoder[SinkSettings.Good] = deriveDecoder[SinkSettings.Good]
+
+    implicit val sinkSettingsBadEncoder: Encoder[SinkSettings.Bad] = deriveEncoder[SinkSettings.Bad]
+    implicit val sinkSettingsBadDecoder: Decoder[SinkSettings.Bad] = deriveDecoder[SinkSettings.Bad]
+
+    implicit val sinkSettingsTypesEncoder: Encoder[SinkSettings.Types] = deriveEncoder[SinkSettings.Types]
+    implicit val sinkSettingsTypesDecoder: Decoder[SinkSettings.Types] = deriveDecoder[SinkSettings.Types]
+
+    implicit val sinkSettingsFailedInsertsEncoder: Encoder[SinkSettings.FailedInserts] =
+      deriveEncoder[SinkSettings.FailedInserts]
+    implicit val sinkSettingsFailedInsertsDecoder: Decoder[SinkSettings.FailedInserts] =
+      deriveDecoder[SinkSettings.FailedInserts]
+  }
+
   final case class Monitoring(statsd: Option[Monitoring.Statsd], dropwizard: Option[Monitoring.Dropwizard])
   object Monitoring {
     final case class Statsd(
@@ -115,14 +177,14 @@ object model {
 
     implicit val monitoringDropwizardEncoder: Encoder[Dropwizard] = deriveEncoder[Dropwizard]
     implicit val monitoringDropwizardDecoder: Decoder[Dropwizard] = deriveDecoder[Dropwizard]
-
-    implicit val finiteDurationEncoder: Encoder[FiniteDuration] =
-      implicitly[Encoder[String]].contramap(_.toString)
-    implicit val finiteDurationDecoder: Decoder[FiniteDuration] =
-      implicitly[Decoder[String]].emap { s =>
-        val strSplit       = s.split(" ")
-        val (length, unit) = (strSplit(0).toLong, strSplit(1))
-        Either.catchOnly[NumberFormatException](FiniteDuration(length, unit)).leftMap(_.toString)
-      }
   }
+
+  implicit val finiteDurationEncoder: Encoder[FiniteDuration] =
+    implicitly[Encoder[String]].contramap(_.toString)
+  implicit val finiteDurationDecoder: Decoder[FiniteDuration] =
+    implicitly[Decoder[String]].emap { s =>
+      val strSplit       = s.split(" ")
+      val (length, unit) = (strSplit(0).toLong, strSplit(1))
+      Either.catchOnly[NumberFormatException](FiniteDuration(length, unit)).leftMap(_.toString)
+    }
 }

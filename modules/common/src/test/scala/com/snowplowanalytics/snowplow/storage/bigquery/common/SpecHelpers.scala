@@ -43,7 +43,7 @@ import io.circe.parser.parse
 
 import java.time.Instant
 import java.util.UUID
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, NANOSECONDS, SECONDS, TimeUnit}
+import scala.concurrent.duration.{FiniteDuration, HOURS, MILLISECONDS, NANOSECONDS, SECONDS, TimeUnit}
 
 object SpecHelpers {
   object meta {
@@ -520,7 +520,54 @@ object SpecHelpers {
     private val failedInserts: Output.PubSub = Output.PubSub(failedInsertsTopic)
     private val lOutput: LoaderOutputs       = LoaderOutputs(good, bad, types, failedInserts)
     private val loadMode: LoadMode           = StreamingInserts(false)
-    private val loader: Config.Loader        = Config.Loader(lInput, lOutput, loadMode)
+
+    private val maxQueueSize: Int      = 1000
+    private val parallelPullCount: Int = 1
+    private val maxAckExtensionPeriod  = FiniteDuration(1L, HOURS)
+    private val awaitTerminatePeriod   = FiniteDuration(30L, SECONDS)
+    private val consumerSettings =
+      ConsumerSettings(maxQueueSize, parallelPullCount, maxAckExtensionPeriod, awaitTerminatePeriod)
+
+    private val bqWriteRequestThreshold: Int            = 500
+    private val bqWriteRequestTimeout: FiniteDuration   = FiniteDuration(1L, SECONDS)
+    private val bqWriteRequestSizeLimit: Int            = 10000000
+    private val bqWriteRequestOverflowQueueMaxSize: Int = 500
+    private val goodSinkConcurrency: Int                = 1024
+    private val sinkSettingsGood = SinkSettings.Good(
+      bqWriteRequestThreshold,
+      bqWriteRequestTimeout,
+      bqWriteRequestSizeLimit,
+      bqWriteRequestOverflowQueueMaxSize,
+      goodSinkConcurrency
+    )
+    private val badProducerBatchSize: Long                 = 8L
+    private val badProducerDelayThreshold: FiniteDuration  = FiniteDuration(2L, SECONDS)
+    private val badSinkConcurrency: Int                    = 64
+    private val sinkSettingsBad                            = SinkSettings.Bad(badProducerBatchSize, badProducerDelayThreshold, badSinkConcurrency)
+    private val observedTypesThreshold: Int                = 10
+    private val observedTypesTimeout: FiniteDuration       = FiniteDuration(30L, SECONDS)
+    private val typeProducerBatchSize: Long                = 4L
+    private val typeProducerDelayThreshold: FiniteDuration = FiniteDuration(200L, MILLISECONDS)
+    private val typeSinkConcurrency: Int                   = 64
+    private val sinkSettingsTypes = SinkSettings.Types(
+      observedTypesThreshold,
+      observedTypesTimeout,
+      typeProducerBatchSize,
+      typeProducerDelayThreshold,
+      typeSinkConcurrency
+    )
+    private val failedInsertProducerBatchSize: Long        = 8L
+    private val failedInsertDelayThreshold: FiniteDuration = FiniteDuration(2L, SECONDS)
+    private val sinkSettingsFailedInserts =
+      SinkSettings.FailedInserts(failedInsertProducerBatchSize, failedInsertDelayThreshold)
+    private val sinkSettings = SinkSettings(
+      sinkSettingsGood,
+      sinkSettingsBad,
+      sinkSettingsTypes,
+      sinkSettingsFailedInserts
+    )
+
+    private val loader: Config.Loader = Config.Loader(lInput, lOutput, loadMode, consumerSettings, sinkSettings)
 
     private val mSubscription: String   = "mutator-sub"
     private val mInput: Input.PubSub    = Input.PubSub(mSubscription)

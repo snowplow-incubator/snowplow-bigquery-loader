@@ -507,20 +507,58 @@ object SpecHelpers {
     private[bigquery] val invalidHoconB64 =
       "ewogICJwcm9qZWN0SWQiOiAic25vd3Bsb3ctZGF0YSIKCiAgImxvYWRlciI6IHsKICAgICJpbnB1dCI6IHsKICAgICAgInR5cGUiOiAiUHViU3ViIgogICAgICAic3Vic2NyaXB0aW9uIjogImVucmljaGVkLXN1YiIKICAgIH0KCiAgICAib3V0cHV0IjogewogICAgICAiZ29vZCI6IHsKICAgICAgICAidHlwZSI6ICJCaWdRdWVyeSIKICAgICAgICAiZGF0YXNldElkIjogImF0b21pYyIKICAgICAgICAidGFibGVJZCI6ICJldmVudHMiCiAgICAgIH0KCiAgICAgICJiYWQiOiB7CiAgICAgICAgInR5cGUiOiAiUHViU3ViIgogICAgICAgICJ0b3BpYyI6ICJiYWQtdG9waWMiCiAgICAgIH0KCiAgICAgICJ0eXBlcyI6IHsKICAgICAgICAidHlwZSI6ICJQdWJTdWIiCiAgICAgICAgInRvcGljIjogInR5cGVzLXRvcGljIgogICAgICB9CgogICAgICAiZmFpbGVkSW5zZXJ0cyI6IHsKICAgICAgICAidHlwZSI6ICJQdWJTdWIiCiAgICAgICAgInRvcGljIjogImZhaWxlZC1pbnNlcnRzLXRvcGljIgogICAgICB9CiAgICB9CgogICAgImxvYWRNb2RlIjogewogICAgICAidHlwZSI6ICJTdHJlYW1pbmdJbnNlcnRzIgogICAgICAicmV0cnkiOiBmYWxzZQogICAgfQogIH0KCiAgIm11dGF0b3IiOiB7CiAgICAiaW5wdXQiOiB7CiAgICAgICJ0eXBlIjogIlB1YlN1YiIKICAgICAgInN1YnNjcmlwdGlvbiI6ICJtdXRhdG9yLXN1YiIKICAgIH0KCiAgICAib3V0cHV0IjogewogICAgICAiZ29vZCI6ICR7bG9hZGVyLm91dHB1dC5nb29kfQogICAgfQogIH0KCiAgInJlcGVhdGVyIjogewogICAgImlucHV0IjogewogICAgICAidHlwZSI6ICJQdWJTdWIiCiAgICAgICJzdWJzY3JpcHRpb24iOiAiZmFpbGVkLWluc2VydHMtc3ViIgogICAgfQoKICAgICJvdXRwdXQiOiB7CiAgICAgICJnb29kIjogJHtsb2FkZXIub3V0cHV0Lmdvb2R9CgogICAgICAiZGVhZExldHRlcnMiOiB7CiAgICAgICAgInR5cGUiOiAiR2NzIgogICAgICAgICJidWNrZXQiOiAiZ3M6Ly9zb21lLWJ1Y2tldC8iCiAgICAgIH0KICAgIH0KICB9CgogICJtb25pdG9yaW5nIjogewogICAgInN0YXRzZCI6IHsKICAgICAgImhvc3RuYW1lIjogInN0YXRzZC5hY21lLmdsIgogICAgICAicG9ydCI6IDEwMjQKICAgICAgInRhZ3MiOiB7fQogICAgICAicGVyaW9kIjogIjEgc2VjIgogICAgICAicHJlZml4IjogInNub3dwbG93Lm1vbml0b3JpbmciCiAgICB9LAogICAgImRyb3B3aXphcmQiOiB7CiAgICAgICJwZXJpb2QiOiAiMSBzZWMiCiAgICB9CiAgfQ=="
 
-    private val lSubscription: String        = "enriched-sub"
-    private val lInput: Input.PubSub         = Input.PubSub(lSubscription)
-    private val datasetId: String            = "atomic"
-    private val tableId: String              = "events"
-    private val good: Output.BigQuery        = Output.BigQuery(datasetId, tableId)
-    private val badTopic: String             = "bad-topic"
-    private val bad: Output.PubSub           = Output.PubSub(badTopic)
-    private val typesTopic: String           = "types-topic"
-    private val types: Output.PubSub         = Output.PubSub(typesTopic)
-    private val failedInsertsTopic: String   = "failed-inserts-topic"
-    private val failedInserts: Output.PubSub = Output.PubSub(failedInsertsTopic)
-    private val lOutput: LoaderOutputs       = LoaderOutputs(good, bad, types, failedInserts)
-    private val loadMode: LoadMode           = StreamingInserts(false)
-    private val loader: Config.Loader        = Config.Loader(lInput, lOutput, loadMode)
+    private val lSubscription: String                   = "enriched-sub"
+    private val lInput: Input.PubSub                    = Input.PubSub(lSubscription)
+    private val datasetId: String                       = "atomic"
+    private val tableId: String                         = "events"
+    private val good: Output.BigQuery                   = Output.BigQuery(datasetId, tableId)
+    private val badTopic: String                        = "bad-topic"
+    private val bad: Output.PubSub                      = Output.PubSub(badTopic)
+    private val typesTopic: String                      = "types-topic"
+    private val types: Output.PubSub                    = Output.PubSub(typesTopic)
+    private val failedInsertsTopic: String              = "failed-inserts-topic"
+    private val failedInserts: Output.PubSub            = Output.PubSub(failedInsertsTopic)
+    private val lOutput: LoaderOutputs                  = LoaderOutputs(good, bad, types, failedInserts)
+    private val loadMode: LoadMode                      = StreamingInserts(false)
+    private val bqWriteRequestThreshold: Int            = 500
+    private val bqWriteRequestTimeout: FiniteDuration   = FiniteDuration(1L, SECONDS)
+    private val bqWriteRequestSizeLimit: Int            = 10000000
+    private val bqWriteRequestOverflowQueueMaxSize: Int = 500
+    private val goodSinkConcurrency: Int                = 64
+    private val sinkSettingsGood = SinkSettings.Good(
+      bqWriteRequestThreshold,
+      bqWriteRequestTimeout,
+      bqWriteRequestSizeLimit,
+      bqWriteRequestOverflowQueueMaxSize,
+      goodSinkConcurrency
+    )
+    private val badProducerBatchSize: Long                 = 8L
+    private val badProducerDelayThreshold: FiniteDuration  = FiniteDuration(2L, SECONDS)
+    private val badSinkConcurrency: Int                    = 64
+    private val sinkSettingsBad                            = SinkSettings.Bad(badProducerBatchSize, badProducerDelayThreshold, badSinkConcurrency)
+    private val observedTypesThreshold: Int                = 10
+    private val observedTypesTimeout: FiniteDuration       = FiniteDuration(30L, SECONDS)
+    private val typeProducerBatchSize: Long                = 4L
+    private val typeProducerDelayThreshold: FiniteDuration = FiniteDuration(200L, MILLISECONDS)
+    private val typeSinkConcurrency: Int                   = 64
+    private val sinkSettingsTypes = SinkSettings.Types(
+      observedTypesThreshold,
+      observedTypesTimeout,
+      typeProducerBatchSize,
+      typeProducerDelayThreshold,
+      typeSinkConcurrency
+    )
+    private val failedInsertProducerBatchSize: Long        = 8L
+    private val failedInsertDelayThreshold: FiniteDuration = FiniteDuration(2L, SECONDS)
+    private val sinkSettingsFailedInserts =
+      SinkSettings.FailedInserts(failedInsertProducerBatchSize, failedInsertDelayThreshold)
+    private val sinkSettings = SinkSettings(
+      sinkSettingsGood,
+      sinkSettingsBad,
+      sinkSettingsTypes,
+      sinkSettingsFailedInserts
+    )
+    private val loader: Config.Loader = Config.Loader(lInput, lOutput, loadMode, sinkSettings)
 
     private val mSubscription: String   = "mutator-sub"
     private val mInput: Input.PubSub    = Input.PubSub(mSubscription)

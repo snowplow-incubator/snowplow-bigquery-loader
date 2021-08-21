@@ -23,7 +23,7 @@ import org.specs2.mutable.Specification
 import scala.concurrent.duration._
 import scala.util.Random
 
-class StreamLoaderSpec extends Specification {
+class ResourcesSpec extends Specification {
 
   implicit val CS: ContextShift[IO] = IO.contextShift(concurrent.ExecutionContext.global)
   implicit val C: Concurrent[IO]    = IO.ioConcurrentEffect
@@ -118,6 +118,43 @@ class StreamLoaderSpec extends Specification {
 
       output1 must beEqualTo(expected1)
       output2 must beEqualTo(expected2)
+    }
+  }
+
+  "splitBy" should {
+    import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Resources.splitBy
+
+    "correctly split a batch by size" in {
+      val input               = List.range(0, 10)
+      val getSize: Int => Int = _ => 1
+      val Threshold           = 3
+
+      val (remaining, toInsert) = splitBy(input, getSize, Threshold)
+
+      remaining must beEqualTo(List.range(3, 10))
+      toInsert must beEqualTo(List.range(0, 3))
+    }
+
+    "return empty remaining list and the original batch to insert if threshold is not exceeded" in {
+      val input               = List.range(0, 10)
+      val getSize: Int => Int = _ => 1
+      val Threshold           = 10
+
+      val (remaining, toInsert) = splitBy(input, getSize, Threshold)
+
+      remaining must beEqualTo(List.empty[Int])
+      toInsert must beEqualTo(input)
+    }
+
+    "return two empty lists if given an empty batch" in {
+      val input               = List.empty[Int]
+      val getSize: Int => Int = _ => 1
+      val Threshold           = 10
+
+      val (remaining, toInsert) = splitBy(input, getSize, Threshold)
+
+      remaining must beEqualTo(input)
+      toInsert must beEqualTo(input)
     }
   }
 }

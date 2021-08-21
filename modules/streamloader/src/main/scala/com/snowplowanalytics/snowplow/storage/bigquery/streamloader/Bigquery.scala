@@ -16,48 +16,60 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Output
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 
-import cats.effect.Sync
+import cats.effect.{Blocker, ContextShift, Sync}
 import cats.implicits._
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, InsertAllResponse, TableId}
+import com.google.cloud.bigquery.InsertAllRequest.RowToInsert
 import com.permutive.pubsub.producer.PubsubProducer
+
+import scala.jdk.CollectionConverters.IterableHasAsJava
 
 object Bigquery {
 
   final case class FailedInsert(tableRow: String) extends AnyVal
 
   /**
-    * Insert row into BigQuery or into "failed inserts" PubSub topic if BQ client returns
+    * Insert rows into BigQuery or into "failed inserts" PubSub topic if BQ client returns
     * any known errors.
     *
-    * @param resources Allocated clients (BQ and PubSub)
-    * @param loaderRow Parsed row to insert
+    * Exceptions from the underlying `insertAll` call are propagated.
     */
   def insert[F[_]: Sync](
     failedInsertProducer: PubsubProducer[F, FailedInsert],
     metrics: Metrics[F],
-    loaderRow: LoaderRow
+    loaderRows: List[LoaderRow]
   )(
-    insertRow: LoaderRow => F[InsertAllResponse]
+    mkInsert: List[LoaderRow] => F[InsertAllResponse]
   ): F[Unit] =
-    insertRow(loaderRow).attempt.flatMap {
-      case Right(response) if response.hasErrors =>
-        loaderRow.data.setFactory(new JacksonFactory)
-        val tableRow = loaderRow.data.toString
-        failedInsertProducer.produce(FailedInsert(tableRow)).void *> metrics.failedInsertCount
-      case Right(_) =>
-        metrics.latency(loaderRow.collectorTstamp.getMillis) *> metrics.goodCount
-      case Left(error) => Sync[F].delay(println(error))
+    mkInsert(loaderRows).flatMap {
+      case response if response.hasErrors =>
+        val errorIndex = response.getInsertErrors.keySet()
+        val failed     = loaderRows.zipWithIndex.filter { case (_, i) => errorIndex.contains(i.toLong) }.map(_._1)
+        val tableRows = failed.map { lr =>
+          lr.data.setFactory(JacksonFactory.getDefaultInstance)
+          FailedInsert(lr.data.toString)
+        }
+        tableRows.traverse_(fi => failedInsertProducer.produce(fi)) *> metrics.failedInsertCount(tableRows.length)
+      case _ =>
+        val earliestCollectorTstamp = loaderRows.map(_.collectorTstamp).min.getMillis
+        metrics.latency(earliestCollectorTstamp) *> metrics.goodCount(loaderRows.length)
     }
 
-  def mkInsert[F[_]: Sync](good: Output.BigQuery, bigQuery: BigQuery): LoaderRow => F[InsertAllResponse] = { lr =>
-    val request = buildRequest(good.datasetId, good.tableId, lr)
-    Sync[F].delay(bigQuery.insertAll(request))
+  def mkInsert[F[_]: Sync: ContextShift](
+    good: Output.BigQuery,
+    bigQuery: BigQuery,
+    blocker: Blocker
+  ): List[LoaderRow] => F[InsertAllResponse] = { lrs =>
+    val request = buildRequest(good.datasetId, good.tableId, lrs)
+    blocker.delay(bigQuery.insertAll(request))
   }
 
   def getClient[F[_]: Sync]: F[BigQuery] =
     Sync[F].delay(BigQueryOptions.getDefaultInstance.getService)
 
-  private def buildRequest(dataset: String, table: String, loaderRow: LoaderRow) =
-    InsertAllRequest.newBuilder(TableId.of(dataset, table)).addRow(loaderRow.data).build()
+  private def buildRequest(dataset: String, table: String, loaderRows: List[LoaderRow]) = {
+    val tableRows = loaderRows.map(lr => RowToInsert.of(lr.data)).asJava
+    InsertAllRequest.newBuilder(TableId.of(dataset, table), tableRows).build()
+  }
 }

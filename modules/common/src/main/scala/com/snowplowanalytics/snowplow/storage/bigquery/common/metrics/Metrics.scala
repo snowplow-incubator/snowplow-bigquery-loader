@@ -27,14 +27,14 @@ sealed trait Metrics[F[_]] {
   /** Send latest metrics to reporter. */
   def report: Stream[F, Unit]
 
-  /** Track latency between collector hit and loading time. */
+  /** Track latency between collector hit (in millis) and loading time. */
   def latency(collectorTstamp: Long): F[Unit]
 
   /** Increment the count of events that were successfully loaded into BigQuery. */
-  def goodCount: F[Unit]
+  def goodCount(n: Int): F[Unit]
 
   /** Increment the count of events that failed to be inserted into BigQuery. */
-  def failedInsertCount: F[Unit]
+  def failedInsertCount(n: Int): F[Unit]
 
   /** Increment the count of events that failed validation against their schema. */
   def badCount: F[Unit]
@@ -117,9 +117,9 @@ object Metrics {
                 _   <- refs.latency.set(Some(now - collectorTstamp))
               } yield ()
 
-            def goodCount: F[Unit] = refs.goodCount.update(_ + 1)
+            def goodCount(n: Int): F[Unit] = refs.goodCount.update(_ + n)
 
-            def failedInsertCount: F[Unit] = refs.failedInsertCount.update(_ + 1)
+            def failedInsertCount(n: Int): F[Unit] = refs.failedInsertCount.update(_ + n)
 
             def badCount: F[Unit] = refs.badCount.update(_ + 1)
 
@@ -132,8 +132,8 @@ object Metrics {
     new Metrics[F] {
       def report: Stream[F, Unit]                 = Stream.never[F]
       def latency(collectorTstamp: Long): F[Unit] = Applicative[F].unit
-      def goodCount: F[Unit]                      = Applicative[F].unit
-      def failedInsertCount: F[Unit]              = Applicative[F].unit
+      def goodCount(n: Int): F[Unit]              = Applicative[F].unit
+      def failedInsertCount(n: Int): F[Unit]      = Applicative[F].unit
       def badCount: F[Unit]                       = Applicative[F].unit
       def uninsertableCount(n: Int): F[Unit]      = Applicative[F].unit
     }

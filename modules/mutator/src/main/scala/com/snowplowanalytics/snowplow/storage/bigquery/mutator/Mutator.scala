@@ -19,7 +19,7 @@ import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema => LoaderSchema}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema => LoaderSchema, LoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.MutatorEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.Mutator._
 
@@ -75,6 +75,15 @@ class Mutator private (
       st <- state.take
       _  <- state.put(st.add(field))
       _  <- log(s"Added ${field.getName}")
+    } yield ()
+
+  /** Add only one field to table */
+  def addField(field: DdlField): IO[Unit] =
+    for {
+      fields <- tableReference.getFields
+      contains = fields.exists(_.getName == field.name)
+      addFieldOps = tableReference.addField(Adapter.adaptField(field))
+      _ <- if (contains) log(s"${field.name} already exists") else addFieldOps *> log(s"Added ${field.name}")
     } yield ()
 
   /** Transform Iglu Schema into valid BigQuery field */
@@ -138,8 +147,8 @@ object Mutator {
   def filterFields(existingColumns: Vector[String], newItems: List[ShreddedType]): List[ShreddedType] =
     newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
 
-  def initialize(env: MutatorEnvironment, verbose: Boolean)(implicit c: Concurrent[IO]): IO[Either[String, Mutator]] =
-    for {
+  def initialize(env: MutatorEnvironment, verbose: Boolean)(implicit c: Concurrent[IO]): IO[Either[String, Mutator]] = {
+    val mutatorIO: IO[Either[String, Mutator]] = for {
       bqClient <- TableReference.BigQueryTable.getClient
       table = new TableReference.BigQueryTable(
         bqClient,
@@ -150,6 +159,12 @@ object Mutator {
       state      <- MVar.of(MutatorState(fields, 0))
       igluClient <- Client.parseDefault[IO](env.resolverJson).value.flatMap(IO.fromEither)
     } yield new Mutator(igluClient, table, state, verbose).asRight
+    val res = for {
+      mutator <- EitherT(mutatorIO)
+      _ <- EitherT.liftF[IO, String, Unit](mutator.addField(LoaderRow.LoadTstampField))
+    } yield mutator
+    res.value
+  }
 
   private def invalidSchema(schema: SchemaKey) =
     MutatorError(s"Schema [${schema.toSchemaUri}] cannot be parsed")

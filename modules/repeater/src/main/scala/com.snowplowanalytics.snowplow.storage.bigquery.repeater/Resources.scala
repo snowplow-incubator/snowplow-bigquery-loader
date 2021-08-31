@@ -79,18 +79,21 @@ final class Resources[F[_]: Sync](
 object Resources {
   private val QueueSize = 100
 
-  final case class Statistics(inserted: Int, uninsertable: Int, lifetime: Duration)
+  final case class Statistics(inserted: Int, uninsertable: Int, retries: Int, lifetime: Duration)
   object Statistics {
-    val start: Statistics = Statistics(0, 0, Duration(0, "millis"))
+    val start: Statistics = Statistics(0, 0, 0, Duration(0, "millis"))
 
     implicit val showRepeaterStatistics: Show[Statistics] = {
       case s if (s.lifetime.toHours == 0) =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.uninsertable} rows rejected in ${s.lifetime.toMinutes} minutes."
+        s"${common(s)} ${s.lifetime.toMinutes} minutes."
       case s if (s.lifetime.toHours > 24) =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.uninsertable} rows rejected in ${s.lifetime.toDays} days and ${s.lifetime.toHours - s.lifetime.toDays * 24} hours."
+        s"${common(s)} ${s.lifetime.toDays} days and ${s.lifetime.toHours - s.lifetime.toDays * 24} hours."
       case s =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.uninsertable} rows rejected in ${s.lifetime.toHours} hours."
+        s"${common(s)} ${s.lifetime.toHours} hours."
     }
+
+    private def common(s: Statistics): String =
+      s"Statistics: ${s.inserted} rows inserted, ${s.uninsertable} rows rejected in"
   }
 
   /** Allocate all resources */

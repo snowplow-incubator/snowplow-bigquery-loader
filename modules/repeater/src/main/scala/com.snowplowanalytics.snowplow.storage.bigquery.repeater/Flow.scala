@@ -48,7 +48,8 @@ object Flow {
         resources.backoffPeriod
       )(event)
       resources.insertBlocker.blockOn(insert).flatMap {
-        case Right(_) => resources.logInserted
+        case Right(Inserted) => resources.logInserted
+        case Right(Reinsert) => resources.logReinsert
         // format: off
         case Left(d) => resources.logAbandoned *> resources.uninsertable.enqueue1(d)
         // format: on
@@ -89,15 +90,15 @@ object Flow {
     datasetId: String,
     tableId: String,
     backoffTime: Int
-  )(event: EventRecord[F]): F[Either[BadRow, Unit]] = {
+  )(event: EventRecord[F]): F[Either[BadRow, InsertStatus]] = {
     val res = for {
       ready <- EitherT.right(event.value.isReady(backoffTime.toLong))
-      result <- EitherT[F, BadRow, Unit] {
+      result <- EitherT[F, BadRow, InsertStatus] {
         if (ready) {
-          event.ack >> EitherT(services.Database.insert[F](client, datasetId, tableId, event.value)).value
+          event.ack >> EitherT(services.Database.insert[F](client, datasetId, tableId, event.value)).as(Inserted.asInstanceOf[InsertStatus]).value
         } else {
           Logger[F].debug(s"Event ${event.value.eventId}/${event.value.etlTstamp} is not ready yet. Nack") >>
-            event.nack.map(_.asRight)
+            event.nack.as(Reinsert.asInstanceOf[InsertStatus].asRight)
         }
       }
     } yield result
@@ -106,4 +107,8 @@ object Flow {
 
   private def getTime[F[_]: Sync]: F[DateTime] =
     Sync[F].delay(DateTime.now())
+
+  sealed trait InsertStatus extends Product with Serializable
+  case object Inserted extends InsertStatus
+  case object Reinsert extends InsertStatus
 }

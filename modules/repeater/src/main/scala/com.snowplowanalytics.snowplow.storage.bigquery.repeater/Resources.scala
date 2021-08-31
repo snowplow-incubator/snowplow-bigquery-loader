@@ -66,6 +66,8 @@ final class Resources[F[_]: Sync](
     statistics.update(s => s.copy(inserted = s.inserted + 1))
   def logAbandoned: F[Unit] =
     statistics.update(s => s.copy(uninsertable = s.uninsertable + 1))
+  def logReinsert: F[Unit] =
+    statistics.update(s => s.copy(reinsert = s.reinsert + 1))
   def updateLifetime: F[Unit] =
     for {
       now <- Sync[F].delay(Instant.now())
@@ -79,18 +81,21 @@ final class Resources[F[_]: Sync](
 object Resources {
   private val QueueSize = 100
 
-  final case class Statistics(inserted: Int, uninsertable: Int, lifetime: Duration)
+  final case class Statistics(inserted: Int, uninsertable: Int, reinsert: Int, lifetime: Duration)
   object Statistics {
-    val start: Statistics = Statistics(0, 0, Duration(0, "millis"))
+    val start: Statistics = Statistics(0, 0, 0, Duration(0, "millis"))
 
     implicit val showRepeaterStatistics: Show[Statistics] = {
       case s if (s.lifetime.toHours == 0) =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.uninsertable} rows rejected in ${s.lifetime.toMinutes} minutes."
+        s"${common(s)} ${s.lifetime.toMinutes} minutes."
       case s if (s.lifetime.toHours > 24) =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.uninsertable} rows rejected in ${s.lifetime.toDays} days and ${s.lifetime.toHours - s.lifetime.toDays * 24} hours."
+        s"${common(s)} ${s.lifetime.toDays} days and ${s.lifetime.toHours - s.lifetime.toDays * 24} hours."
       case s =>
-        s"Statistics: ${s.inserted} rows inserted, ${s.uninsertable} rows rejected in ${s.lifetime.toHours} hours."
+        s"${common(s)} ${s.lifetime.toHours} hours."
     }
+
+    private def common(s: Statistics): String =
+      s"Statistics: ${s.reinsert} rows nack'ed for reinsertion, ${s.inserted} rows inserted, ${s.uninsertable} rows rejected in"
   }
 
   /** Allocate all resources */

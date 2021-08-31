@@ -12,7 +12,7 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, LoaderRow}
 
 import cats.effect.IO
 import com.google.cloud.bigquery.{Schema => BqSchema, _}
@@ -60,7 +60,8 @@ object TableReference {
 
     def create(client: BigQuery, projectId: String, datasetId: String, tableId: String): IO[Table] = IO {
       val id         = TableId.of(projectId, datasetId, tableId)
-      val schema     = BqSchema.of(Atomic.table.map(Adapter.adaptField).asJava)
+      val fields     = Atomic.table.appended(LoaderRow.LoadTstampField)
+      val schema     = BqSchema.of(fields.map(Adapter.adaptField).asJava)
       val definition = StandardTableDefinition.newBuilder().setSchema(schema).build()
       val tableInfo  = TableInfo.newBuilder(id, definition).build()
       client.create(tableInfo)

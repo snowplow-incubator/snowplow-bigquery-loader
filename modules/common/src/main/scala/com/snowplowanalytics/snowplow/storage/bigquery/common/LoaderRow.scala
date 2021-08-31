@@ -39,6 +39,8 @@ object LoaderRow {
 
   type Transformed = ValidatedNel[FailureDetails.LoaderIgluError, List[(String, AnyRef)]]
 
+  val LoadTstampField = Field("load_tstamp", Type.Timestamp, Mode.Nullable)
+
   /**
     * Parse the enriched TSV line into a loader row, that can be loaded into BigQuery.
     * If Loader is able to figure out that row cannot be loaded into BQ,
@@ -125,7 +127,9 @@ object LoaderRow {
             }
       }
 
-    aggregated.leftMap(errors => s"Unexpected types in transformed event: ${errors.mkString_(",")}").toEither
+    aggregated
+      .map((LoadTstampField.name, "AUTO")::_)
+      .leftMap(errors => s"Unexpected types in transformed event: ${errors.mkString_(",")}").toEither
   }
 
   /** Group list of contexts by their full URI and transform values into ready to load rows */

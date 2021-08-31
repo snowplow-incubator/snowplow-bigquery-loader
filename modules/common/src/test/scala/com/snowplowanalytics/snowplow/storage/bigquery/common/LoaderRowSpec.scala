@@ -18,7 +18,7 @@ import com.snowplowanalytics.iglu.core.SchemaVer.Full
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Row.{Primitive, Record, Repeated}
 import com.snowplowanalytics.snowplow.badrows.Processor
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.transformJson
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.{transformJson, LoadTstampField}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.implicits.idClock
 
 import cats.Id
@@ -118,6 +118,7 @@ class LoaderRowSpec extends Specification {
         .set("domain_sessionidx", 3)
         .set("event_id", "ba553b7f-63d5-47ad-8697-06016b472c34")
         .set("v_etl", "bq-loader-test")
+        .set(LoadTstampField.name, "AUTO")
       val tableRowC = new TableRow()
         .set("v_collector", "bq-loader-test")
         .set("collector_tstamp", "2019-02-18T08:06:07.580Z")
@@ -126,6 +127,7 @@ class LoaderRowSpec extends Specification {
         .set("event_id", "ba553b7f-63d5-47ad-8697-06016b472c34")
         .set("v_etl", "bq-loader-test")
         .set("contexts_com_snowplowanalytics_snowplow_web_page_1_0_0", cValue)
+        .set(LoadTstampField.name, "AUTO")
       val tableRowDc = new TableRow()
         .set("v_collector", "bq-loader-test")
         .set("collector_tstamp", "2019-02-18T08:06:07.580Z")
@@ -134,6 +136,7 @@ class LoaderRowSpec extends Specification {
         .set("event_id", "ba553b7f-63d5-47ad-8697-06016b472c34")
         .set("v_etl", "bq-loader-test")
         .set("contexts_com_snowplowanalytics_snowplow_derived_context_1_0_0", dcValue)
+        .set(LoadTstampField.name, "AUTO")
       val tableRowUe = new TableRow()
         .set("v_collector", "bq-loader-test")
         .set("collector_tstamp", "2019-02-18T08:06:07.580Z")
@@ -142,6 +145,7 @@ class LoaderRowSpec extends Specification {
         .set("event_id", "ba553b7f-63d5-47ad-8697-06016b472c34")
         .set("v_etl", "bq-loader-test")
         .set("unstruct_event_com_snowplowanalytics_snowplow_unstruct_event_1_0_0", ueValue)
+        .set(LoadTstampField.name, "AUTO")
       val tableRowUeC = new TableRow()
         .set("v_collector", "bq-loader-test")
         .set("collector_tstamp", "2019-02-18T08:06:07.580Z")
@@ -151,6 +155,7 @@ class LoaderRowSpec extends Specification {
         .set("v_etl", "bq-loader-test")
         .set("contexts_com_snowplowanalytics_snowplow_web_page_1_0_0", cValue)
         .set("unstruct_event_com_snowplowanalytics_snowplow_unstruct_event_1_0_0", ueValue)
+        .set(LoadTstampField.name, "AUTO")
       val tableRowUeDc = new TableRow()
         .set("v_collector", "bq-loader-test")
         .set("collector_tstamp", "2019-02-18T08:06:07.580Z")
@@ -160,6 +165,7 @@ class LoaderRowSpec extends Specification {
         .set("v_etl", "bq-loader-test")
         .set("unstruct_event_com_snowplowanalytics_snowplow_unstruct_event_1_0_0", ueValue)
         .set("contexts_com_snowplowanalytics_snowplow_derived_context_1_0_0", dcValue)
+        .set(LoadTstampField.name, "AUTO")
       val tableRowUeDcC = new TableRow()
         .set("v_collector", "bq-loader-test")
         .set("collector_tstamp", "2019-02-18T08:06:07.580Z")
@@ -170,6 +176,7 @@ class LoaderRowSpec extends Specification {
         .set("contexts_com_snowplowanalytics_snowplow_web_page_1_0_0", cValue)
         .set("unstruct_event_com_snowplowanalytics_snowplow_unstruct_event_1_0_0", ueValue)
         .set("contexts_com_snowplowanalytics_snowplow_derived_context_1_0_0", dcValue)
+        .set(LoadTstampField.name, "AUTO")
 
       // format: off
       val tstamp = event.collector_tstamp.toEpochMilli

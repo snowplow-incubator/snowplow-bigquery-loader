@@ -19,8 +19,8 @@ import cats.effect.Sync
 import cats.syntax.either._
 import com.permutive.pubsub.consumer.decoder.MessageDecoder
 import io.circe.{Decoder, Encoder, Json, JsonObject}
-import io.circe.generic.semiauto._
 import io.circe.parser.parse
+import io.circe.syntax._
 
 import java.time.Instant
 import java.util
@@ -53,8 +53,9 @@ object EventContainer {
     } yield EventContainer(eventId, etlTstamp, jsonObject)
   }
 
-  implicit val circeEventEncoder: Encoder[EventContainer] =
-    deriveEncoder[EventContainer]
+  implicit val circeEventEncoder: Encoder[EventContainer] = Encoder.instance { eventContainer =>
+    eventContainer.payload.asJson
+  }
 
   implicit val pubsubEventDecoder: MessageDecoder[EventContainer] = { bytes: Array[Byte] =>
     for {

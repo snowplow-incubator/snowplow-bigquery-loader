@@ -6,7 +6,7 @@ on:
       - '*'
 
 jobs:
-  build_and_deploy:
+  deploy_github:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -15,12 +15,6 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 8
-      - name: Publish to Docker Hub
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        run: $GITHUB_WORKSPACE/.github/workflows/deploy.sh ${GITHUB_REF##*/}
       - name: Build artifacts
         run: |
           sbt 'project mutator' assembly
@@ -39,8 +33,66 @@ jobs:
           name: Version ${{ steps.ver.outputs.project_version }}
           tag_name: ${{ steps.ver.outputs.project_version }}
           files: |
-            mutator/target/scala-2.13/snowplow-bigquery-mutator-${{ steps.ver.outputs.project_version }}.jar
-            repeater/target/scala-2.13/snowplow-bigquery-repeater-${{ steps.ver.outputs.project_version }}.jar
-            streamloader/target/scala-2.13/snowplow-bigquery-streamloader-${{ steps.ver.outputs.project_version }}.jar
+            modules/mutator/target/scala-2.13/snowplow-bigquery-mutator-${{ steps.ver.outputs.project_version }}.jar
+            modules/repeater/target/scala-2.13/snowplow-bigquery-repeater-${{ steps.ver.outputs.project_version }}.jar
+            modules/streamloader/target/scala-2.13/snowplow-bigquery-streamloader-${{ steps.ver.outputs.project_version }}.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy_docker:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app:
+          - loader
+          - streamloader
+          - mutator
+          - repeater
+    steps:
+      - uses: actions/checkout@v2
+      - uses: coursier/cache-action@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v1
+        with:
+          java-version: 8
+
+      - name: Get current version
+        id: ver
+        run: |
+          export PROJECT_VERSION=$(sbt "project common" version -Dsbt.log.noformat=true | perl -ne 'print "$1\n" if /info.*(\d+\.\d+\.\d+[^\r\n]*)/' | tail -n 1 | tr -d '\n')
+          echo "::set-output name=project_version::$PROJECT_VERSION"
+
+      - name: Stage the Docker build
+        run: sbt "project ${{ matrix.platform}}" docker:stage
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: snowplow/snowplow-bigquery-${{ matrix.app }}
+          tags: |
+            type=raw,value=latest,enable=${{ !contains(steps.ver.outputs.project_version, 'rc') }}
+            type=raw,value=${{ steps.ver.outputs.project_version }}
+          flavor: |
+            latest=false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push image
+        uses: docker/build-push-action@v2
+        with:
+          context: modules/${{ matrix.app }}/target/docker/stage
+          file: modules/${{ matrix.app }}/target/docker/stage/Dockerfile
+          platforms: linux/amd64,linux/arm64/v8
+          tags: ${{ steps.meta.outputs.tags }}
+          push: true

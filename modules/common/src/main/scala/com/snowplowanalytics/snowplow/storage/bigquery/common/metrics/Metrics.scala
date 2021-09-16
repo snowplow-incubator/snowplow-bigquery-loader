@@ -27,7 +27,7 @@ sealed trait Metrics[F[_]] {
   /** Send latest metrics to reporter. */
   def report: Stream[F, Unit]
 
-  /** Track latency between collector hit and loading time. */
+  /** Track latency between collector hit (in millis) and loading time. */
   def latency(collectorTstamp: Long): F[Unit]
 
   /** Increment the count of events that were successfully loaded into BigQuery. */

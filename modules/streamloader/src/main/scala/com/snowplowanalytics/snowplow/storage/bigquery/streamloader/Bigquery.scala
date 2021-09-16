@@ -16,7 +16,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Output
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 
-import cats.effect.Sync
+import cats.effect.{Blocker, ContextShift, Sync}
 import cats.implicits._
 import com.permutive.pubsub.producer.Model.SimpleRecord
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, InsertAllResponse, TableId}
@@ -30,8 +30,10 @@ object Bigquery {
   final case class FailedInsert(tableRow: String) extends AnyVal
 
   /**
-    * Insert row into BigQuery or into "failed inserts" PubSub topic if BQ client returns
+    * Insert rows into BigQuery or into "failed inserts" PubSub topic if BQ client returns
     * any known errors.
+    *
+    * Exceptions from the underlying `insertAll` call are propagated.
     */
   def insert[F[_]: Sync](
     failedInsertProducer: PubsubProducer[F, FailedInsert],
@@ -40,22 +42,24 @@ object Bigquery {
   )(
     mkInsert: List[LoaderRow] => F[InsertAllResponse]
   ): F[Unit] =
-    mkInsert(loaderRows).attempt.flatMap {
-      case Right(response) if response.hasErrors =>
+    mkInsert(loaderRows).flatMap {
+      case response if response.hasErrors =>
         val errorIndex = response.getInsertErrors.keySet()
         val failed     = loaderRows.zipWithIndex.filter { case (_, i) => errorIndex.contains(i.toLong) }.map(_._1)
         val tableRows  = failed.map(lr => SimpleRecord(FailedInsert(lr.toString)))
         failedInsertProducer.produceMany[List](tableRows).void *> metrics.failedInsertCount(tableRows.length)
-      case Right(_) =>
+      case _ =>
         val earliestCollectorTstamp = loaderRows.map(_.collectorTstamp).min.getMillis
         metrics.latency(earliestCollectorTstamp) *> metrics.goodCount(loaderRows.length)
-      case Left(errors) => Sync[F].delay(println(errors))
     }
 
-  def mkInsert[F[_]: Sync](good: Output.BigQuery, bigQuery: BigQuery): List[LoaderRow] => F[InsertAllResponse] = {
-    lrs =>
-      val request = buildRequest(good.datasetId, good.tableId, lrs)
-      Sync[F].delay(bigQuery.insertAll(request))
+  def mkInsert[F[_]: Sync: ContextShift](
+    good: Output.BigQuery,
+    bigQuery: BigQuery,
+    blocker: Blocker
+  ): List[LoaderRow] => F[InsertAllResponse] = { lrs =>
+    val request = buildRequest(good.datasetId, good.tableId, lrs)
+    blocker.delay(bigQuery.insertAll(request))
   }
 
   def getClient[F[_]: Sync]: F[BigQuery] =

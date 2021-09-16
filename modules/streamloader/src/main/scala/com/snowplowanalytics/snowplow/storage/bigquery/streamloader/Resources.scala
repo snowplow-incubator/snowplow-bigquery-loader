@@ -169,10 +169,8 @@ object Resources {
         .parEvalMapUnordered(sinkSettingsGood.sinkConcurrency) { slrows =>
           val (remaining, toInsert) = splitBy(slrows, getSize[F], sinkSettingsGood.bqWriteRequestSizeLimit)
           remaining.traverse_(bufferOverflowQueue.enqueue1) *>
-            blocker.blockOn(
-              Bigquery.insert(producer, metrics, toInsert.map(_.row))(Bigquery.mkInsert(good, bigQuery)) *> toInsert
-                .traverse_(_.ack)
-            )
+            Bigquery.insert(producer, metrics, toInsert.map(_.row))(Bigquery.mkInsert(good, bigQuery, blocker)) *> toInsert
+            .traverse_(_.ack)
         }
     }
 

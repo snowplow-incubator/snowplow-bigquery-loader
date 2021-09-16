@@ -12,6 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.ConsumerSettings
+
 import cats.effect.{Blocker, Concurrent, ContextShift, Sync}
 import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
 import com.permutive.pubsub.consumer.Model
@@ -21,13 +23,20 @@ object Source {
   def getStream[F[_]: Concurrent: ContextShift](
     projectId: String,
     subscription: String,
-    blocker: Blocker
+    blocker: Blocker,
+    cs: ConsumerSettings
   ): Stream[F, Payload[F]] =
     PubsubGoogleConsumer.subscribe[F, String](
       blocker,
       Model.ProjectId(projectId),
       Model.Subscription(subscription),
       (msg, err, _, _) => Sync[F].delay(System.err.println(s"Msg $msg got error $err")),
-      config = PubsubGoogleConsumerConfig(onFailedTerminate = _ => Sync[F].unit)
+      config = PubsubGoogleConsumerConfig(
+        cs.maxQueueSize,
+        cs.parallelPullCount,
+        cs.maxAckExtensionPeriod,
+        cs.awaitTerminatePeriod,
+        onFailedTerminate = _ => Sync[F].unit
+      )
     )
 }

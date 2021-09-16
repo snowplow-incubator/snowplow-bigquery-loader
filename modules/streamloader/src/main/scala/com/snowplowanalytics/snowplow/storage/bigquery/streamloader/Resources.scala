@@ -67,7 +67,7 @@ object Resources {
     // format: off
     for {
       blocker        <- Blocker[F]
-      source         = Source.getStream[F](env.projectId, env.config.input.subscription, blocker)
+      source         = Source.getStream[F](env.projectId, env.config.input.subscription, blocker, env.config.consumerSettings)
       igluClient     <- Resource.liftF[F, Client[F, Json]](clientF)
       types          <- mkTypeSink[F](env.projectId, env.config.output.types.topic, env.config.sinkSettings.types)
       bigquery       <- Resource.liftF[F, BigQuery](Bigquery.getClient)

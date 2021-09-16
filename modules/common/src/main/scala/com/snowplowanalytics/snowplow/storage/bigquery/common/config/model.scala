@@ -28,6 +28,7 @@ object model {
       input: Input.PubSub,
       output: LoaderOutputs,
       loadMode: LoadMode,
+      consumerSettings: ConsumerSettings,
       sinkSettings: SinkSettings
     ) extends Config
     final case class Mutator(input: Input.PubSub, output: MutatorOutput) extends Config
@@ -99,6 +100,17 @@ object model {
       deriveDecoder[StreamingInserts].widen,
       deriveDecoder[FileLoads].widen
     ).reduceLeft(_.or(_))
+  }
+
+  final case class ConsumerSettings(
+    maxQueueSize: Int,
+    parallelPullCount: Int,
+    maxAckExtensionPeriod: FiniteDuration,
+    awaitTerminatePeriod: FiniteDuration
+  )
+  object ConsumerSettings {
+    implicit val consumerSettingsEncoder: Encoder[ConsumerSettings] = deriveEncoder[ConsumerSettings]
+    implicit val consumerSettingsDecoder: Decoder[ConsumerSettings] = deriveDecoder[ConsumerSettings]
   }
 
   final case class SinkSettings(

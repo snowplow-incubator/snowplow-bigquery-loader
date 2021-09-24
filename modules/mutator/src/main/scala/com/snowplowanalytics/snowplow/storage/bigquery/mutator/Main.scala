@@ -39,11 +39,8 @@ object Main extends IOApp {
 
       case Right(c: MutatorCommand.Create) =>
         for {
-          env    <- IO.delay(c.env)
           client <- TableReference.BigQueryTable.getClient
-          _ <- TableReference
-            .BigQueryTable
-            .create(client, env.projectId, env.config.output.good.datasetId, env.config.output.good.tableId)
+          _      <- TableReference.BigQueryTable.create(c, client)
         } yield ExitCode.Success
 
       case Right(c: MutatorCommand.AddColumn) =>

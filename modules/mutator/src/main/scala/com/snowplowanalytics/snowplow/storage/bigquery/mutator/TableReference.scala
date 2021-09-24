@@ -13,6 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, LoaderRow}
+import com.snowplowanalytics.snowplow.storage.bigquery.mutator.MutatorCli.MutatorCommand
 
 import cats.effect.IO
 import com.google.cloud.bigquery.{Schema => BqSchema, _}
@@ -58,12 +59,27 @@ object TableReference {
     def getClient: IO[BigQuery] =
       IO(BigQueryOptions.getDefaultInstance.getService)
 
-    def create(client: BigQuery, projectId: String, datasetId: String, tableId: String): IO[Table] = IO {
-      val id         = TableId.of(projectId, datasetId, tableId)
-      val fields     = Atomic.table.appended(LoaderRow.LoadTstampField)
-      val schema     = BqSchema.of(fields.map(Adapter.adaptField).asJava)
-      val definition = StandardTableDefinition.newBuilder().setSchema(schema).build()
-      val tableInfo  = TableInfo.newBuilder(id, definition).build()
+    def create(args: MutatorCommand.Create, client: BigQuery): IO[Table] = IO {
+      val id =
+        TableId.of(args.env.projectId, args.env.config.output.good.datasetId, args.env.config.output.good.tableId)
+      val fields = Atomic.table.appended(LoaderRow.LoadTstampField)
+      val schema = BqSchema.of(fields.map(Adapter.adaptField).asJava)
+      val partitioning = args.partitionColumn match {
+        case Some(partCol) =>
+          Some(
+            TimePartitioning
+              .newBuilder(args.partitioningType)
+              .setField(partCol.name)
+              .setRequirePartitionFilter(args.requirePartitionFilter)
+              .build()
+          )
+        case _ => None
+      }
+      val definition = partitioning match {
+        case Some(p) => StandardTableDefinition.newBuilder().setSchema(schema).setTimePartitioning(p).build()
+        case _       => StandardTableDefinition.newBuilder().setSchema(schema).build()
+      }
+      val tableInfo = TableInfo.newBuilder(id, definition).build()
       client.create(tableInfo)
     }
 

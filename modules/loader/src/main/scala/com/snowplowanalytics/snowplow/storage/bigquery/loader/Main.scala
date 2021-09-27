@@ -22,7 +22,7 @@ object Main {
     LoaderCli.parse(args) match {
       case Right(env) =>
         Loader.run(env, sc)
-        val _ = sc.run().waitUntilDone(Duration.Inf)
+        val _ = sc.run().waitUntilFinish(Duration.Inf)
       case Left(error) =>
         System.err.println(error.getMessage)
         System.exit(1)

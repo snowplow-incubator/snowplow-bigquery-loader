@@ -21,7 +21,7 @@ object Dependencies {
     val googleCloudPubSub   = "1.102.0" // no upgrade before bumping pubsubFs2
     val googleCloudStorage  = "1.102.0" // no upgrade before bumping pubsubFs2
     val metrics             = "4.1.25"
-    val slf4j               = "1.7.30"
+    val slf4j               = "1.7.32"
 
     // TODO: remove when libraries bringing in older versions are bumped
     val nettyCodec     = "4.1.68.Final" // scio

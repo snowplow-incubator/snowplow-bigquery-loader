@@ -24,7 +24,7 @@ object Dependencies {
     val slf4j               = "1.7.30"
 
     // TODO: remove when libraries bringing in older versions are bumped
-    val nettyCodec     = "4.1.46.Final" // scio
+    val nettyCodec     = "4.1.68.Final" // scio
     val nettyCodecHttp = "4.1.44.Final" // scio
     val fastjson       = "1.2.69"       // scio
     val googleOauth    = "1.31.0"       // scio

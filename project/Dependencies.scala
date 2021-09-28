@@ -23,11 +23,11 @@ object Dependencies {
     val metrics             = "4.1.25"
     val slf4j               = "1.7.32"
 
-    // TODO: remove when libraries bringing in older versions are bumped
-    val nettyCodec     = "4.1.68.Final" // scio
-    val nettyCodecHttp = "4.1.44.Final" // scio
-    val fastjson       = "1.2.69"       // scio
-    val googleOauth    = "1.31.0"       // scio
+    // Override provided versions to fix security vulnerabilities
+    val nettyCodec     = "4.1.68.Final"
+    val nettyCodecHttp = "4.1.61.Final"
+    val fastjson       = "1.2.69"
+    val googleOauth    = "1.31.0"
 
     // Scala third-party
     val cats       = "2.6.1"
@@ -71,14 +71,15 @@ object Dependencies {
   val gcs      = "com.google.cloud" % "google-cloud-storage"  % V.googleCloudStorage
 
   // Java
-  val dataflowRunner = "org.apache.beam"         % "beam-runners-google-cloud-dataflow-java" % V.beam
-  val directRunner   = "org.apache.beam"         % "beam-runners-direct-java"                % V.beam
-  val metrics        = "io.dropwizard.metrics"   % "metrics-core"                            % V.metrics
-  val slf4j          = "org.slf4j"               % "slf4j-simple"                            % V.slf4j
-  val nettyCodec     = "io.netty"                % "netty-codec"                             % V.nettyCodec
-  val nettyCodecHttp = "io.netty"                % "netty-codec-http"                        % V.nettyCodecHttp
-  val fastjson       = "com.alibaba"             % "fastjson"                                % V.fastjson
-  val googleOauth    = "com.google.oauth-client" % "google-oauth-client"                     % V.googleOauth
+  val dataflowRunner  = "org.apache.beam"         % "beam-runners-google-cloud-dataflow-java" % V.beam
+  val directRunner    = "org.apache.beam"         % "beam-runners-direct-java"                % V.beam
+  val metrics         = "io.dropwizard.metrics"   % "metrics-core"                            % V.metrics
+  val slf4j           = "org.slf4j"               % "slf4j-simple"                            % V.slf4j
+  val nettyCodec      = "io.netty"                % "netty-codec"                             % V.nettyCodec
+  val nettyCodecHttp  = "io.netty"                % "netty-codec-http"                        % V.nettyCodecHttp
+  val nettyCodecHttp2 = "io.netty"                % "netty-codec-http2"                       % V.nettyCodecHttp
+  val fastjson        = "com.alibaba"             % "fastjson"                                % V.fastjson
+  val googleOauth     = "com.google.oauth-client" % "google-oauth-client"                     % V.googleOauth
 
   // Scala third-party
   val cats          = "org.typelevel"     %% "cats-core"                % V.cats

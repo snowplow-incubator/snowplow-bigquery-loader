@@ -56,8 +56,7 @@ object Dependencies {
     val schemaDdl    = "0.14.2"
 
     // Scala (test only)
-    val scalaCheck = "1.14.3"
-    val specs2     = "4.10.0"
+    val specs2 = "4.10.0"
 
     // Build
     val betterMonadicFor   = "0.3.1"
@@ -107,8 +106,6 @@ object Dependencies {
   val schemaDdl     = "com.snowplowanalytics" %% "schema-ddl"                   % V.schemaDdl
 
   // Scala (test only)
-  val scalaCheck       = "org.scalacheck" %% "scalacheck"        % V.scalaCheck % "test"
-  val specs2           = "org.specs2"     %% "specs2-core"       % V.specs2     % "test"
-  val specs2ScalaCheck = "org.specs2"     %% "specs2-scalacheck" % V.specs2     % "test"
-  val scioTest         = "com.spotify"    %% "scio-test"         % V.scio       % "test"
+  val specs2   = "org.specs2"  %% "specs2-core" % V.specs2 % "test"
+  val scioTest = "com.spotify" %% "scio-test"   % V.scio   % "test"
 }

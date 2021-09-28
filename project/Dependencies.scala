@@ -50,7 +50,7 @@ object Dependencies {
 
     // Scala Snowplow
     val analyticsSdk = "2.1.0"
-    val badrows      = "2.1.0"
+    val badrows      = "2.1.1"
     val igluClient   = "1.0.2"
     val igluCore     = "1.0.0"
     val schemaDdl    = "0.14.2"

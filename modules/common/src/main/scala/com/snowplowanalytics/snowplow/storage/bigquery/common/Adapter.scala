@@ -57,7 +57,6 @@ object Adapter {
       case Type.String    => LegacySQLTypeName.STRING
       case Type.Float     => LegacySQLTypeName.FLOAT
       case Type.Numeric   => LegacySQLTypeName.NUMERIC
-      case Type.Bytes     => LegacySQLTypeName.BYTES
       case Type.Date      => LegacySQLTypeName.DATE
       case Type.DateTime  => LegacySQLTypeName.DATETIME
       case Type.Record(_) => LegacySQLTypeName.RECORD

@@ -68,17 +68,17 @@ object Resources {
     for {
       blocker        <- Blocker[F]
       source         = Source.getStream[F](env.projectId, env.config.input.subscription, blocker, env.config.consumerSettings)
-      igluClient     <- Resource.liftF[F, Client[F, Json]](clientF)
+      igluClient     <- Resource.eval[F, Client[F, Json]](clientF)
       types          <- mkTypeSink[F](env.projectId, env.config.output.types.topic, env.config.sinkSettings.types)
-      bigquery       <- Resource.liftF[F, BigQuery](Bigquery.getClient)
+      bigquery       <- Resource.eval[F, BigQuery](Bigquery.getClient)
       failedInserts  <- mkProducer[F, Bigquery.FailedInsert](
         env.projectId,
         env.config.output.failedInserts.topic,
         env.config.sinkSettings.failedInserts.producerBatchSize,
         env.config.sinkSettings.failedInserts.producerDelayThreshold
       )
-      metrics        <- Resource.liftF(mkMetricsReporter[F](blocker, env.monitoring))
-      queue          <- Resource.liftF(Queue.bounded[F, StreamLoaderRow[F]](env.config.sinkSettings.good.bqWriteRequestOverflowQueueMaxSize))
+      metrics        <- Resource.eval(mkMetricsReporter[F](blocker, env.monitoring))
+      queue          <- Resource.eval(Queue.bounded[F, StreamLoaderRow[F]](env.config.sinkSettings.good.bqWriteRequestOverflowQueueMaxSize))
       badSink        <- mkBadSink[F](env.projectId, env.config.output.bad.topic, env.config.sinkSettings.bad.sinkConcurrency, metrics, env.config.sinkSettings.bad)
       goodSink       = mkGoodSink[F](blocker, env.config.output.good, bigquery, failedInserts, metrics, types, queue, env.config.sinkSettings.good, env.config.sinkSettings.types)
     } yield new Resources[F](source, igluClient, badSink, goodSink, metrics)

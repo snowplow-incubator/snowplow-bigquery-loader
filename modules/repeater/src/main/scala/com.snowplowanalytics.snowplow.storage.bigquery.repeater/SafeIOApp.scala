@@ -40,5 +40,5 @@ trait SafeIOApp extends IOApp.WithContext {
   }
 
   val executionContextResource: Resource[SyncIO, ExecutionContext] =
-    Resource.liftF(SyncIO(exitingEC))
+    Resource.eval(SyncIO(exitingEC))
 }

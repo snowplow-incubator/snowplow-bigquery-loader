@@ -52,7 +52,7 @@ object Dependencies {
     val analyticsSdk = "2.1.0"
     val badrows      = "2.1.1"
     val igluClient   = "1.1.1"
-    val igluCore     = "1.0.0"
+    val igluCore     = "1.0.1"
     val schemaDdl    = "0.14.2"
 
     // Scala (test only)

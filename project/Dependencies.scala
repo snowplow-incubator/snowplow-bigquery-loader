@@ -56,7 +56,7 @@ object Dependencies {
     val schemaDdl    = "0.14.2"
 
     // Scala (test only)
-    val specs2 = "4.10.0"
+    val specs2 = "4.12.12"
 
     // Build
     val betterMonadicFor   = "0.3.1"

@@ -35,7 +35,7 @@ object Dependencies {
     val circe      = "0.14.1"
     val decline    = "1.4.0"
     val fs2        = "2.5.9"
-    val httpClient = "0.21.15"
+    val httpClient = "0.22.5"
     val logging    = "1.1.1"
     // =========================================================================
     // After 1.102.0 the Google Cloud Java SDK versions diverge.

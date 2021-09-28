@@ -49,7 +49,7 @@ object StatsDReporter {
       case Some(statsd) =>
         Resource.fromAutoCloseable(Sync[F].delay(new DatagramSocket)).map(impl[F](blocker, statsd, _))
       case None =>
-        Resource.liftF[F, Metrics.Reporter[F]](Sync[F].delay(new Metrics.Reporter[F] {
+        Resource.eval[F, Metrics.Reporter[F]](Sync[F].delay(new Metrics.Reporter[F] {
           def report(snapshot: MetricsSnapshot): F[Unit] = Sync[F].unit
         }))
     }

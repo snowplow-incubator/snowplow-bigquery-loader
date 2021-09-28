@@ -33,7 +33,7 @@ object Dependencies {
     val cats       = "2.6.1"
     val catsEffect = "2.5.4"
     val circe      = "0.14.1"
-    val decline    = "1.0.0"
+    val decline    = "1.4.0"
     val fs2        = "2.5.0"
     val httpClient = "0.21.15"
     val logging    = "1.1.1"

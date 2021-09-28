@@ -27,6 +27,7 @@ lazy val common = project
     libraryDependencies ++= Seq(
       Dependencies.bigQuery,
       Dependencies.cats,
+      Dependencies.catsEffect,
       Dependencies.circe,
       Dependencies.circeConfig,
       Dependencies.circeJawn,
@@ -85,7 +86,6 @@ lazy val mutator = project
   .settings(BuildSettings.mutatorBuildSettings)
   .settings(
     libraryDependencies ++= Seq(
-      Dependencies.catsEffect,
       Dependencies.pubsub
     )
   )
@@ -98,7 +98,6 @@ lazy val repeater = project
   .settings(BuildSettings.repeaterBuildSettings)
   .settings(
     libraryDependencies ++= Seq(
-      Dependencies.catsEffect,
       Dependencies.gcs,
       Dependencies.httpClient,
       Dependencies.pubsub,

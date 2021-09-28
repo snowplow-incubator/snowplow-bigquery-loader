@@ -30,7 +30,7 @@ object Dependencies {
     val googleOauth    = "1.31.0"       // scio
 
     // Scala third-party
-    val cats       = "2.1.1"
+    val cats       = "2.6.1"
     val catsEffect = "2.3.1"
     val circe      = "0.13.0"
     val decline    = "1.0.0"

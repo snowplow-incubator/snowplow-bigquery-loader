@@ -59,7 +59,10 @@ object CliConfig {
 
   /** CLI option to parse base64-encoded config hocon */
   val configOpt: Opts[CliConfig] =
-    Opts.option[String]("config", "Base64-encoded app configuration (hocon)").mapValidated(validate(decodeBase64Hocon))
+    Opts
+      .option[String]("config", "Base64-encoded app configuration (hocon). Defaults to empty string.")
+      .withDefault("")
+      .mapValidated(validate(decodeBase64Hocon))
 
   /** Check if the provided resolverJson can be parsed into a Resolver instance */
   def validateResolverJson[F[_]: Monad: InitSchemaCache: InitListCache](

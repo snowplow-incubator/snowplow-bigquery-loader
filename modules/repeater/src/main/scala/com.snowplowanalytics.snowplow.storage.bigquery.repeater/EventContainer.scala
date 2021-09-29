@@ -12,9 +12,6 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import com.snowplowanalytics.snowplow.badrows.BadRow
-import com.snowplowanalytics.snowplow.storage.bigquery.repeater.PayloadParser.ReconstructedEvent
-
 import cats.effect.Sync
 import cats.syntax.either._
 import com.permutive.pubsub.consumer.decoder.MessageDecoder
@@ -39,9 +36,6 @@ case class EventContainer(eventId: UUID, etlTstamp: Instant, payload: JsonObject
   /** Check if event is older than `seconds` (time to create a column) */
   def isReady[F[_]: Sync](seconds: Long): F[Boolean] =
     Sync[F].delay(etlTstamp.isBefore(Instant.now().minusSeconds(seconds)))
-
-  def parsePayload[F[_]: Sync]: F[Either[BadRow, ReconstructedEvent]] =
-    Sync[F].delay(PayloadParser.parse(payload))
 }
 
 object EventContainer {

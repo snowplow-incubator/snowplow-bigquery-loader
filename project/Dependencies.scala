@@ -19,7 +19,7 @@ object Dependencies {
     val beam                = "2.24.0"
     val googleCloudBigQuery = "2.1.6"   // compatible with google-cloud-pubsub:1.114.3
     val googleCloudPubSub   = "1.102.0" // no upgrade before bumping pubsubFs2
-    val googleCloudStorage  = "1.102.0" // no upgrade before bumping pubsubFs2
+    val googleCloudStorage  = "2.1.1"   // compatible with google-cloud-pubsub:1.114.3
     val metrics             = "4.1.25"
     val slf4j               = "1.7.32"
 

@@ -18,7 +18,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 
 import cats.effect.{Blocker, ContextShift, Sync}
 import cats.implicits._
-import com.google.api.client.json.jackson2.JacksonFactory
+import com.google.api.client.json.gson.GsonFactory
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, InsertAllResponse, TableId}
 import com.google.cloud.bigquery.InsertAllRequest.RowToInsert
 import com.permutive.pubsub.producer.PubsubProducer
@@ -47,7 +47,7 @@ object Bigquery {
         val errorIndex = response.getInsertErrors.keySet()
         val failed     = loaderRows.zipWithIndex.filter { case (_, i) => errorIndex.contains(i.toLong) }.map(_._1)
         val tableRows = failed.map { lr =>
-          lr.data.setFactory(JacksonFactory.getDefaultInstance)
+          lr.data.setFactory(GsonFactory.getDefaultInstance)
           FailedInsert(lr.data.toString)
         }
         tableRows.traverse_(fi => failedInsertProducer.produce(fi)) *> metrics.failedInsertCount(tableRows.length)

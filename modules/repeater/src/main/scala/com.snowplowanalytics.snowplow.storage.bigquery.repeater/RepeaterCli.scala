@@ -37,7 +37,7 @@ object RepeaterCli {
       "bufferSize",
       "Some failed inserts cannot be written to BigQuery, even after multiple attempts. " +
         "These events are buffered and ultimately sunk to GCS." +
-        "The buffer is flushed when uninsertableBufferSize is reached or when uninsertableTimeout passes."
+        "The buffer is flushed when bufferSize is reached or when timeout passes."
     )
     .validate("Buffer size must be greater than 0.") { _ > 0 }
     .withDefault(DefaultBufferSize)
@@ -47,13 +47,13 @@ object RepeaterCli {
       "timeout",
       "Some failed inserts cannot be written to BigQuery, even after multiple attempts. " +
         "These events are buffered and ultimately sunk to GCS." +
-        "The buffer is flushed when uninsertableBufferSize is reached or when uninsertableTimeout passes."
+        "The buffer is flushed when bufferSize is reached or when timeout passes."
     )
     .validate("Timeout must be greater than 0.") { _ > 0 }
     .withDefault(DefaultTimeout)
 
   private val backoffPeriod = Opts
-    .option[Int]("backoffPeriod", "Time (in seconds) to wait before trying to re-insert the record(s).")
+    .option[Int]("backoffPeriod", "Time (in seconds) to wait before re-trying to insert the record(s).")
     .validate("Backoff period must be greater than 0.") { _ > 0 }
     .withDefault(DefaultBackoffTime)
 

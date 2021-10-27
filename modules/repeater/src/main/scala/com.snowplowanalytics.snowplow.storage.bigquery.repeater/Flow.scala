@@ -84,7 +84,7 @@ object Flow {
       _    <- counter.update(_ + 1)
       i    <- counter.get
       file = Storage.getFileName(bucket.path, i)
-      _ <- Logger[F].debug(s"Filename will be $file")
+      _ <- Logger[F].info(s"Filename will be $file")
       _ <- Storage.uploadChunk[F](bucket.bucket, file, chunk, metrics)
     } yield ()
 

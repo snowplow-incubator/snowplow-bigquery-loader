@@ -37,14 +37,7 @@ object Dependencies {
     val fs2        = "2.5.9"
     val httpClient = "0.22.5"
     val logging    = "1.1.1"
-    // =========================================================================
-    // After 1.102.0 the Google Cloud Java SDK versions diverge.
-    // It becomes harder to know what versions are compatible with each other.
-    // Bumping pubsubFs2 to 0.16.0 calls for googleCloudPubSub 1.107.0,
-    // but it's unclear to what versions the other two SDKs need to be bumped.
-    // Runtime errors occur when the versions are incompatible.
-    // =========================================================================
-    val pubsubFs2   = "0.15.0"
+    val pubsubFs2   = "0.18.0"
     val scio        = "0.9.6"
     val circeConfig = "0.8.0"
 
@@ -91,7 +84,6 @@ object Dependencies {
   val fs2           = "co.fs2"            %% "fs2-core"                 % V.fs2
   val httpClient    = "org.http4s"        %% "http4s-async-http-client" % V.httpClient
   val logging       = "io.chrisdavenport" %% "log4cats-slf4j"           % V.logging
-  val pubsubFs2     = "com.permutive"     %% "fs2-google-pubsub-http"   % V.pubsubFs2
   val pubsubFs2Grpc = "com.permutive"     %% "fs2-google-pubsub-grpc"   % V.pubsubFs2
   val scioBigQuery  = "com.spotify"       %% "scio-bigquery"            % V.scio
   val scioCore      = "com.spotify"       %% "scio-core"                % V.scio

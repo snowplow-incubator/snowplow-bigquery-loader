@@ -17,7 +17,7 @@ object Dependencies {
   object V {
     // Java
     val beam                = "2.24.0"
-    val googleCloudBigQuery = "1.102.0" // no upgrade before bumping pubsubFs2
+    val googleCloudBigQuery = "2.1.6"   // compatible with google-cloud-pubsub:1.14.3
     val googleCloudPubSub   = "1.102.0" // no upgrade before bumping pubsubFs2
     val googleCloudStorage  = "1.102.0" // no upgrade before bumping pubsubFs2
     val metrics             = "4.1.25"

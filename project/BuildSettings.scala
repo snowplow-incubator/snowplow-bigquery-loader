@@ -22,17 +22,19 @@ import sbtassembly._
 import sbtassembly.AssemblyKeys._
 import sbtbuildinfo._
 import sbtbuildinfo.BuildInfoKeys._
+import sbtdynver.DynVerPlugin.autoImport._
 
 object BuildSettings {
   lazy val projectSettings = Seq(
     organization := "com.snowplowanalytics",
-    version := "1.0.0",
     scalaVersion := "2.13.2",
     buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description, BuildInfoKey.action("userAgent") {
       s"${name.value}/${version.value}"
     }),
     // Do not warn about Docker keys not being used by any other settings/tasks
-    Global / lintUnusedKeysOnLoad := false
+    Global / lintUnusedKeysOnLoad := false,
+    ThisBuild / dynverVTagPrefix := false,
+    ThisBuild / dynverSeparator := "-"
   )
 
   lazy val commonProjectSettings = projectSettings ++ Seq(

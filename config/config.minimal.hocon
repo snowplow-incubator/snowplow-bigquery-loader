@@ -45,7 +45,6 @@
       "good": ${loader.output.good}
 
       "deadLetters": {
-        "type": "Gcs"
         "bucket": "gs://dead-letter-bucket"
       }
     }

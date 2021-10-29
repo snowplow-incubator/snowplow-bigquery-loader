@@ -1,3 +1,14 @@
+Version 1.0.1 (2021-10-29)
+--------------------------
+Use sbt-dynver plugin (#227)
+Repeater: change filename logging level to info (#222)
+Repeater: fix typos in cli options' help text (#221)
+Add monitoring defaults to application.conf (#220)
+Bump fs2-google-cloud-pubsub to 0.18.0 (#226)
+Bump google-cloud-pubsub to 1.114.3 (#225)
+Bump google-cloud-storage to 2.1.1 (#224)
+Bump google-cloud-bigquery to 2.1.6 (#223)
+
 Version 1.0.0 (2021-10-06)
 --------------------------
 Switch from JSON to HOCON in config file (#186)

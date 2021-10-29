@@ -81,7 +81,7 @@ limitations under the License.
 [build-image]: https://github.com/snowplow-incubator/snowplow-bigquery-loader/workflows/build/badge.svg
 [build-wf]: https://github.com/snowplow-incubator/snowplow-bigquery-loader/actions?query=workflow%3Abuild
 
-[release-image]: http://img.shields.io/badge/release-1.0.0-blue.svg?style=flat
+[release-image]: http://img.shields.io/badge/release-1.0.1-blue.svg?style=flat
 [releases]: https://github.com/snowplow-incubator/snowplow-bigquery-loader
 
 [techdocs-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/techdocs.png

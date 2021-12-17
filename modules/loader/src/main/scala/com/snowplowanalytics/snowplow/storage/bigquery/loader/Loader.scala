@@ -26,6 +26,7 @@ import com.google.api.services.bigquery.model.TableReference
 import com.spotify.scio.ScioContext
 import com.spotify.scio.coders.Coder
 import com.spotify.scio.values.{SCollection, SideOutput, WindowOptions}
+import com.spotify.scio.pubsub._
 import io.circe.Json
 import org.apache.beam.sdk.io.gcp.bigquery.{BigQueryIO, InsertRetryPolicy}
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.{CreateDisposition, WriteDisposition}
@@ -58,6 +59,7 @@ object Loader {
   val BadRowsOutput: SideOutput[BadRow] = SideOutput[BadRow]()
 
   /** Run whole pipeline */
+  @annotation.nowarn("msg=method saveAsPubsub in class SCollectionPubsubOps is deprecated")
   def run(env: LoaderEnvironment, sc: ScioContext): Unit = {
     startReporter(reporter, env)
 
@@ -137,6 +139,7 @@ object Loader {
       }
 
   /** Read data from PubSub topic and transform to ready to load rows */
+  @annotation.nowarn("msg=method pubsubSubscription in class ScioContextOps is deprecated")
   private def getData(resolver: Json, sc: ScioContext, input: String): SCollection[Either[BadRow, LoaderRow]] =
     sc.pubsubSubscription[String](input)
       .map(parse(resolver))

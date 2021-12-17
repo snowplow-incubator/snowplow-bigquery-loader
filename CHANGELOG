@@ -1,3 +1,10 @@
+Version 1.0.2 (2021-12-17)
+--------------------------
+Bump scio to 0.11.1 and beam to 2.33.0 (#232)
+Bump gson to 2.8.9 (#234)
+Beam loader: Pin bigquery sdk to 1.135.3 (#236)
+Bump google sdks using google-cloud-bom 0.163.0 (#235)
+
 Version 1.0.1 (2021-10-29)
 --------------------------
 Use sbt-dynver plugin (#227)

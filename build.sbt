@@ -61,10 +61,11 @@ lazy val loader = project
       Dependencies.directRunner,
       Dependencies.metrics,
       Dependencies.scioCore,
-      Dependencies.scioBigQuery,
+      Dependencies.scioGoogle,
       Dependencies.scioTest,
       Dependencies.fastjson
-    )
+    ),
+    resolvers += "Confluent Repository".at("https://packages.confluent.io/maven/")
   )
   .dependsOn(common % "compile->compile;test->test")
 

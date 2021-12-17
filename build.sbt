@@ -25,7 +25,7 @@ lazy val common = project
   .settings(BuildSettings.commonBuildSettings)
   .settings(
     libraryDependencies ++= Seq(
-      Dependencies.bigQuery,
+      Dependencies.Beam.bigQuery,
       Dependencies.cats,
       Dependencies.catsEffect,
       Dependencies.circe,
@@ -77,6 +77,7 @@ lazy val streamloader = project
   .settings(BuildSettings.streamloaderBuildSettings)
   .settings(
     libraryDependencies ++= Seq(
+      Dependencies.bigQuery,
       Dependencies.pubsubFs2Grpc
     )
   )
@@ -89,6 +90,7 @@ lazy val mutator = project
   .settings(BuildSettings.mutatorBuildSettings)
   .settings(
     libraryDependencies ++= Seq(
+      Dependencies.bigQuery,
       Dependencies.pubsub
     )
   )
@@ -104,6 +106,7 @@ lazy val repeater = project
       Dependencies.gcs,
       Dependencies.httpClient,
       Dependencies.pubsub,
+      Dependencies.bigQuery,
       Dependencies.pubsubFs2Grpc
     )
   )

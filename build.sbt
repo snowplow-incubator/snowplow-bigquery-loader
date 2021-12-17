@@ -46,7 +46,8 @@ lazy val common = project
       Dependencies.nettyCodec,
       Dependencies.nettyCodecHttp,
       Dependencies.nettyCodecHttp2,
-      Dependencies.googleOauth
+      Dependencies.googleOauth,
+      Dependencies.gson
     )
   )
 

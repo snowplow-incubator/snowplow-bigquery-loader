@@ -22,6 +22,7 @@ object Dependencies {
     val googleCloudStorage  = "2.1.1"   // compatible with google-cloud-pubsub:1.114.3
     val metrics             = "4.1.25"
     val slf4j               = "1.7.32"
+    val gson                = "2.8.9"   // Override transitive dependency of scio
 
     // Override provided versions to fix security vulnerabilities
     val nettyCodec     = "4.1.68.Final"
@@ -72,6 +73,7 @@ object Dependencies {
   val nettyCodecHttp2 = "io.netty"                % "netty-codec-http2"                       % V.nettyCodecHttp
   val fastjson        = "com.alibaba"             % "fastjson"                                % V.fastjson
   val googleOauth     = "com.google.oauth-client" % "google-oauth-client"                     % V.googleOauth
+  val gson            = "com.google.code.gson"    % "gson"                                    % V.gson
 
   // Scala third-party
   val cats          = "org.typelevel"     %% "cats-core"                % V.cats

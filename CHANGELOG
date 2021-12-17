@@ -1,3 +1,8 @@
+Version 1.0.2 (2021-12-17)
+--------------------------
+Bump scio to 0.11.1 and beam to 2.33.0 (close #232)
+Bump gson to 2.8.9 (close #234)
+
 Version 1.0.1 (2021-10-29)
 --------------------------
 Use sbt-dynver plugin (#227)

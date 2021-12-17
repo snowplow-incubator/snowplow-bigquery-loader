@@ -16,7 +16,7 @@ object Dependencies {
 
   object V {
     // Java
-    val beam                = "2.24.0"
+    val beam                = "2.33.0"
     val googleCloudBigQuery = "2.1.6"   // compatible with google-cloud-pubsub:1.114.3
     val googleCloudPubSub   = "1.114.3" // match the version of fs2-google-pubsub
     val googleCloudStorage  = "2.1.1"   // compatible with google-cloud-pubsub:1.114.3
@@ -38,7 +38,7 @@ object Dependencies {
     val httpClient = "0.22.5"
     val logging    = "1.1.1"
     val pubsubFs2   = "0.18.0"
-    val scio        = "0.9.6"
+    val scio        = "0.11.1"
     val circeConfig = "0.8.0"
 
     // Scala Snowplow
@@ -85,9 +85,9 @@ object Dependencies {
   val httpClient    = "org.http4s"        %% "http4s-async-http-client" % V.httpClient
   val logging       = "io.chrisdavenport" %% "log4cats-slf4j"           % V.logging
   val pubsubFs2Grpc = "com.permutive"     %% "fs2-google-pubsub-grpc"   % V.pubsubFs2
-  val scioBigQuery  = "com.spotify"       %% "scio-bigquery"            % V.scio
   val scioCore      = "com.spotify"       %% "scio-core"                % V.scio
   val scioRepl      = "com.spotify"       %% "scio-repl"                % V.scio
+  val scioGoogle    = "com.spotify"       %% "scio-google-cloud-platform" % V.scio
   val circeConfig   = "io.circe"          %% "circe-config"             % V.circeConfig
 
   // Scala Snowplow

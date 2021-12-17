@@ -109,6 +109,9 @@ object BuildSettings {
       "-target",
       "1.8",
       "-Xlint"
+    ),
+    scalacOptions := Seq(
+      "-Ywarn-unused:-nowarn"
     )
   )
 

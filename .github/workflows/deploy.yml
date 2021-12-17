@@ -63,7 +63,7 @@ jobs:
           echo "::set-output name=project_version::$PROJECT_VERSION"
 
       - name: Stage the Docker build
-        run: sbt "project ${{ matrix.platform}}" docker:stage
+        run: sbt "project ${{ matrix.app }}" docker:stage
 
       - name: Docker metadata
         id: meta

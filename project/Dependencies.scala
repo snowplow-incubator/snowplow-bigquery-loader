@@ -17,9 +17,9 @@ object Dependencies {
   object V {
     // Java
     val beam                = "2.33.0"
-    val googleCloudBigQuery = "2.1.6"   // compatible with google-cloud-pubsub:1.114.3
-    val googleCloudPubSub   = "1.114.3" // match the version of fs2-google-pubsub
-    val googleCloudStorage  = "2.1.1"   // compatible with google-cloud-pubsub:1.114.3
+    val googleCloudBigQuery = "2.3.3"   // compatible with google-cloud-bom:0.163.0
+    val googleCloudPubSub   = "1.114.7" // compatible with google-cloud-bom:0.163.0
+    val googleCloudStorage  = "2.1.9"   // compatible with google-cloud-bom:0.163.0
     val metrics             = "4.1.25"
     val slf4j               = "1.7.32"
     val gson                = "2.8.9"   // Override transitive dependency of scio

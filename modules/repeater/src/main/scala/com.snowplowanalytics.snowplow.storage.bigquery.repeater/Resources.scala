@@ -145,11 +145,11 @@ object Resources {
     } yield resources
   }
 
-  def mkMetricsReporter[F[_]: ConcurrentEffect: ContextShift: Timer](
+  def mkMetricsReporter[F[_]: ConcurrentEffect: ContextShift: Timer: Logger](
     blocker: Blocker,
     monitoringConfig: Monitoring
   ): F[Metrics[F]] =
-    Metrics.build[F](blocker, monitoringConfig.statsd, ReportingApp.Repeater)
+    Metrics.build[F](blocker, monitoringConfig, ReportingApp.Repeater)
 
   /**
     * Try to get uninsertable events into the queue all at once,

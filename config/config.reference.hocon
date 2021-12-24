@@ -140,6 +140,12 @@
       # Optional
       "prefix": "snowplow.monitoring"
     }
+    "stdout": {
+      # Reporting period with time unit
+      "period": "1 sec"
+      # Optional
+      "prefix": "snowplow.monitoring"
+    }
 
     # For Loader deployments
     # "dropwizard": {

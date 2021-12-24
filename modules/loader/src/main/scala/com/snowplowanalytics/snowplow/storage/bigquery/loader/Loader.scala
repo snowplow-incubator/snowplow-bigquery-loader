@@ -167,7 +167,7 @@ object Loader {
   }
 
   private def updateMetrics(cTstamp: Instant, monitoring: Monitoring) = monitoring match {
-    case Monitoring(_, Some(_)) =>
+    case Monitoring(_, _, Some(_)) =>
       val diff = Instant.now().getMillis - cTstamp.getMillis
       latency.update(diff) match {
         case Right(upd) => upd

@@ -33,7 +33,6 @@ import java.nio.charset.StandardCharsets.UTF_8
   * `snowplow.bigquery.streamloader.latency:2000|g|#app_id:12345,env:prod`
   */
 object StatsDReporter {
-  private val DefaultPrefix         = "snowplow.bigquery.streamloader"
   private val LatencyGaugeName      = "latency"
   private val GoodCountName         = "good"
   private val FailedInsertCountName = "failed_inserts"
@@ -43,16 +42,9 @@ object StatsDReporter {
   /** A reporter which sends metrics from the registry to the StatsD server. */
   def make[F[_]: Sync: ContextShift: Timer](
     blocker: Blocker,
-    monitoringConfig: Option[Statsd]
+    config: Statsd
   ): Resource[F, Metrics.Reporter[F]] =
-    monitoringConfig match {
-      case Some(statsd) =>
-        Resource.fromAutoCloseable(Sync[F].delay(new DatagramSocket)).map(impl[F](blocker, statsd, _))
-      case None =>
-        Resource.eval[F, Metrics.Reporter[F]](Sync[F].delay(new Metrics.Reporter[F] {
-          def report(snapshot: MetricsSnapshot): F[Unit] = Sync[F].unit
-        }))
-    }
+    Resource.fromAutoCloseable(Sync[F].delay(new DatagramSocket)).map(impl[F](blocker, config, _))
 
   /**
     * The stream calls `InetAddress.getByName` each time there is a new batch of metrics. This allows
@@ -104,14 +96,11 @@ object StatsDReporter {
     kv =>
       val (k, v) = kv
       if (k == LatencyGaugeName) {
-        s"${normalizeMetric(monitoringConfig.prefix, k)}:${v}|g|#$tagStr"
+        s"${Metrics.normalizeMetric(monitoringConfig.prefix, k)}:${v}|g|#$tagStr"
       } else {
-        s"${normalizeMetric(monitoringConfig.prefix, k)}:${v}|c|#$tagStr"
+        s"${Metrics.normalizeMetric(monitoringConfig.prefix, k)}:${v}|c|#$tagStr"
       }
   }
-
-  private def normalizeMetric(prefix: Option[String], metric: String): String =
-    s"${prefix.getOrElse(DefaultPrefix).stripSuffix(".")}.$metric".stripPrefix(".")
 
   private def sendMetric[F[_]: ContextShift: Sync](
     blocker: Blocker,

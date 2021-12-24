@@ -158,7 +158,7 @@ object model {
       deriveDecoder[SinkSettings.FailedInserts]
   }
 
-  final case class Monitoring(statsd: Option[Monitoring.Statsd], dropwizard: Option[Monitoring.Dropwizard])
+  final case class Monitoring(statsd: Option[Monitoring.Statsd], stdout: Option[Monitoring.Stdout], dropwizard: Option[Monitoring.Dropwizard])
   object Monitoring {
     final case class Statsd(
       hostname: String,
@@ -167,6 +167,7 @@ object model {
       period: FiniteDuration,
       prefix: Option[String]
     )
+    final case class Stdout(period: FiniteDuration, prefix: Option[String])
     final case class Dropwizard(period: FiniteDuration)
 
     implicit val monitoringEncoder: Encoder[Monitoring] = deriveEncoder[Monitoring]
@@ -174,6 +175,9 @@ object model {
 
     implicit val monitoringStatsdEncoder: Encoder[Statsd] = deriveEncoder[Statsd]
     implicit val monitoringStatsdDecoder: Decoder[Statsd] = deriveDecoder[Statsd]
+
+    implicit val monitoringStdoutEncoder: Encoder[Stdout] = deriveEncoder[Stdout]
+    implicit val monitoringStdoutDecoder: Decoder[Stdout] = deriveDecoder[Stdout]
 
     implicit val monitoringDropwizardEncoder: Encoder[Dropwizard] = deriveEncoder[Dropwizard]
     implicit val monitoringDropwizardDecoder: Decoder[Dropwizard] = deriveDecoder[Dropwizard]

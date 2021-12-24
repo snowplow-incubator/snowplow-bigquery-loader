@@ -35,6 +35,8 @@ import fs2.{Pipe, Stream}
 import fs2.concurrent.Queue
 import io.circe.Json
 
+import io.chrisdavenport.log4cats.Logger
+
 import scala.annotation.tailrec
 import scala.concurrent.duration._
 
@@ -54,7 +56,7 @@ object Resources {
     * @tparam F effect type that can allocate Iglu cache
     * @return allocated `Resources`
     */
-  def acquire[F[_]: Concurrent: ContextShift: InitSchemaCache: InitListCache: ConcurrentEffect: Timer](
+  def acquire[F[_]: Concurrent: ContextShift: InitSchemaCache: InitListCache: ConcurrentEffect: Timer: Logger](
     env: LoaderEnvironment
   ): Resource[F, Resources[F]] = {
     val clientF: F[Client[F, Json]] = Client.parseDefault[F](env.resolverJson).value.flatMap {
@@ -69,7 +71,8 @@ object Resources {
       blocker        <- Blocker[F]
       source         = Source.getStream[F](env.projectId, env.config.input.subscription, blocker, env.config.consumerSettings)
       igluClient     <- Resource.eval[F, Client[F, Json]](clientF)
-      types          <- mkTypeSink[F](env.projectId, env.config.output.types.topic, env.config.sinkSettings.types)
+      metrics        <- Resource.eval(mkMetricsReporter[F](blocker, env.monitoring))
+      types          <- mkTypeSink[F](env.projectId, env.config.output.types.topic, env.config.sinkSettings.types, metrics)
       bigquery       <- Resource.eval[F, BigQuery](Bigquery.getClient)
       failedInserts  <- mkProducer[F, Bigquery.FailedInsert](
         env.projectId,
@@ -77,7 +80,6 @@ object Resources {
         env.config.sinkSettings.failedInserts.producerBatchSize,
         env.config.sinkSettings.failedInserts.producerDelayThreshold
       )
-      metrics        <- Resource.eval(mkMetricsReporter[F](blocker, env.monitoring))
       queue          <- Resource.eval(Queue.bounded[F, StreamLoaderRow[F]](env.config.sinkSettings.good.bqWriteRequestOverflowQueueMaxSize))
       badSink        <- mkBadSink[F](env.projectId, env.config.output.bad.topic, env.config.sinkSettings.bad.sinkConcurrency, metrics, env.config.sinkSettings.bad)
       goodSink       = mkGoodSink[F](blocker, env.config.output.good, bigquery, failedInserts, metrics, types, queue, env.config.sinkSettings.good, env.config.sinkSettings.types)
@@ -127,7 +129,8 @@ object Resources {
   private def mkTypeSink[F[_]: Concurrent](
     projectId: String,
     topic: String,
-    sinkSettingsTypes: SinkSettings.Types
+    sinkSettingsTypes: SinkSettings.Types,
+    metrics: Metrics[F]
   ): Resource[F, Pipe[F, Set[ShreddedType], Unit]] =
     mkProducer[F, Set[ShreddedType]](
       projectId,
@@ -136,7 +139,7 @@ object Resources {
       sinkSettingsTypes.producerDelayThreshold
     ).map { p =>
       _.parEvalMapUnordered(sinkSettingsTypes.sinkConcurrency) { types =>
-        p.produce(types).void
+        p.produce(types).void *> metrics.typesCount(types.size)
       }
     }
 
@@ -234,9 +237,9 @@ object Resources {
   ): Pipe[F, Set[ShreddedType], Set[ShreddedType]] =
     _.through(batch(n, t)).map(_.toSet.flatten)
 
-  private def mkMetricsReporter[F[_]: ConcurrentEffect: ContextShift: Timer](
+  private def mkMetricsReporter[F[_]: ConcurrentEffect: ContextShift: Timer: Logger](
     blocker: Blocker,
     monitoringConfig: Monitoring
   ): F[Metrics[F]] =
-    Metrics.build[F](blocker, monitoringConfig.statsd, ReportingApp.StreamLoader)
+    Metrics.build[F](blocker, monitoringConfig, ReportingApp.StreamLoader)
 }

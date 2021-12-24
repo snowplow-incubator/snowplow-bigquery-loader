@@ -24,7 +24,7 @@ import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 object Repeater extends SafeIOApp {
-  private val StreamConcurrency = 4
+  private val StreamConcurrency = 3
 
   val processor: Processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
@@ -35,7 +35,6 @@ object Repeater extends SafeIOApp {
       case Right(command) =>
         val process = for {
           resources <- Stream.resource(Resources.acquire[IO](command))
-          _         <- Stream.eval(resources.showStats)
           bqSink = services
             .PubSub
             .getEvents(
@@ -48,9 +47,8 @@ object Repeater extends SafeIOApp {
             .through[IO, Unit](Flow.sink(resources))
 
           uninsertableSink = Flow.dequeueUninsertable(resources)
-          logging          = Stream.awakeEvery[IO](5.minute).evalMap(_ => resources.updateLifetime *> resources.showStats)
           metricsStream    = resources.metrics.report
-          _ <- Stream(bqSink, uninsertableSink, logging, metricsStream).parJoin[IO, Unit](StreamConcurrency)
+          _ <- Stream(bqSink, uninsertableSink, metricsStream).parJoin[IO, Unit](StreamConcurrency)
         } yield ()
 
         process.compile.drain.attempt.flatMap {

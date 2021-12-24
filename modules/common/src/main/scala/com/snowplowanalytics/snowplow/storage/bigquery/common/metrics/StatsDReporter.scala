@@ -38,6 +38,7 @@ object StatsDReporter {
   private val FailedInsertCountName = "failed_inserts"
   private val BadCountName          = "bad"
   private val UninsertableName      = "uninsertable"
+  private val RepeaterInsertedName  = "repeater_inserted"
 
   /** A reporter which sends metrics from the registry to the StatsD server. */
   def make[F[_]: Sync: ContextShift: Timer](
@@ -88,7 +89,11 @@ object StatsDReporter {
         FailedInsertCountName -> lms.failedInsertCount.toString,
         BadCountName          -> lms.badCount.toString
       ) ++ lms.latency.map(l => LatencyGaugeName -> l.toString)
-    case rms: RepeaterMetricsSnapshot => List(UninsertableName -> rms.uninsertableCount.toString)
+    case rms: RepeaterMetricsSnapshot =>
+      List(
+        UninsertableName -> rms.uninsertableCount.toString,
+        RepeaterInsertedName -> rms.insertedCount.toString
+      )
   }
 
   private def statsDFormat(monitoringConfig: Statsd): KeyValueMetric => String = {

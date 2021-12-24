@@ -40,7 +40,6 @@ import scala.concurrent.ExecutionContext
   * @param uninsertable Queue of events that could not be loaded into BQ after multiple attempts
   * @param counter Counter for batches of uninsertable events
   * @param stop Signal to stop retrieving items
-  * @param statistics Holds information about inserted and uninsertable events over time
   * @param bufferSize Max size of uninsertable buffer (buffer is flushed when this is reached)
   * @param timeout Max time to wait before flushing the uninsetable buffer (if bufferSize is not reached first)
   * @param backoffPeriod Time to wait before trying to re-insert events
@@ -53,7 +52,6 @@ final class Resources[F[_]: Sync](
   val uninsertable: Queue[F, BadRow],
   val counter: Ref[F, Int],
   val stop: SignallingRef[F, Boolean],
-  val statistics: Ref[F, Resources.Statistics],
   val bufferSize: Int,
   val timeout: Int,
   val backoffPeriod: Int,
@@ -61,40 +59,10 @@ final class Resources[F[_]: Sync](
   val insertBlocker: Blocker,
   val jobStartTime: Instant,
   val metrics: Metrics[F]
-) {
-  def logInserted: F[Unit] =
-    statistics.update(s => s.copy(inserted = s.inserted + 1))
-  def logAbandoned: F[Unit] =
-    statistics.update(s => s.copy(uninsertable = s.uninsertable + 1))
-  def updateLifetime: F[Unit] =
-    for {
-      now <- Sync[F].delay(Instant.now())
-      newLifetime = Duration(now.getMillis - jobStartTime.getMillis, "millis")
-      _ <- statistics.update(s => s.copy(lifetime = newLifetime))
-    } yield ()
-  def showStats(implicit L: Logger[F]): F[Unit] =
-    statistics.get.flatMap(statistics => L.info(statistics.show))
-}
+)
 
 object Resources {
   private val QueueSize = 100
-
-  final case class Statistics(inserted: Int, uninsertable: Int, retries: Int, lifetime: Duration)
-  object Statistics {
-    val start: Statistics = Statistics(0, 0, 0, Duration(0, "millis"))
-
-    implicit val showRepeaterStatistics: Show[Statistics] = {
-      case s if (s.lifetime.toHours == 0) =>
-        s"${common(s)} ${s.lifetime.toMinutes} minutes."
-      case s if (s.lifetime.toHours > 24) =>
-        s"${common(s)} ${s.lifetime.toDays} days and ${s.lifetime.toHours - s.lifetime.toDays * 24} hours."
-      case s =>
-        s"${common(s)} ${s.lifetime.toHours} hours."
-    }
-
-    private def common(s: Statistics): String =
-      s"Statistics: ${s.inserted} rows inserted, ${s.uninsertable} rows rejected in"
-  }
 
   /** Allocate all resources */
   def acquire[F[_]: ConcurrentEffect: ContextShift: Timer: Logger](
@@ -112,7 +80,6 @@ object Resources {
       queue       <- Queue.bounded[F, BadRow](QueueSize)
       counter     <- Ref[F].of[Int](0)
       stop        <- SignallingRef[F, Boolean](false)
-      statistics  <- Ref[F].of[Statistics](Statistics.start)
       concurrency <- Sync[F].delay(Runtime.getRuntime.availableProcessors * 16)
       _ <- Logger[F].info(
         s"Initializing Repeater from ${env.config.input.subscription} to ${env.config.output.good} with $concurrency streams"
@@ -127,7 +94,6 @@ object Resources {
           queue,
           counter,
           stop,
-          statistics,
           cmd.bufferSize,
           cmd.timeout,
           cmd.backoffPeriod,

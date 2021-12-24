@@ -51,10 +51,10 @@ object Flow {
         resources.backoffPeriod
       )(event)
       resources.insertBlocker.blockOn(insert).flatMap {
-        case Right(Inserted) => resources.logInserted
+        case Right(Inserted) => resources.metrics.repeaterInsertedCount
         case Right(_)        => Sync[F].unit
         // format: off
-        case Left(d) => resources.logAbandoned *> resources.uninsertable.enqueue1(d)
+        case Left(d) => resources.uninsertable.enqueue1(d)
         // format: on
       }
     }

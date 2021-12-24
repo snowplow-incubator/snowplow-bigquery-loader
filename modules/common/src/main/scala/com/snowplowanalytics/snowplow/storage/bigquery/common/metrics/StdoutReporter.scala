@@ -36,7 +36,8 @@ object StdoutReporter {
           case rms: Metrics.MetricsSnapshot.RepeaterMetricsSnapshot =>
             val logStart = s"${Metrics.normalizeMetric(config.prefix, "Statistics")} = ${config.period}"
             val uninsertableSection = s"UninsertableEvents = ${rms.uninsertableCount}"
-            Logger[F].info(s"$logStart, $uninsertableSection")
+            val insertedSection = s"InsertedEvents = ${rms.insertedCount}"
+            Logger[F].info(s"$logStart, $uninsertableSection, $insertedSection")
         }
     }))
 

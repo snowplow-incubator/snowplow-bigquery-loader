@@ -26,21 +26,17 @@ object StdoutReporter {
         snapshot match {
           case lms: Metrics.MetricsSnapshot.LoaderMetricsSnapshot =>
             val totalEventCount = lms.goodCount + lms.badCount + lms.failedInsertCount
-            Logger[F].info(
-              s"""
-                 |${Metrics.normalizeMetric(config.prefix, "StatisticsPeriod")} = ${config.period}
-                 |${Metrics.normalizeMetric(config.prefix, "TotalEvent")} = ${totalEventCount}
-                 |${Metrics.normalizeMetric(config.prefix, "GoodEvent")} = ${lms.goodCount}
-                 |${Metrics.normalizeMetric(config.prefix, "FailedInsert")} = ${lms.failedInsertCount}
-                 |${Metrics.normalizeMetric(config.prefix, "BadEvent")} = ${lms.badCount}
-                 |${Metrics.normalizeMetric(config.prefix, "TypeMessages")} = ${lms.typesCount}""".stripMargin
-            )
+            val logStart = s"${Metrics.normalizeMetric(config.prefix, "StatisticsPeriod")} = ${config.period}"
+            val totalSection = s"TotalEvent = $totalEventCount"
+            val goodSection = s"GoodEvent = ${lms.goodCount}"
+            val failedInsertSection = s"FailedInsert = ${lms.failedInsertCount}"
+            val badEventSection = s"BadEvent = ${lms.badCount}"
+            val typeSection = s"TypeMessages = ${lms.typesCount}"
+            Logger[F].info(s"$logStart, $totalSection, $goodSection, $failedInsertSection, $badEventSection, $typeSection")
           case rms: Metrics.MetricsSnapshot.RepeaterMetricsSnapshot =>
-            Logger[F].info(
-              s"""${Metrics.normalizeMetric(config.prefix, "Statistics")} In ${config.period}
-                 |${Metrics.normalizeMetric(config.prefix, "Uninsertable")} = ${rms.uninsertableCount}
-                 |""".stripMargin
-            )
+            val logStart = s"${Metrics.normalizeMetric(config.prefix, "Statistics")} = ${config.period}"
+            val uninsertableSection = s"UninsertableEvents = ${rms.uninsertableCount}"
+            Logger[F].info(s"$logStart, $uninsertableSection")
         }
     }))
 

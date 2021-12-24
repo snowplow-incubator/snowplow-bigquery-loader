@@ -46,6 +46,9 @@ sealed trait Metrics[F[_]] {
 
   /** Increment the count of failed inserts that ultimately could not be loaded into BigQuery. */
   def uninsertableCount(n: Int): F[Unit]
+
+  /** Increment the count of events that inserted by repeater */
+  def repeaterInsertedCount: F[Unit]
 }
 
 object Metrics {
@@ -66,7 +69,7 @@ object Metrics {
       typesCount: Int
     ) extends MetricsSnapshot
 
-    final case class RepeaterMetricsSnapshot(uninsertableCount: Int) extends MetricsSnapshot
+    final case class RepeaterMetricsSnapshot(uninsertableCount: Int, insertedCount: Int) extends MetricsSnapshot
   }
 
   sealed trait ReportingApp
@@ -81,32 +84,35 @@ object Metrics {
     failedInsertCount: Ref[F, Int],
     badCount: Ref[F, Int],
     typesCount: Ref[F, Int],
-    uninsertableCount: Ref[F, Int]
+    uninsertableCount: Ref[F, Int],
+    repeaterInsertedCount: Ref[F, Int]
   )
   private object MetricsRefs {
     import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.MetricsSnapshot._
 
     def init[F[_]: Sync]: F[MetricsRefs[F]] =
       for {
-        latency           <- Ref.of[F, Option[Long]](None)
-        goodCount         <- Ref.of[F, Int](0)
-        failedInsertCount <- Ref.of[F, Int](0)
-        badCount          <- Ref.of[F, Int](0)
-        typesCount        <- Ref.of[F, Int](0)
-        uninsertableCount <- Ref.of[F, Int](0)
-      } yield MetricsRefs(latency, goodCount, failedInsertCount, badCount, typesCount, uninsertableCount)
+        latency               <- Ref.of[F, Option[Long]](None)
+        goodCount             <- Ref.of[F, Int](0)
+        failedInsertCount     <- Ref.of[F, Int](0)
+        badCount              <- Ref.of[F, Int](0)
+        typesCount            <- Ref.of[F, Int](0)
+        uninsertableCount     <- Ref.of[F, Int](0)
+        repeaterInsertedCount <- Ref.of[F, Int](0)
+      } yield MetricsRefs(latency, goodCount, failedInsertCount, badCount, typesCount, uninsertableCount, repeaterInsertedCount)
 
     def snapshot[F[_]: Monad](refs: MetricsRefs[F], app: ReportingApp): F[MetricsSnapshot] =
       for {
-        maybeLatency      <- refs.latency.getAndSet(None)
-        goodCount         <- refs.goodCount.getAndSet(0)
-        failedInsertCount <- refs.failedInsertCount.getAndSet(0)
-        badCount          <- refs.badCount.getAndSet(0)
-        typesCount        <- refs.typesCount.getAndSet(0)
-        uninsertableCount <- refs.uninsertableCount.getAndSet(0)
+        maybeLatency          <- refs.latency.getAndSet(None)
+        goodCount             <- refs.goodCount.getAndSet(0)
+        failedInsertCount     <- refs.failedInsertCount.getAndSet(0)
+        badCount              <- refs.badCount.getAndSet(0)
+        typesCount            <- refs.typesCount.getAndSet(0)
+        uninsertableCount     <- refs.uninsertableCount.getAndSet(0)
+        repeaterInsertedCount <- refs.repeaterInsertedCount.getAndSet(0)
       } yield app match {
         case ReportingApp.StreamLoader => LoaderMetricsSnapshot(maybeLatency, goodCount, failedInsertCount, badCount, typesCount)
-        case ReportingApp.Repeater     => RepeaterMetricsSnapshot(uninsertableCount)
+        case ReportingApp.Repeater     => RepeaterMetricsSnapshot(uninsertableCount, repeaterInsertedCount)
       }
   }
 
@@ -157,6 +163,9 @@ object Metrics {
 
             def uninsertableCount(n: Int): F[Unit] =
               statsdRefs.uninsertableCount.update(_ + n) *> stdoutRefs.uninsertableCount.update(_ + n)
+
+            def repeaterInsertedCount: F[Unit] =
+              statsdRefs.repeaterInsertedCount.update(_ + 1) *> stdoutRefs.repeaterInsertedCount.update(_ + 1)
           }
         }
     }
@@ -170,6 +179,7 @@ object Metrics {
       def badCount: F[Unit]                       = Applicative[F].unit
       def typesCount(n: Int): F[Unit]             = Applicative[F].unit
       def uninsertableCount(n: Int): F[Unit]      = Applicative[F].unit
+      def repeaterInsertedCount: F[Unit]          = Applicative[F].unit
     }
 
   private def reporterStream[F[_]: Sync: Timer: ContextShift](

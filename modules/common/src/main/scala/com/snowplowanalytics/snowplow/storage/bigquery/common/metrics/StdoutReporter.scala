@@ -26,17 +26,18 @@ object StdoutReporter {
         snapshot match {
           case lms: Metrics.MetricsSnapshot.LoaderMetricsSnapshot =>
             val totalEventCount = lms.goodCount + lms.badCount + lms.failedInsertCount
-            val logStart = s"${Metrics.normalizeMetric(config.prefix, "StatisticsPeriod")} = ${config.period}"
-            val totalSection = s"TotalEvent = $totalEventCount"
-            val goodSection = s"GoodEvent = ${lms.goodCount}"
-            val failedInsertSection = s"FailedInsert = ${lms.failedInsertCount}"
-            val badEventSection = s"BadEvent = ${lms.badCount}"
-            val typeSection = s"Types = ${lms.typesCount}"
-            Logger[F].info(s"$logStart, $totalSection, $goodSection, $failedInsertSection, $badEventSection, $typeSection")
+            val logPeriod= s"${Metrics.normalizeMetric(config.prefix, "StatisticsPeriod")} = ${config.period}"
+            val total = s"TotalEvent = $totalEventCount"
+            val good = s"GoodEvent = ${lms.goodCount}"
+            val failedInsert = s"FailedInsert = ${lms.failedInsertCount}"
+            val badEvent = s"BadEvent = ${lms.badCount}"
+            val types = s"Types = ${lms.typesCount}"
+            Logger[F].info(s"$logPeriod, $total, $good, $failedInsert, $badEvent, $types")
           case rms: Metrics.MetricsSnapshot.RepeaterMetricsSnapshot =>
-            val logStart = s"${Metrics.normalizeMetric(config.prefix, "Statistics")} = ${config.period}"
-            val uninsertableSection = s"UninsertableEvents = ${rms.uninsertableCount}"
-            Logger[F].info(s"$logStart, $uninsertableSection")
+            val logPeriod = s"${Metrics.normalizeMetric(config.prefix, "Statistics")} = ${config.period}"
+            val uninsertable = s"UninsertableEvents = ${rms.uninsertableCount}"
+            val inserted = s"InsertedEvents = ${rms.insertedCount}"
+            Logger[F].info(s"$logPeriod, $uninsertable, $inserted")
         }
     }))
 

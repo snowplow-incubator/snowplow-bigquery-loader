@@ -12,13 +12,15 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common.metrics
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.Statsd
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring
 
 import cats.{Applicative, Monad}
 import cats.effect.{Async, Blocker, Clock, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2.Stream
+
+import io.chrisdavenport.log4cats.Logger
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
@@ -39,11 +41,17 @@ sealed trait Metrics[F[_]] {
   /** Increment the count of events that failed validation against their schema. */
   def badCount: F[Unit]
 
+  /** Increment the count of types sent to mutator */
+  def typesCount(n: Int): F[Unit]
+
   /** Increment the count of failed inserts that ultimately could not be loaded into BigQuery. */
   def uninsertableCount(n: Int): F[Unit]
 }
 
 object Metrics {
+
+  private val DefaultPrefix = "snowplow.bigquery.streamloader"
+
   trait Reporter[F[_]] {
     def report(snapshot: MetricsSnapshot): F[Unit]
   }
@@ -54,7 +62,8 @@ object Metrics {
       latency: Option[Long],
       goodCount: Int,
       failedInsertCount: Int,
-      badCount: Int
+      badCount: Int,
+      typesCount: Int
     ) extends MetricsSnapshot
 
     final case class RepeaterMetricsSnapshot(uninsertableCount: Int) extends MetricsSnapshot
@@ -71,6 +80,7 @@ object Metrics {
     goodCount: Ref[F, Int],
     failedInsertCount: Ref[F, Int],
     badCount: Ref[F, Int],
+    typesCount: Ref[F, Int],
     uninsertableCount: Ref[F, Int]
   )
   private object MetricsRefs {
@@ -82,8 +92,9 @@ object Metrics {
         goodCount         <- Ref.of[F, Int](0)
         failedInsertCount <- Ref.of[F, Int](0)
         badCount          <- Ref.of[F, Int](0)
+        typesCount        <- Ref.of[F, Int](0)
         uninsertableCount <- Ref.of[F, Int](0)
-      } yield MetricsRefs(latency, goodCount, failedInsertCount, badCount, uninsertableCount)
+      } yield MetricsRefs(latency, goodCount, failedInsertCount, badCount, typesCount, uninsertableCount)
 
     def snapshot[F[_]: Monad](refs: MetricsRefs[F], app: ReportingApp): F[MetricsSnapshot] =
       for {
@@ -91,39 +102,61 @@ object Metrics {
         goodCount         <- refs.goodCount.getAndSet(0)
         failedInsertCount <- refs.failedInsertCount.getAndSet(0)
         badCount          <- refs.badCount.getAndSet(0)
+        typesCount        <- refs.typesCount.getAndSet(0)
         uninsertableCount <- refs.uninsertableCount.getAndSet(0)
       } yield app match {
-        case ReportingApp.StreamLoader => LoaderMetricsSnapshot(maybeLatency, goodCount, failedInsertCount, badCount)
+        case ReportingApp.StreamLoader => LoaderMetricsSnapshot(maybeLatency, goodCount, failedInsertCount, badCount, typesCount)
         case ReportingApp.Repeater     => RepeaterMetricsSnapshot(uninsertableCount)
       }
   }
 
-  def build[F[_]: ContextShift: ConcurrentEffect: Timer](
+  def build[F[_]: ContextShift: ConcurrentEffect: Timer: Logger](
     blocker: Blocker,
-    monitoringConfig: Option[Statsd],
+    monitoringConfig: Monitoring,
     app: ReportingApp
   ): F[Metrics[F]] =
     monitoringConfig match {
-      case None => noop[F].pure[F]
-      case Some(statsd) =>
-        MetricsRefs.init[F].map { refs =>
+      case Monitoring(None, None, _) => noop[F].pure[F]
+      case Monitoring(statsd, stdout, _)=>
+        (MetricsRefs.init[F], MetricsRefs.init[F]).mapN { (statsdRefs, stdoutRefs) =>
           new Metrics[F] {
-            def report: Stream[F, Unit] =
-              reporterStream(StatsDReporter.make[F](blocker, monitoringConfig), refs, statsd.period, app)
+            def report: Stream[F, Unit] = {
+              val rep1 = statsd
+                .map { config =>
+                  reporterStream(StatsDReporter.make[F](blocker, config), statsdRefs, config.period, app)
+                }
+                .getOrElse(Stream.never[F])
+
+              val rep2 = stdout
+                .map { config =>
+                  reporterStream(StdoutReporter.make[F](config), stdoutRefs, config.period, app)
+                }
+                .getOrElse(Stream.never[F])
+
+              rep1.concurrently(rep2)
+            }
 
             def latency(collectorTstamp: Long): F[Unit] =
               for {
                 now <- Clock[F].realTime(MILLISECONDS)
-                _   <- refs.latency.set(Some(now - collectorTstamp))
+                _   <- statsdRefs.latency.set(Some(now - collectorTstamp))
+                _   <- stdoutRefs.latency.set(Some(now - collectorTstamp))
               } yield ()
 
-            def goodCount(n: Int): F[Unit] = refs.goodCount.update(_ + n)
+            def goodCount(n: Int): F[Unit] =
+              statsdRefs.goodCount.update(_ + n) *> stdoutRefs.goodCount.update(_ + n)
 
-            def failedInsertCount(n: Int): F[Unit] = refs.failedInsertCount.update(_ + n)
+            def failedInsertCount(n: Int): F[Unit] =
+              statsdRefs.failedInsertCount.update(_ + n) *> stdoutRefs.failedInsertCount.update(_ + n)
 
-            def badCount: F[Unit] = refs.badCount.update(_ + 1)
+            def badCount: F[Unit] =
+              statsdRefs.badCount.update(_ + 1) *> stdoutRefs.badCount.update(_ + 1)
 
-            def uninsertableCount(n: Int): F[Unit] = refs.uninsertableCount.update(_ + n)
+            def typesCount(n: Int): F[Unit] =
+              statsdRefs.typesCount.update(_ + n) *> stdoutRefs.typesCount.update(_ + n)
+
+            def uninsertableCount(n: Int): F[Unit] =
+              statsdRefs.uninsertableCount.update(_ + n) *> stdoutRefs.uninsertableCount.update(_ + n)
           }
         }
     }
@@ -135,6 +168,7 @@ object Metrics {
       def goodCount(n: Int): F[Unit]              = Applicative[F].unit
       def failedInsertCount(n: Int): F[Unit]      = Applicative[F].unit
       def badCount: F[Unit]                       = Applicative[F].unit
+      def typesCount(n: Int): F[Unit]             = Applicative[F].unit
       def uninsertableCount(n: Int): F[Unit]      = Applicative[F].unit
     }
 
@@ -150,4 +184,7 @@ object Metrics {
       snapshot <- Stream.eval(MetricsRefs.snapshot(metrics, app))
       _        <- Stream.eval(rep.report(snapshot))
     } yield ()
+
+  def normalizeMetric(prefix: Option[String], metric: String): String =
+    s"${prefix.getOrElse(DefaultPrefix).stripSuffix(".")}.$metric".stripPrefix(".")
 }

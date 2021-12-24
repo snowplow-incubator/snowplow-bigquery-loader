@@ -14,10 +14,16 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import cats.effect._
 
+import io.chrisdavenport.log4cats.Logger
+import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+
 object Main extends IOApp {
+
+  implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
+
   override def run(args: List[String]): IO[ExitCode] =
     StreamLoaderCli.parse(args) match {
-      case Right(env) => StreamLoader.run(env).as(ExitCode.Success)
-      case Left(help) => IO.delay(System.err.println(help.toString)).as(ExitCode.Error)
+      case Right(env) => StreamLoader.run(env)
+      case Left(help) => unsafeLogger.error(help.toString).as(ExitCode.Error)
     }
 }

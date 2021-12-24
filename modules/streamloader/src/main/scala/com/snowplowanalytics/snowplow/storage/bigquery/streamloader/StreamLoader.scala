@@ -14,10 +14,11 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
+import io.chrisdavenport.log4cats.Logger
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
 
-import cats.effect.{Clock, Concurrent, ContextShift, IO, Timer}
+import cats.effect._
 import cats.implicits._
 
 object StreamLoader {
@@ -37,7 +38,7 @@ object StreamLoader {
 
   type Parsed = Either[StreamBadRow[IO], StreamLoaderRow[IO]]
 
-  def run(e: LoaderEnvironment)(implicit CS: ContextShift[IO], C: Concurrent[IO], T: Timer[IO]): IO[Unit] =
+  def run(e: LoaderEnvironment)(implicit CS: ContextShift[IO], C: Concurrent[IO], T: Timer[IO], logger: Logger[IO]): IO[ExitCode] =
     Resources.acquire(e).use { resources =>
       val eventStream = resources.source.evalMap(parse(resources.igluClient.resolver))
 
@@ -48,7 +49,13 @@ object StreamLoader {
 
       val metrics = resources.metrics.report
 
-      load.merge(metrics).compile.drain
+      logger.info(s"BQ Stream Loader ${generated.BuildInfo.version} has started. Listening ${e.config.input.subscription}") *>
+        load.merge(metrics).compile.drain.attempt.flatMap {
+          case Right(_) =>
+            logger.info("Application shutting down") >> IO.pure(ExitCode.Success)
+          case Left(e) =>
+            logger.error(e)(s"Application shutting down with error") *> IO.raiseError(e) >> IO.pure(ExitCode.Error)
+        }
     }
 
   /** Parse a PubSub message into a `LoaderRow` (or `BadRow`) and attach `ack` action to be used after sink. */

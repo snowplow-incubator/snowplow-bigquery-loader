@@ -136,13 +136,13 @@
         # "worker": ${HOST}
       }
       # Reporting period with time unit
-      "period": "1 sec"
+      "period": "10 min"
       # Optional
       "prefix": "snowplow.monitoring"
     }
     "stdout": {
       # Reporting period with time unit
-      "period": "1 sec"
+      "period": "10 min"
       # Optional
       "prefix": "snowplow.monitoring"
     }

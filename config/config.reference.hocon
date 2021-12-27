@@ -146,6 +146,10 @@
       # Optional
       "prefix": "snowplow.monitoring"
     }
+    # For tracking runtime exceptions
+    "sentry": {
+      "dsn": "http://sentry.acme.com"
+    }
 
     # For Loader deployments
     # "dropwizard": {

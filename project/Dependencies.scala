@@ -26,6 +26,7 @@ object Dependencies {
     val metrics             = "4.1.25"
     val slf4j               = "1.7.32"
     val gson                = "2.8.9"   // Override transitive dependency of scio
+    val sentry              = "1.7.30"
 
     // Override provided versions to fix security vulnerabilities
     val nettyCodec     = "4.1.68.Final"
@@ -80,6 +81,7 @@ object Dependencies {
   val fastjson        = "com.alibaba"             % "fastjson"                                % V.fastjson
   val googleOauth     = "com.google.oauth-client" % "google-oauth-client"                     % V.googleOauth
   val gson            = "com.google.code.gson"    % "gson"                                    % V.gson
+  val sentry          = "io.sentry"               % "sentry"                                  % V.sentry
 
   // Scala third-party
   val cats          = "org.typelevel"     %% "cats-core"                % V.cats

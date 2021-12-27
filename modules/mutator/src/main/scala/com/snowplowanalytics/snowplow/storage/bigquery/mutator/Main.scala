@@ -12,13 +12,20 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
+import io.chrisdavenport.log4cats.Logger
+import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.MutatorCli.MutatorCommand
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Sentry
 
 import cats.effect.{ExitCode, IO, IOApp}
+import cats.implicits._
 
 object Main extends IOApp {
   private val MaxConcurrency = 4
+
+  implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
 
   def sink(mutator: Mutator): fs2.Pipe[IO, List[ShreddedType], Unit] =
     _.parEvalMap(MaxConcurrency)(items => mutator.updateTable(items))
@@ -26,16 +33,25 @@ object Main extends IOApp {
   def run(args: List[String]): IO[ExitCode] =
     MutatorCli.parse(args) match {
       case Right(c: MutatorCommand.Listen) =>
-        val appStream = for {
-          env     <- IO.delay(c.env).stream
-          mutator <- Mutator.initialize(env, c.verbose).map(_.fold(e => throw new RuntimeException(e), identity)).stream
-          queue   <- TypeReceiver.initQueue(512).stream
-          _       <- TypeReceiver.startSubscription(env, TypeReceiver(queue, c.verbose)).stream
-          _       <- IO(println(s"Mutator is listening ${env.config.input.subscription} PubSub subscription")).stream
-          _       <- queue.dequeue.through(sink(mutator))
-        } yield ()
+        Sentry.init[IO](c.env.monitoring.sentry).use { sentry =>
+          val appStream = for {
+            env     <- IO.delay(c.env).stream
+            mutator <- Mutator.initialize(env, c.verbose).map(_.fold(e => throw new RuntimeException(e), identity)).stream
+            queue   <- TypeReceiver.initQueue(512).stream
+            _       <- TypeReceiver.startSubscription(env, TypeReceiver(queue, c.verbose)).stream
+            _       <- IO(println(s"Mutator is listening ${env.config.input.subscription} PubSub subscription")).stream
+            _       <- queue.dequeue.through(sink(mutator))
+          } yield ()
 
-        appStream.compile.drain.as(ExitCode.Success)
+          appStream.compile.drain.attempt.flatMap {
+            case Right(_) =>
+              unsafeLogger.info("Application shutting down") >> IO.pure(ExitCode.Success)
+            case Left(err) =>
+              unsafeLogger.error(err)("Application shutting down with error") *>
+              sentry.trackException(err) >>
+              IO.pure(ExitCode.Error)
+          }
+        }
 
       case Right(c: MutatorCommand.Create) =>
         for {

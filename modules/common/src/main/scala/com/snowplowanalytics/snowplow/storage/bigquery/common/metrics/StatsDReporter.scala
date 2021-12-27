@@ -91,8 +91,7 @@ object StatsDReporter {
       ) ++ lms.latency.map(l => LatencyGaugeName -> l.toString)
     case rms: RepeaterMetricsSnapshot =>
       List(
-        UninsertableName -> rms.uninsertableCount.toString,
-        RepeaterInsertedName -> rms.insertedCount.toString
+        UninsertableName -> rms.uninsertableCount.toString
       )
   }
 

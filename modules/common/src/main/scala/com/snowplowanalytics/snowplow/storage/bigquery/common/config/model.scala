@@ -12,6 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common.config
 
+import java.net.URI
+
 import cats.implicits.toFunctorOps
 import cats.syntax.either._
 import io.circe.{Decoder, Encoder}
@@ -158,7 +160,7 @@ object model {
       deriveDecoder[SinkSettings.FailedInserts]
   }
 
-  final case class Monitoring(statsd: Option[Monitoring.Statsd], stdout: Option[Monitoring.Stdout], dropwizard: Option[Monitoring.Dropwizard])
+  final case class Monitoring(statsd: Option[Monitoring.Statsd], stdout: Option[Monitoring.Stdout], sentry: Option[Monitoring.Sentry], dropwizard: Option[Monitoring.Dropwizard])
   object Monitoring {
     final case class Statsd(
       hostname: String,
@@ -168,6 +170,7 @@ object model {
       prefix: Option[String]
     )
     final case class Stdout(period: FiniteDuration, prefix: Option[String])
+    final case class Sentry(dsn: URI)
     final case class Dropwizard(period: FiniteDuration)
 
     implicit val monitoringEncoder: Encoder[Monitoring] = deriveEncoder[Monitoring]
@@ -179,8 +182,16 @@ object model {
     implicit val monitoringStdoutEncoder: Encoder[Stdout] = deriveEncoder[Stdout]
     implicit val monitoringStdoutDecoder: Decoder[Stdout] = deriveDecoder[Stdout]
 
+    implicit val monitoringSentryEncoder: Encoder[Sentry] = deriveEncoder[Sentry]
+    implicit val monitoringSentryDecoder: Decoder[Sentry] = deriveDecoder[Sentry]
+
     implicit val monitoringDropwizardEncoder: Encoder[Dropwizard] = deriveEncoder[Dropwizard]
     implicit val monitoringDropwizardDecoder: Decoder[Dropwizard] = deriveDecoder[Dropwizard]
+
+    implicit val uriDecoder: Decoder[URI] =
+      Decoder[String].emap(s => Either.catchOnly[IllegalArgumentException](URI.create(s)).leftMap(_.toString))
+    implicit val uriEncoder: Encoder[URI] =
+      Encoder[String].contramap(_.toString)
   }
 
   implicit val finiteDurationEncoder: Encoder[FiniteDuration] =

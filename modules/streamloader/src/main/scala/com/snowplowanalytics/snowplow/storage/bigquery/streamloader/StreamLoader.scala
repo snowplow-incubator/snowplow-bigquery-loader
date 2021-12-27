@@ -54,7 +54,9 @@ object StreamLoader {
           case Right(_) =>
             logger.info("Application shutting down") >> IO.pure(ExitCode.Success)
           case Left(e) =>
-            logger.error(e)(s"Application shutting down with error") *> IO.raiseError(e) >> IO.pure(ExitCode.Error)
+            logger.error(e)(s"Application shutting down with error") *>
+              resources.sentry.trackException(e) >>
+              IO.pure(ExitCode.Error)
         }
     }
 

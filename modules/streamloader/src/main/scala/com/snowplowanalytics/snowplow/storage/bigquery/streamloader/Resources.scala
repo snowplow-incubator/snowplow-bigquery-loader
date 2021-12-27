@@ -22,6 +22,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Moni
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.{StreamBadRow, StreamLoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Sentry
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.FailedInsert
 
 import cats.Applicative
@@ -45,7 +46,8 @@ final class Resources[F[_]](
   val igluClient: Client[F, Json],
   val badSink: Pipe[F, StreamBadRow[F], Unit],
   val goodSink: Pipe[F, StreamLoaderRow[F], Unit],
-  val metrics: Metrics[F]
+  val metrics: Metrics[F],
+  val sentry: Sentry[F]
 )
 
 object Resources {
@@ -82,8 +84,9 @@ object Resources {
       )
       queue          <- Resource.eval(Queue.bounded[F, StreamLoaderRow[F]](env.config.sinkSettings.good.bqWriteRequestOverflowQueueMaxSize))
       badSink        <- mkBadSink[F](env.projectId, env.config.output.bad.topic, env.config.sinkSettings.bad.sinkConcurrency, metrics, env.config.sinkSettings.bad)
+      sentry         <- Sentry.init(env.monitoring.sentry)
       goodSink       = mkGoodSink[F](blocker, env.config.output.good, bigquery, failedInserts, metrics, types, queue, env.config.sinkSettings.good, env.config.sinkSettings.types)
-    } yield new Resources[F](source, igluClient, badSink, goodSink, metrics)
+    } yield new Resources[F](source, igluClient, badSink, goodSink, metrics, sentry)
     // format: on
   }
 

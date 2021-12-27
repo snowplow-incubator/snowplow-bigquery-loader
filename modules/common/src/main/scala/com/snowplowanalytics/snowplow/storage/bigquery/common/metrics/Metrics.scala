@@ -122,8 +122,8 @@ object Metrics {
     app: ReportingApp
   ): F[Metrics[F]] =
     monitoringConfig match {
-      case Monitoring(None, None, _) => noop[F].pure[F]
-      case Monitoring(statsd, stdout, _)=>
+      case Monitoring(None, None, _, _) => noop[F].pure[F]
+      case Monitoring(statsd, stdout, _, _)=>
         (MetricsRefs.init[F], MetricsRefs.init[F]).mapN { (statsdRefs, stdoutRefs) =>
           new Metrics[F] {
             def report: Stream[F, Unit] = {

@@ -17,6 +17,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.E
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp
+import com.snowplowanalytics.snowplow.storage.bigquery.common.Sentry
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.{GcsPath, validateBucket}
 
 import cats.Show
@@ -58,7 +59,8 @@ final class Resources[F[_]: Sync](
   val concurrency: Int,
   val insertBlocker: Blocker,
   val jobStartTime: Instant,
-  val metrics: Metrics[F]
+  val metrics: Metrics[F],
+  val sentry: Sentry[F]
 )
 
 object Resources {
@@ -69,7 +71,7 @@ object Resources {
     cmd: RepeaterCli.ListenCommand
   ): Resource[F, Resources[F]] = {
     // It's a function because blocker needs to be created as Resource
-    val initResources: F[Blocker => F[Resources[F]]] = for {
+    val initResources: F[(Blocker, Sentry[F]) => F[Resources[F]]] = for {
       env      <- Sync[F].delay(cmd.env)
       bigQuery <- services.Database.getClient[F]
       bucket <- Sync[F].fromEither(
@@ -85,7 +87,7 @@ object Resources {
         s"Initializing Repeater from ${env.config.input.subscription} to ${env.config.output.good} with $concurrency streams"
       )
       jobStartTime <- Sync[F].delay(Instant.now())
-    } yield (b: Blocker) =>
+    } yield (b: Blocker, sentry: Sentry[F]) =>
       mkMetricsReporter[F](b, env.monitoring).map(m =>
         new Resources[F](
           bigQuery,
@@ -100,14 +102,16 @@ object Resources {
           concurrency,
           b,
           jobStartTime,
-          m
+          m,
+          sentry
         )
       )
 
     val createBlocker = Sync[F].delay(Executors.newCachedThreadPool()).map(ExecutionContext.fromExecutorService)
     for {
       blocker   <- Resource.make(createBlocker)(ec => Sync[F].delay(ec.shutdown())).map(Blocker.liftExecutionContext)
-      resources <- Resource.make(initResources.flatMap(init => init.apply(blocker)))(release[F])
+      sentry    <- Sentry.init(cmd.env.monitoring.sentry)
+      resources <- Resource.make(initResources.flatMap(init => init.apply(blocker, sentry)))(release[F])
     } yield resources
   }
 

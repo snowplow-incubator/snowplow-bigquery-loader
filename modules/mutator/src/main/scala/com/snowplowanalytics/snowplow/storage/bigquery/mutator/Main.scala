@@ -39,7 +39,7 @@ object Main extends IOApp {
             mutator <- Mutator.initialize(env, c.verbose).map(_.fold(e => throw new RuntimeException(e), identity)).stream
             queue   <- TypeReceiver.initQueue(512).stream
             _       <- TypeReceiver.startSubscription(env, TypeReceiver(queue, c.verbose)).stream
-            _       <- IO(println(s"Mutator is listening ${env.config.input.subscription} PubSub subscription")).stream
+            _       <- unsafeLogger.info(s"Mutator is listening ${env.config.input.subscription} PubSub subscription").stream
             _       <- queue.dequeue.through(sink(mutator))
           } yield ()
 
@@ -67,6 +67,6 @@ object Main extends IOApp {
         } yield ExitCode.Success
 
       case Left(help) =>
-        IO(System.err.println(help.toString)).as(ExitCode.Error)
+        unsafeLogger.error(help.toString).as(ExitCode.Error)
     }
 }

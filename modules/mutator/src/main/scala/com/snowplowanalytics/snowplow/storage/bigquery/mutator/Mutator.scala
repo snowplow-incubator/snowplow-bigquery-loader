@@ -30,7 +30,8 @@ import cats.implicits._
 import com.google.cloud.bigquery.Field
 import io.circe.Json
 
-import java.time.Instant
+import org.typelevel.log4cats.Logger
+
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
@@ -50,11 +51,11 @@ class Mutator private (
 ) {
 
   /** Add all new columns to a table */
-  def updateTable(inventoryItems: List[Data.ShreddedType])(implicit t: Timer[IO], cs: ContextShift[IO]): IO[Unit] =
+  def updateTable(inventoryItems: List[Data.ShreddedType])(implicit t: Timer[IO], cs: ContextShift[IO], logger: Logger[IO]): IO[Unit] =
     // format: off
     for {
       _ <- if (verbose)
-      { log(s"Received ${inventoryItems.map(x => s"${x.shredProperty} ${x.schemaKey.toSchemaUri}").mkString(", ")}") }
+      { logger.info(s"Received ${inventoryItems.map(x => s"${x.shredProperty} ${x.schemaKey.toSchemaUri}").mkString(", ")}") }
       else { IO.unit }
       MutatorState(fields, _) <- state.read
       existingColumns = fields.map(_.getName)
@@ -62,28 +63,28 @@ class Mutator private (
       _           <- fieldsToAdd.traverse_(item => addField(item).recoverWith(logAddItem(item))).timeout(30.seconds)
       latestState <- state.take
       _           <- state.put(latestState.increment)
-      _ <- if (latestState.received % 100 == 0) { log(latestState) } else { IO.unit }
+      _ <- if (latestState.received % 100 == 0) { logState(latestState) } else { IO.unit }
     } yield ()
   // format: on
 
   /** Perform ALTER TABLE */
-  def addField(inventoryItem: ShreddedType)(implicit t: Timer[IO], cs: ContextShift[IO]): IO[Unit] =
+  def addField(inventoryItem: ShreddedType)(implicit t: Timer[IO], cs: ContextShift[IO], logger: Logger[IO]): IO[Unit] =
     for {
       schema <- getSchema(inventoryItem.schemaKey)
       field = getField(inventoryItem, schema)
       _  <- tableReference.addField(field)
       st <- state.take
       _  <- state.put(st.add(field))
-      _  <- log(s"Added ${field.getName}")
+      _  <- logger.info(s"Added ${field.getName}")
     } yield ()
 
   /** Add only one field to table */
-  def addField(field: DdlField): IO[Unit] =
+  def addField(field: DdlField)(implicit logger: Logger[IO]): IO[Unit] =
     for {
       fields <- tableReference.getFields
       contains = fields.exists(_.getName == field.name)
       addFieldOps = tableReference.addField(Adapter.adaptField(field))
-      _ <- if (contains) log(s"${field.name} already exists") else addFieldOps *> log(s"Added ${field.name}")
+      _ <- if (contains) logger.info(s"${field.name} already exists") else addFieldOps *> logger.info(s"Added ${field.name}")
     } yield ()
 
   /** Transform Iglu Schema into valid BigQuery field */
@@ -99,37 +100,30 @@ class Mutator private (
   }
 
   /** Receive the JSON Schema from the Iglu registry */
-  def getSchema(key: SchemaKey)(implicit t: Timer[IO], cs: ContextShift[IO]): IO[Schema] = {
+  def getSchema(key: SchemaKey)(implicit t: Timer[IO], cs: ContextShift[IO], logger: Logger[IO]): IO[Schema] = {
     val action = for {
       response <- EitherT(igluClient.resolver.lookupSchema(key).timeout(10.seconds)).leftMap(fetchError)
-      _        <- EitherT.liftF(log(s"Received $response from Iglu registry"))
+      _        <- EitherT.liftF(logger.info(s"Received $response from Iglu registry"))
       schema   <- EitherT.fromOption[IO](Schema.parse(response), invalidSchema(key))
     } yield schema
 
     action.value.flatMap(IO.fromEither)
   }
 
-  private def log(message: String): IO[Unit] =
-    IO(println(s"Mutator ${Instant.now()}: $message"))
-
-  private def log(mutatorState: MutatorState): IO[Unit] =
+  private def logState(mutatorState: MutatorState)(implicit logger: Logger[IO]): IO[Unit] =
     if (mutatorState.received == Long.MaxValue - 2) {
-      log(
+      logger.info(
         s"received ${mutatorState.received} records, resetting counted; known fields are ${mutatorState.fields.map(_.getName).mkString(", ")}"
       )
     } else {
-      log(
+      logger.info(
         s"received ${mutatorState.received} records; known fields are ${mutatorState.fields.map(_.getName).mkString(", ")}"
       )
     }
 
-  private def logAddItem(item: Data.ShreddedType): PartialFunction[Throwable, IO[Unit]] = {
+  private def logAddItem(item: Data.ShreddedType)(implicit logger: Logger[IO]): PartialFunction[Throwable, IO[Unit]] = {
     case NonFatal(error) =>
-      IO {
-        System.err.println(s"Failed to add ${item.schemaKey.toSchemaUri} as ${item.shredProperty.name}")
-        error.printStackTrace()
-        System.out.println("Continuing...")
-      }
+      logger.error(error)(s"Failed to add ${item.schemaKey.toSchemaUri} as ${item.shredProperty.name}")
   }
 }
 
@@ -147,7 +141,7 @@ object Mutator {
   def filterFields(existingColumns: Vector[String], newItems: List[ShreddedType]): List[ShreddedType] =
     newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
 
-  def initialize(env: MutatorEnvironment, verbose: Boolean)(implicit c: Concurrent[IO]): IO[Either[String, Mutator]] = {
+  def initialize(env: MutatorEnvironment, verbose: Boolean)(implicit c: Concurrent[IO], logger: Logger[IO]): IO[Either[String, Mutator]] = {
     val mutatorIO: IO[Either[String, Mutator]] = for {
       bqClient <- TableReference.BigQueryTable.getClient
       table = new TableReference.BigQueryTable(

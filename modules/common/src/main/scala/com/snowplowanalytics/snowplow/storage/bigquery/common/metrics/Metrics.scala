@@ -20,7 +20,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2.Stream
 
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 

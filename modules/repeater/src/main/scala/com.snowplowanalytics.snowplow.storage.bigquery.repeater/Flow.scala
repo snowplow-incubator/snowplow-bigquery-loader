@@ -23,7 +23,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.cloud.bigquery._
 import fs2.{Chunk, Stream}
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import org.joda.time.DateTime
 
 import scala.concurrent.duration._

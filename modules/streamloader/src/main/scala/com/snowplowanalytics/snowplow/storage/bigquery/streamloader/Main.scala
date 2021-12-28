@@ -14,8 +14,8 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import cats.effect._
 
-import io.chrisdavenport.log4cats.Logger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 object Main extends IOApp {
 

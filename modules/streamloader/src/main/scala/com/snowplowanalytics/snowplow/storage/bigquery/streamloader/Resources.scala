@@ -36,7 +36,7 @@ import fs2.{Pipe, Stream}
 import fs2.concurrent.Queue
 import io.circe.Json
 
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._

@@ -41,7 +41,7 @@ object Dependencies {
     val decline    = "1.4.0"
     val fs2        = "2.5.9"
     val httpClient = "0.22.5"
-    val logging    = "1.1.1"
+    val logging    = "1.4.0"
     val pubsubFs2   = "0.18.0"
     val scio        = "0.11.1"
     val circeConfig = "0.8.0"
@@ -93,7 +93,7 @@ object Dependencies {
   val decline       = "com.monovore"      %% "decline"                  % V.decline
   val fs2           = "co.fs2"            %% "fs2-core"                 % V.fs2
   val httpClient    = "org.http4s"        %% "http4s-async-http-client" % V.httpClient
-  val logging       = "io.chrisdavenport" %% "log4cats-slf4j"           % V.logging
+  val logging       = "org.typelevel"     %% "log4cats-slf4j"           % V.logging
   val pubsubFs2Grpc = "com.permutive"     %% "fs2-google-pubsub-grpc"   % V.pubsubFs2
   val scioCore      = "com.spotify"       %% "scio-core"                % V.scio
   val scioRepl      = "com.spotify"       %% "scio-repl"                % V.scio

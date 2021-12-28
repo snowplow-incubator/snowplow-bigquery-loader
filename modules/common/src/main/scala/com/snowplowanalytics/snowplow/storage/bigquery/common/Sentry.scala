@@ -16,7 +16,7 @@ import cats.effect.{Resource, Sync}
 
 import io.sentry.{Sentry => RSentry, SentryOptions}
 
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring
 

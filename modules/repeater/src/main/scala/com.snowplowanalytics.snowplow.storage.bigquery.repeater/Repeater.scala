@@ -17,8 +17,8 @@ import com.snowplowanalytics.snowplow.badrows.Processor
 import cats.effect._
 import cats.syntax.all._
 import fs2.Stream
-import io.chrisdavenport.log4cats.Logger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 object Repeater extends SafeIOApp {
   private val StreamConcurrency = 3

@@ -19,7 +19,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.cloud.storage.{BlobInfo, StorageOptions}
 import fs2.{Chunk, Stream, text}
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.format.DateTimeFormat
 

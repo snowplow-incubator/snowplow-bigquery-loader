@@ -14,7 +14,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
 

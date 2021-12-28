@@ -91,7 +91,7 @@ object Resources {
   }
 
   /** Construct a PubSub producer. */
-  private def mkProducer[F[_]: Async, A: MessageEncoder](
+  private def mkProducer[F[_]: Async: Logger, A: MessageEncoder](
     projectId: String,
     topic: String,
     batchSize: Long,
@@ -103,14 +103,14 @@ object Resources {
       config = PubsubProducerConfig[F](
         batchSize         = batchSize,
         delayThreshold    = delay,
-        onFailedTerminate = e => Sync[F].delay(println(s"Got error $e")).void
+        onFailedTerminate = e => Logger[F].error(e)(s"Error in PubSub producer")
       )
     )
 
   // TODO: Can failed inserts be given their own sink like bad rows and types?
 
   // Acks the event after processing it as a `BadRow`
-  private def mkBadSink[F[_]: Concurrent](
+  private def mkBadSink[F[_]: Concurrent: Logger](
     projectId: String,
     topic: String,
     maxConcurrency: Int,
@@ -129,7 +129,7 @@ object Resources {
     }
 
   // Does not ack the event -- it still needs to end up in one of the other targets
-  private def mkTypeSink[F[_]: Concurrent](
+  private def mkTypeSink[F[_]: Concurrent: Logger](
     projectId: String,
     topic: String,
     sinkSettingsTypes: SinkSettings.Types,

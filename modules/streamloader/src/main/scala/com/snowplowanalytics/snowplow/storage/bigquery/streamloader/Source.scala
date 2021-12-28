@@ -14,13 +14,15 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.ConsumerSettings
 
+import org.typelevel.log4cats.Logger
+
 import cats.effect.{Blocker, Concurrent, ContextShift, Sync}
 import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
 import com.permutive.pubsub.consumer.Model
 import fs2.Stream
 
 object Source {
-  def getStream[F[_]: Concurrent: ContextShift](
+  def getStream[F[_]: Concurrent: ContextShift: Logger](
     projectId: String,
     subscription: String,
     blocker: Blocker,
@@ -30,7 +32,7 @@ object Source {
       blocker,
       Model.ProjectId(projectId),
       Model.Subscription(subscription),
-      (msg, err, _, _) => Sync[F].delay(System.err.println(s"Msg $msg got error $err")),
+      (msg, err, _, _) => Logger[F].error(err)(s"Error from PubSub message $msg"),
       config = PubsubGoogleConsumerConfig(
         cs.maxQueueSize,
         cs.parallelPullCount,

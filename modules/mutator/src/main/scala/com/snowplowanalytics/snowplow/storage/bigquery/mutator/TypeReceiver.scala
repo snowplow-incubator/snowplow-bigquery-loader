@@ -28,49 +28,59 @@ import fs2.concurrent.Queue
 import io.circe.{Decoder, DecodingFailure, Error, Json}
 import io.circe.jawn.parse
 
+import org.typelevel.log4cats.Logger
+
 import java.util.concurrent.TimeUnit
 
 /**
   * PubSub consumer, listening for shredded types and
   * enqueing them into common type queue
   */
-class TypeReceiver(queue: Queue[IO, List[ShreddedType]], verbose: Boolean) extends MessageReceiver {
+class TypeReceiver(queue: Queue[IO, List[ShreddedType]], verbose: Boolean)(implicit logger: Logger[IO]) extends MessageReceiver {
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
-    val items: Either[Error, List[ShreddedType]] = for {
-      json          <- parse(message.getData.toStringUtf8)
-      invetoryItems <- TypeReceiver.decodeItems(json)
-    } yield invetoryItems
-
-    if (verbose) {
-      log(message.getData.toStringUtf8)
+    val loggingF: IO[Unit] = if (verbose) {
+      logger.info(message.getData.toStringUtf8)
+    } else {
+      IO.unit
     }
 
-    items match {
+    val itemsF: IO[Either[Error, List[ShreddedType]]] = IO.delay {
+      for {
+        json <- parse(message.getData.toStringUtf8)
+        invetoryItems <- TypeReceiver.decodeItems(json)
+      } yield invetoryItems
+    }
+
+    val dequeueF: Either[Error, List[ShreddedType]] => IO[Unit] = {
       case Right(Nil) =>
-        consumer.ack()
+        IO.delay(consumer.ack())
       case Right(inventoryItems) =>
         queue
           .enqueue1(inventoryItems)
           .runAsync { callback =>
             notificationCallback(consumer)(callback)
-          }
-          .unsafeRunSync()
-      case Left(_) =>
-        notificationCallback(consumer)(items).unsafeRunSync()
+          }.toIO
+      case i@Left(_) =>
+        notificationCallback(consumer)(i)
     }
-  }
 
-  private def log(message: String): Unit =
-    println(s"TypeReceiver ${java.time.Instant.now()}: $message")
+    val io: IO[Unit] = for {
+      _ <- loggingF
+      items <- itemsF
+      _ <- dequeueF(items)
+    } yield ()
+
+    io.unsafeRunSync()
+  }
 
   private def notificationCallback(consumer: AckReplyConsumer)(either: Either[Throwable, _]): IO[Unit] =
     either match {
       case Right(_) =>
         IO(consumer.ack())
       case Left(error: Error) =>
-        IO(consumer.ack()) *> IO(System.err.println(error.show))
+        IO(consumer.ack()) *> logger.error(error.show)
       case Left(queueError) =>
-        IO(consumer.ack()) *> IO(System.err.println(queueError.getMessage))
+        IO(consumer.ack()) *> logger.error(queueError.getMessage)
     }
 }
 
@@ -99,7 +109,7 @@ object TypeReceiver {
   def initQueue(size: Int)(implicit cs: ContextShift[IO]): IO[Queue[IO, List[ShreddedType]]] =
     Queue.bounded[IO, List[ShreddedType]](size)
 
-  def apply(queue: Queue[IO, List[ShreddedType]], verbose: Boolean): TypeReceiver =
+  def apply(queue: Queue[IO, List[ShreddedType]], verbose: Boolean)(implicit logger: Logger[IO]): TypeReceiver =
     new TypeReceiver(queue, verbose)
 
   def startSubscription(env: MutatorEnvironment, listener: TypeReceiver): IO[Unit] =

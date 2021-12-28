@@ -21,7 +21,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.Me
 
 import cats.effect.{Blocker, ContextShift, Resource, Sync, Timer}
 import cats.implicits._
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.Logger
 
 import java.net.{DatagramPacket, DatagramSocket, InetAddress}
 import java.nio.charset.StandardCharsets.UTF_8
@@ -41,7 +41,7 @@ object StatsDReporter {
   private val RepeaterInsertedName  = "repeater_inserted"
 
   /** A reporter which sends metrics from the registry to the StatsD server. */
-  def make[F[_]: Sync: ContextShift: Timer](
+  def make[F[_]: Sync: ContextShift: Timer: Logger](
     blocker: Blocker,
     config: Statsd
   ): Resource[F, Metrics.Reporter[F]] =
@@ -57,7 +57,7 @@ object StatsDReporter {
     * so there could be a delay in following a DNS record change.  For the Docker image we release
     * the cache time is 30 seconds.
     */
-  private def impl[F[_]: Sync: ContextShift: Timer](
+  private def impl[F[_]: Sync: ContextShift: Timer: Logger](
     blocker: Blocker,
     monitoringConfig: Statsd,
     socket: DatagramSocket
@@ -70,10 +70,7 @@ object StatsDReporter {
             sendMetric[F](blocker, socket, inetAddr, monitoringConfig.port)
           )
         } yield ()).handleErrorWith { t =>
-          for {
-            logger <- Slf4jLogger.create[F]
-            _      <- Sync[F].delay(logger.error(t)("Caught exception sending metrics"))
-          } yield ()
+          Logger[F].error(t)("Caught exception sending metrics")
         }
     }
 

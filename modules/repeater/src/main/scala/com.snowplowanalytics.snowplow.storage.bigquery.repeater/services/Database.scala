@@ -18,7 +18,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer,
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.cloud.bigquery.{Option => _, _}
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import io.circe.syntax._
 
 import scala.jdk.CollectionConverters._

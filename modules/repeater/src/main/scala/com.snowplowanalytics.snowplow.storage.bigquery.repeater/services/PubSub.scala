@@ -22,7 +22,7 @@ import com.permutive.pubsub.consumer.{ConsumerRecord, Model}
 import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
 import fs2.concurrent.Queue
 import fs2.Stream
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 
 /** Module responsible for reading Pub/Sub */
 object PubSub {

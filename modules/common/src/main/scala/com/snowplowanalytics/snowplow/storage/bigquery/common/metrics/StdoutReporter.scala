@@ -31,7 +31,7 @@ object StdoutReporter {
             val goodSection = s"GoodEvent = ${lms.goodCount}"
             val failedInsertSection = s"FailedInsert = ${lms.failedInsertCount}"
             val badEventSection = s"BadEvent = ${lms.badCount}"
-            val typeSection = s"TypeMessages = ${lms.typesCount}"
+            val typeSection = s"Types = ${lms.typesCount}"
             Logger[F].info(s"$logStart, $totalSection, $goodSection, $failedInsertSection, $badEventSection, $typeSection")
           case rms: Metrics.MetricsSnapshot.RepeaterMetricsSnapshot =>
             val logStart = s"${Metrics.normalizeMetric(config.prefix, "Statistics")} = ${config.period}"

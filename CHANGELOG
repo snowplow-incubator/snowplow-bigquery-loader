@@ -1,3 +1,15 @@
+Version 1.1.0 (2022-01-11)
+--------------------------
+Implement new metrics reporter for stdout (#238)
+Repeater: move statistics logs under metrics (#239)
+Stream Loader: integrate Sentry (#240)
+Repeater: integrate Sentry (#241)
+Mutator: integrate Sentry (#242)
+Bump log4cats to 1.4.0 (#246)
+Mutator: use logger instead of println (#244)
+Stream Loader: use logger instead of println (#245)
+Extend copyright to 2022 (#243)
+
 Version 1.0.2 (2021-12-17)
 --------------------------
 Bump scio to 0.11.1 and beam to 2.33.0 (#232)

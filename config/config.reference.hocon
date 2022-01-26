@@ -89,6 +89,15 @@
         "producerDelayThreshold": "2 seconds"
       }
     }
+
+    # For recommended initial and max delay values, see https://cloud.google.com/bigquery/sla (Definition of "Back-off Requirements")
+    "retrySettings": {
+        "type": "BigQueryRetrySettings"
+        "initialDelay": 1 # secs
+        "delayMultiplier": 1.5
+        "maxDelay": 32 # secs
+        "totalTimeout": 5 # 5 mins gives us 30 attempts with 1 sec initial delay and 1.5 multiplier
+    }
   }
 
   "mutator": {

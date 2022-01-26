@@ -19,9 +19,11 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 import cats.effect.{Blocker, ContextShift, Sync}
 import cats.implicits._
 import com.google.api.client.json.gson.GsonFactory
+import com.google.api.gax.retrying.RetrySettings
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, InsertAllResponse, TableId}
 import com.google.cloud.bigquery.InsertAllRequest.RowToInsert
 import com.permutive.pubsub.producer.PubsubProducer
+import org.threeten.bp.Duration
 
 import scala.jdk.CollectionConverters.IterableHasAsJava
 
@@ -65,8 +67,17 @@ object Bigquery {
     blocker.delay(bigQuery.insertAll(request))
   }
 
-  def getClient[F[_]: Sync]: F[BigQuery] =
-    Sync[F].delay(BigQueryOptions.getDefaultInstance.getService)
+  def getClient[F[_]: Sync]: F[BigQuery] = {
+    val retrySettings =
+      RetrySettings
+        .newBuilder()
+        .setMaxAttempts(10)
+        .setRetryDelayMultiplier(1.5)
+        .setTotalTimeout(Duration.ofMinutes(5))
+        .build
+
+    Sync[F].delay(BigQueryOptions.newBuilder.setRetrySettings(retrySettings).build.getService)
+  }
 
   private def buildRequest(dataset: String, table: String, loaderRows: List[LoaderRow]) = {
     val tableRows = loaderRows.map(lr => RowToInsert.of(lr.data)).asJava

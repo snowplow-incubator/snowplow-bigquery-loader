@@ -31,7 +31,8 @@ object model {
       output: LoaderOutputs,
       loadMode: LoadMode,
       consumerSettings: ConsumerSettings,
-      sinkSettings: SinkSettings
+      sinkSettings: SinkSettings,
+      retrySettings: BigQueryRetrySettings
     ) extends Config
     final case class Mutator(input: Input.PubSub, output: MutatorOutput) extends Config
     final case class Repeater(input: Input.PubSub, output: RepeaterOutputs) extends Config
@@ -160,7 +161,18 @@ object model {
       deriveDecoder[SinkSettings.FailedInserts]
   }
 
-  final case class Monitoring(statsd: Option[Monitoring.Statsd], stdout: Option[Monitoring.Stdout], sentry: Option[Monitoring.Sentry], dropwizard: Option[Monitoring.Dropwizard])
+  final case class BigQueryRetrySettings(initialDelay: Int, delayMultiplier: Double, maxDelay: Int, totalTimeout: Int)
+  object BigQueryRetrySettings {
+    implicit val bigQueryRetrySettingsEncoder: Encoder[BigQueryRetrySettings] = deriveEncoder[BigQueryRetrySettings]
+    implicit val bigQueryRetrySettingsDecoder: Decoder[BigQueryRetrySettings] = deriveDecoder[BigQueryRetrySettings]
+  }
+
+  final case class Monitoring(
+    statsd: Option[Monitoring.Statsd],
+    stdout: Option[Monitoring.Stdout],
+    sentry: Option[Monitoring.Sentry],
+    dropwizard: Option[Monitoring.Dropwizard]
+  )
   object Monitoring {
     final case class Statsd(
       hostname: String,

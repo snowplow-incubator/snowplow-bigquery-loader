@@ -33,7 +33,12 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Confi
   RepeaterOutputs
 }
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.LoadMode.StreamingInserts
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.{Dropwizard, Statsd, Stdout, Sentry => SentryConfig}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.{
+  Dropwizard,
+  Statsd,
+  Stdout,
+  Sentry => SentryConfig
+}
 
 import cats.Id
 import cats.effect.Clock
@@ -567,8 +572,14 @@ object SpecHelpers {
       sinkSettingsTypes,
       sinkSettingsFailedInserts
     )
+    private val initialDelay    = 1
+    private val delayMultiplier = 1.5
+    private val maxDelay        = 32
+    private val totalTimeout    = 5
+    private val retrySettings   = BigQueryRetrySettings(initialDelay, delayMultiplier, maxDelay, totalTimeout)
 
-    private val loader: Config.Loader = Config.Loader(lInput, lOutput, loadMode, consumerSettings, sinkSettings)
+    private val loader: Config.Loader =
+      Config.Loader(lInput, lOutput, loadMode, consumerSettings, sinkSettings, retrySettings)
 
     private val mSubscription: String   = "mutator-sub"
     private val mInput: Input.PubSub    = Input.PubSub(mSubscription)

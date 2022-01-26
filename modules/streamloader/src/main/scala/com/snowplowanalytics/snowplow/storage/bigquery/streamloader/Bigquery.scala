@@ -13,15 +13,17 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Output
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{BigQueryRetrySettings, Output}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 
 import cats.effect.{Blocker, ContextShift, Sync}
 import cats.implicits._
 import com.google.api.client.json.gson.GsonFactory
+import com.google.api.gax.retrying.RetrySettings
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, InsertAllResponse, TableId}
 import com.google.cloud.bigquery.InsertAllRequest.RowToInsert
 import com.permutive.pubsub.producer.PubsubProducer
+import org.threeten.bp.Duration
 
 import scala.jdk.CollectionConverters.IterableHasAsJava
 
@@ -65,8 +67,18 @@ object Bigquery {
     blocker.delay(bigQuery.insertAll(request))
   }
 
-  def getClient[F[_]: Sync]: F[BigQuery] =
-    Sync[F].delay(BigQueryOptions.getDefaultInstance.getService)
+  def getClient[F[_]: Sync](rs: BigQueryRetrySettings): F[BigQuery] = {
+    val retrySettings =
+      RetrySettings
+        .newBuilder()
+        .setInitialRetryDelay(Duration.ofSeconds(rs.initialDelay))
+        .setRetryDelayMultiplier(rs.delayMultiplier)
+        .setMaxRetryDelay(Duration.ofSeconds(rs.maxDelay))
+        .setTotalTimeout(Duration.ofMinutes(rs.totalTimeout))
+        .build
+
+    Sync[F].delay(BigQueryOptions.newBuilder.setRetrySettings(retrySettings).build.getService)
+  }
 
   private def buildRequest(dataset: String, table: String, loaderRows: List[LoaderRow]) = {
     val tableRows = loaderRows.map(lr => RowToInsert.of(lr.data)).asJava

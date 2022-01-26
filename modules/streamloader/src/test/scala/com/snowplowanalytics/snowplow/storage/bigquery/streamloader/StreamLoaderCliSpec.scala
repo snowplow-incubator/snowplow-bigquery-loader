@@ -16,6 +16,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers
 
 import org.specs2.mutable.Specification
 
+// The inputs for these tests take into account all settings specified in common/src/main/resources/application.conf
 class StreamLoaderCliSpec extends Specification {
   "parse" should {
     "extract valid Loader configuration" in {

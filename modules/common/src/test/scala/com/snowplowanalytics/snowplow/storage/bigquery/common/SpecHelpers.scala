@@ -578,8 +578,10 @@ object SpecHelpers {
     private val totalTimeout    = 5
     private val retrySettings   = BigQueryRetrySettings(initialDelay, delayMultiplier, maxDelay, totalTimeout)
 
+    private val terminationTimeout = FiniteDuration(60, SECONDS)
+
     private val loader: Config.Loader =
-      Config.Loader(lInput, lOutput, loadMode, consumerSettings, sinkSettings, retrySettings)
+      Config.Loader(lInput, lOutput, loadMode, consumerSettings, sinkSettings, retrySettings, terminationTimeout)
 
     private val mSubscription: String   = "mutator-sub"
     private val mInput: Input.PubSub    = Input.PubSub(mSubscription)

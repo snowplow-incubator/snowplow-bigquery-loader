@@ -32,7 +32,8 @@ object model {
       loadMode: LoadMode,
       consumerSettings: ConsumerSettings,
       sinkSettings: SinkSettings,
-      retrySettings: BigQueryRetrySettings
+      retrySettings: BigQueryRetrySettings,
+      terminationTimeout: FiniteDuration
     ) extends Config
     final case class Mutator(input: Input.PubSub, output: MutatorOutput) extends Config
     final case class Repeater(input: Input.PubSub, output: RepeaterOutputs) extends Config

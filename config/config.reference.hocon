@@ -98,6 +98,9 @@
         "maxDelay": 32 # secs
         "totalTimeout": 5 # 5 mins gives us 30 attempts with 1 sec initial delay and 1.5 multiplier
     }
+
+    # Maximum time to wait for graceful shutdown to complete
+    "terminationTimeout": "1 minute"
   }
 
   "mutator": {

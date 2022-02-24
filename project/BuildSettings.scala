@@ -32,7 +32,7 @@ object BuildSettings {
       s"${name.value}/${version.value}"
     }),
     // Do not warn about Docker keys not being used by any other settings/tasks
-    Global / lintUnusedKeysOnLoad := false,
+    Global    / lintUnusedKeysOnLoad := false,
     ThisBuild / dynverVTagPrefix := false,
     ThisBuild / dynverSeparator := "-"
   )
@@ -131,7 +131,7 @@ object BuildSettings {
     Docker / daemonUser := "daemon",
     Docker / daemonUserUid := None,
     Docker / defaultLinuxInstallLocation := "/opt/snowplow",
-    dockerBaseImage := "adoptopenjdk:8-jre-hotspot-focal",
+    dockerBaseImage := "eclipse-temurin:11-jre-focal",
     dockerUsername := Some("snowplow"),
     dockerUpdateLatest := true,
     dockerCmd := Seq("--help")

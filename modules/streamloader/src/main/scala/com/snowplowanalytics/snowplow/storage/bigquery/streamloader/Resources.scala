@@ -33,7 +33,7 @@ import com.permutive.pubsub.producer.{Model, PubsubProducer}
 import com.permutive.pubsub.producer.encoder.MessageEncoder
 import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerConfig}
 import fs2.{Pipe, Stream}
-import fs2.concurrent.Queue
+import fs2.concurrent.{NoneTerminatedQueue, Queue}
 import io.circe.Json
 
 import org.typelevel.log4cats.Logger
@@ -82,7 +82,7 @@ object Resources {
         env.config.sinkSettings.failedInserts.producerBatchSize,
         env.config.sinkSettings.failedInserts.producerDelayThreshold
       )
-      queue          <- Resource.eval(Queue.bounded[F, StreamLoaderRow[F]](env.config.sinkSettings.good.bqWriteRequestOverflowQueueMaxSize))
+      queue          <- Resource.eval(Queue.boundedNoneTerminated[F, StreamLoaderRow[F]](env.config.sinkSettings.good.bqWriteRequestOverflowQueueMaxSize))
       badSink        <- mkBadSink[F](env.projectId, env.config.output.bad.topic, env.config.sinkSettings.bad.sinkConcurrency, metrics, env.config.sinkSettings.bad)
       sentry         <- Sentry.init(env.monitoring.sentry)
       goodSink       = mkGoodSink[F](blocker, env.config.output.good, bigquery, failedInserts, metrics, types, queue, env.config.sinkSettings.good, env.config.sinkSettings.types)
@@ -165,16 +165,17 @@ object Resources {
     producer: PubsubProducer[F, FailedInsert],
     metrics: Metrics[F],
     typeSink: Pipe[F, Set[ShreddedType], Unit],
-    bufferOverflowQueue: Queue[F, StreamLoaderRow[F]],
+    bufferOverflowQueue: NoneTerminatedQueue[F, StreamLoaderRow[F]],
     sinkSettingsGood: SinkSettings.Good,
     sinkSettingsTypes: SinkSettings.Types
   ): Pipe[F, StreamLoaderRow[F], Unit] = {
     val goodPipe: Pipe[F, StreamLoaderRow[F], Unit] = {
-      _.merge(bufferOverflowQueue.dequeue)
+      _.onFinalize(bufferOverflowQueue.enqueue1(None))
+        .merge(bufferOverflowQueue.dequeue)
         .through(batch(sinkSettingsGood.bqWriteRequestThreshold, sinkSettingsGood.bqWriteRequestTimeout))
         .parEvalMapUnordered(sinkSettingsGood.sinkConcurrency) { slrows =>
           val (remaining, toInsert) = splitBy(slrows, getSize[F], sinkSettingsGood.bqWriteRequestSizeLimit)
-          remaining.traverse_(bufferOverflowQueue.enqueue1) *>
+          remaining.traverse_(r => bufferOverflowQueue.enqueue1(Some(r))) *>
             Bigquery.insert(producer, metrics, toInsert.map(_.row))(Bigquery.mkInsert(good, bigQuery, blocker)) *> toInsert
             .traverse_(_.ack)
         }

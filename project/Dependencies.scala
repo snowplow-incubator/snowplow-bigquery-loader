@@ -23,7 +23,7 @@ object Dependencies {
     object Beam {
       val googleCloudBigQuery = "1.135.3" // compatible with google-cloud-bom:0.157.0
     }
-    val metrics = "4.1.25"
+    val metrics = "4.1.31"
     val slf4j   = "1.7.32"
     val gson    = "2.8.9" // Override transitive dependency of scio
     val sentry  = "1.7.30"

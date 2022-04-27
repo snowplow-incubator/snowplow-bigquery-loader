@@ -40,7 +40,7 @@ object Dependencies {
     val circe       = "0.14.1"
     val decline     = "1.4.0"
     val fs2         = "2.5.9"
-    val httpClient  = "0.22.5"
+    val httpClient  = "0.22.12"
     val logging     = "1.5.1"
     val pubsubFs2   = "0.18.1"
     val scio        = "0.11.4"

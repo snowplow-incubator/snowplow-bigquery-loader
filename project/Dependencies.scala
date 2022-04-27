@@ -25,12 +25,10 @@ object Dependencies {
     }
     val metrics = "4.1.31"
     val slf4j   = "1.7.32"
-    val gson    = "2.8.9" // Override transitive dependency of scio
     val sentry  = "1.7.30"
 
     // Override provided versions to fix security vulnerabilities
     val nettyCodec     = "4.1.76.Final"
-    val fastjson       = "1.2.69"
     val googleOauth    = "1.31.0"
 
     // Scala third-party
@@ -77,9 +75,7 @@ object Dependencies {
   val nettyCodec      = "io.netty"                % "netty-codec"                             % V.nettyCodec
   val nettyCodecHttp  = "io.netty"                % "netty-codec-http"                        % V.nettyCodec
   val nettyCodecHttp2 = "io.netty"                % "netty-codec-http2"                       % V.nettyCodec
-  val fastjson        = "com.alibaba"             % "fastjson"                                % V.fastjson
   val googleOauth     = "com.google.oauth-client" % "google-oauth-client"                     % V.googleOauth
-  val gson            = "com.google.code.gson"    % "gson"                                    % V.gson
   val sentry          = "io.sentry"               % "sentry"                                  % V.sentry
 
   // Scala third-party

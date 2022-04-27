@@ -537,13 +537,11 @@ object SpecHelpers {
     private val bqWriteRequestThreshold: Int            = 500
     private val bqWriteRequestTimeout: FiniteDuration   = FiniteDuration(1L, SECONDS)
     private val bqWriteRequestSizeLimit: Int            = 10000000
-    private val bqWriteRequestOverflowQueueMaxSize: Int = 500
     private val goodSinkConcurrency: Int                = 1024
     private val sinkSettingsGood = SinkSettings.Good(
       bqWriteRequestThreshold,
       bqWriteRequestTimeout,
       bqWriteRequestSizeLimit,
-      bqWriteRequestOverflowQueueMaxSize,
       goodSinkConcurrency
     )
     private val badProducerBatchSize: Long                 = 8L

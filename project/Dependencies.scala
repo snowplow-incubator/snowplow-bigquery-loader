@@ -29,8 +29,7 @@ object Dependencies {
     val sentry  = "1.7.30"
 
     // Override provided versions to fix security vulnerabilities
-    val nettyCodec     = "4.1.68.Final"
-    val nettyCodecHttp = "4.1.61.Final"
+    val nettyCodec     = "4.1.76.Final"
     val fastjson       = "1.2.69"
     val googleOauth    = "1.31.0"
 
@@ -76,8 +75,8 @@ object Dependencies {
   val metrics         = "io.dropwizard.metrics"   % "metrics-core"                            % V.metrics
   val slf4j           = "org.slf4j"               % "slf4j-simple"                            % V.slf4j
   val nettyCodec      = "io.netty"                % "netty-codec"                             % V.nettyCodec
-  val nettyCodecHttp  = "io.netty"                % "netty-codec-http"                        % V.nettyCodecHttp
-  val nettyCodecHttp2 = "io.netty"                % "netty-codec-http2"                       % V.nettyCodecHttp
+  val nettyCodecHttp  = "io.netty"                % "netty-codec-http"                        % V.nettyCodec
+  val nettyCodecHttp2 = "io.netty"                % "netty-codec-http2"                       % V.nettyCodec
   val fastjson        = "com.alibaba"             % "fastjson"                                % V.fastjson
   val googleOauth     = "com.google.oauth-client" % "google-oauth-client"                     % V.googleOauth
   val gson            = "com.google.code.gson"    % "gson"                                    % V.gson

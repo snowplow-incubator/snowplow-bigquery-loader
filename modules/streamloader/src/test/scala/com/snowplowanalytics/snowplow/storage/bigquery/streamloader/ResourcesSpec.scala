@@ -121,40 +121,37 @@ class ResourcesSpec extends Specification {
     }
   }
 
-  "splitBy" should {
-    import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Resources.splitBy
+  "batchBySize" should {
+    import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Resources.batchBySize
 
-    "correctly split a batch by size" in {
+    "correctly batch inputs by size" in {
       val input               = List.range(0, 10)
       val getSize: Int => Int = _ => 1
       val Threshold           = 3
 
-      val (remaining, toInsert) = splitBy(input, getSize, Threshold)
+      val batched = Stream.emit(input).through(batchBySize(getSize, Threshold)).toList
 
-      remaining must beEqualTo(List.range(3, 10))
-      toInsert must beEqualTo(List.range(0, 3))
+      batched must beEqualTo(List(List(0, 1, 2), List(3, 4, 5), List(6, 7, 8), List(9)))
     }
 
-    "return empty remaining list and the original batch to insert if threshold is not exceeded" in {
+    "return a single batch to insert if threshold is not exceeded" in {
       val input               = List.range(0, 10)
       val getSize: Int => Int = _ => 1
       val Threshold           = 10
 
-      val (remaining, toInsert) = splitBy(input, getSize, Threshold)
+      val batched = Stream.emit(input).through(batchBySize(getSize, Threshold)).toList
 
-      remaining must beEqualTo(List.empty[Int])
-      toInsert must beEqualTo(input)
+      batched must beEqualTo(List(input))
     }
 
-    "return two empty lists if given an empty batch" in {
+    "return an empty list if given an empty batch" in {
       val input               = List.empty[Int]
       val getSize: Int => Int = _ => 1
       val Threshold           = 10
 
-      val (remaining, toInsert) = splitBy(input, getSize, Threshold)
+      val batched = Stream.emit(input).through(batchBySize(getSize, Threshold)).toList
 
-      remaining must beEqualTo(input)
-      toInsert must beEqualTo(input)
+      batched must beEmpty
     }
   }
 }

@@ -128,7 +128,6 @@ object model {
       bqWriteRequestThreshold: Int,
       bqWriteRequestTimeout: FiniteDuration,
       bqWriteRequestSizeLimit: Int,
-      bqWriteRequestOverflowQueueMaxSize: Int,
       sinkConcurrency: Int
     )
 

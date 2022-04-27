@@ -43,7 +43,7 @@ object Dependencies {
     val httpClient  = "0.22.12"
     val logging     = "1.5.1"
     val pubsubFs2   = "0.18.1"
-    val scio        = "0.11.4"
+    val scio        = "0.11.5"
     val circeConfig = "0.8.0"
 
     // Scala Snowplow

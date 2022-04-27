@@ -82,10 +82,9 @@ object Resources {
         env.config.sinkSettings.failedInserts.producerBatchSize,
         env.config.sinkSettings.failedInserts.producerDelayThreshold
       )
-      queue          <- Resource.eval(Queue.bounded[F, StreamLoaderRow[F]](env.config.sinkSettings.good.bqWriteRequestOverflowQueueMaxSize))
       badSink        <- mkBadSink[F](env.projectId, env.config.output.bad.topic, env.config.sinkSettings.bad.sinkConcurrency, metrics, env.config.sinkSettings.bad)
       sentry         <- Sentry.init(env.monitoring.sentry)
-      goodSink       = mkGoodSink[F](blocker, env.config.output.good, bigquery, failedInserts, metrics, types, queue, env.config.sinkSettings.good, env.config.sinkSettings.types)
+      goodSink       = mkGoodSink[F](blocker, env.config.output.good, bigquery, failedInserts, metrics, types, env.config.sinkSettings.good, env.config.sinkSettings.types)
     } yield new Resources[F](source, igluClient, badSink, goodSink, metrics, sentry)
     // format: on
   }
@@ -165,18 +164,15 @@ object Resources {
     producer: PubsubProducer[F, FailedInsert],
     metrics: Metrics[F],
     typeSink: Pipe[F, Set[ShreddedType], Unit],
-    bufferOverflowQueue: Queue[F, StreamLoaderRow[F]],
     sinkSettingsGood: SinkSettings.Good,
     sinkSettingsTypes: SinkSettings.Types
   ): Pipe[F, StreamLoaderRow[F], Unit] = {
     val goodPipe: Pipe[F, StreamLoaderRow[F], Unit] = {
-      _.merge(bufferOverflowQueue.dequeue)
-        .through(batch(sinkSettingsGood.bqWriteRequestThreshold, sinkSettingsGood.bqWriteRequestTimeout))
+      _.through(batchByTime(sinkSettingsGood.bqWriteRequestThreshold, sinkSettingsGood.bqWriteRequestTimeout))
+        .through(batchBySize(getSize[F], sinkSettingsGood.bqWriteRequestSizeLimit))
         .parEvalMapUnordered(sinkSettingsGood.sinkConcurrency) { slrows =>
-          val (remaining, toInsert) = splitBy(slrows, getSize[F], sinkSettingsGood.bqWriteRequestSizeLimit)
-          remaining.traverse_(bufferOverflowQueue.enqueue1) *>
-            Bigquery.insert(producer, metrics, toInsert.map(_.row))(Bigquery.mkInsert(good, bigQuery, blocker)) *> toInsert
-            .traverse_(_.ack)
+          Bigquery.insert(producer, metrics, slrows.map(_.row))(Bigquery.mkInsert(good, bigQuery, blocker)) *>
+            slrows.traverse_(_.ack)
         }
     }
 
@@ -188,31 +184,29 @@ object Resources {
   }
 
   /**
-    * Splits a List of As into two Lists, using the provided getSize function.
-    * Used to split a List[StreamLoaderRow] into a (remaining, toInsert) Lists.
+    * Batches a List of As into sub-Lists, using the provided getSize function.
+    * Used to split an unbounded List[StreamLoaderRow] into a smaller Lists
     * The max size of a Pub/Sub message is 10MB, so a lower threshold might result in events that get forever trapped in the stream.
     * @param batch A List of As (used with StreamLoaderRow)
     * @param getSize A function to get the size of a single A
     * @param threshold A limit to how big the toInsert List can be, as measured by toInsert.map(getSize).sum
     * @tparam A The type of element in the original collection (used with StreamLoaderRow)
-    * @return A tuple of Lists. The second List contains all As that could be inserted into it without breaching the threshold. The first List contains the remaining As.
+    * @return A List of Lists. Each list may be inserted without breaching the threshold.
     */
-  private[streamloader] def splitBy[A](batch: List[A], getSize: A => Int, threshold: Int): (List[A], List[A]) = {
-    val originalBatch = batch
+  private[streamloader] def batchBySize[F[_], A](getSize: A => Int, threshold: Int): Pipe[F, List[A], List[A]] = {
     @tailrec
-    def go(batch: List[A], acc: (List[A], Int, Boolean)): (List[A], List[A]) = {
-      val (buffer, totalSize, isFull) = acc
-      batch match {
-        case _ if isFull => (originalBatch.drop(buffer.length), buffer.reverse)
-        case Nil         => (List.empty[A], buffer.reverse)
-        case h :: t =>
-          val currSize = getSize(h)
-          if (currSize + totalSize > threshold) go(t, (buffer, totalSize, true))
-          else go(t, (h :: buffer, currSize + totalSize, false))
+    def go(accHead: List[A], accTail: List[List[A]], accSize: Int, todo: List[A]): List[List[A]] =
+      todo match {
+        case Nil => accHead :: accTail
+        case head :: tail =>
+          val headSize = getSize(head)
+          if (headSize + accSize > threshold)
+            go(List(head), accHead :: accTail, headSize, tail)
+          else
+            go(head :: accHead, accTail, headSize + accSize, tail)
       }
-    }
 
-    go(batch, (List.empty[A], 0, false))
+    _.flatMap(as => Stream.emits(go(Nil, Nil, 0, as).reverse)).map(_.reverse).filter(_.nonEmpty)
   }
 
   private def getSize[F[_]]: StreamLoaderRow[F] => Int = _.row.data.toString.getBytes(UTF_8).length
@@ -222,7 +216,7 @@ object Resources {
     * @param n How many As to put in the batch.
     * @param t How long to wait before finalising the batch
     */
-  private[streamloader] def batch[F[_]: Timer: Concurrent, A](
+  private[streamloader] def batchByTime[F[_]: Timer: Concurrent, A](
     n: Int,
     t: FiniteDuration
   ): Pipe[F, A, List[A]] =
@@ -238,7 +232,7 @@ object Resources {
     n: Int,
     t: FiniteDuration
   ): Pipe[F, Set[ShreddedType], Set[ShreddedType]] =
-    _.through(batch(n, t)).map(_.toSet.flatten)
+    _.through(batchByTime(n, t)).map(_.toSet.flatten)
 
   private def mkMetricsReporter[F[_]: ConcurrentEffect: ContextShift: Timer: Logger](
     blocker: Blocker,

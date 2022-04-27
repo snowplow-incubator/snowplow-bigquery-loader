@@ -46,8 +46,6 @@ lazy val common = project
       Dependencies.nettyCodec,
       Dependencies.nettyCodecHttp,
       Dependencies.nettyCodecHttp2,
-      Dependencies.googleOauth,
-      Dependencies.gson,
       Dependencies.sentry
     )
   )
@@ -65,7 +63,6 @@ lazy val loader = project
       Dependencies.scioCore,
       Dependencies.scioGoogle,
       Dependencies.scioTest,
-      Dependencies.fastjson
     ),
     resolvers += "Confluent Repository".at("https://packages.confluent.io/maven/")
   )

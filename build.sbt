@@ -40,6 +40,7 @@ lazy val common = project
       Dependencies.analyticsSdk,
       Dependencies.badrows,
       Dependencies.igluClient,
+      Dependencies.jacksonDatabind,
       Dependencies.igluCoreCirce,
       Dependencies.schemaDdl,
       Dependencies.specs2,

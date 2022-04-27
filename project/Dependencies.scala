@@ -28,8 +28,9 @@ object Dependencies {
     val sentry  = "1.7.30"
 
     // Override provided versions to fix security vulnerabilities
-    val nettyCodec     = "4.1.76.Final"
-    val googleOauth    = "1.31.0"
+    val nettyCodec   = "4.1.76.Final"
+    val googleOauth  = "1.31.0"
+    val jackson      = "2.13.2.2"
 
     // Scala third-party
     val cats        = "2.6.1"
@@ -68,15 +69,16 @@ object Dependencies {
   }
 
   // Java
-  val dataflowRunner  = "org.apache.beam"         % "beam-runners-google-cloud-dataflow-java" % V.beam
-  val directRunner    = "org.apache.beam"         % "beam-runners-direct-java"                % V.beam
-  val metrics         = "io.dropwizard.metrics"   % "metrics-core"                            % V.metrics
-  val slf4j           = "org.slf4j"               % "slf4j-simple"                            % V.slf4j
-  val nettyCodec      = "io.netty"                % "netty-codec"                             % V.nettyCodec
-  val nettyCodecHttp  = "io.netty"                % "netty-codec-http"                        % V.nettyCodec
-  val nettyCodecHttp2 = "io.netty"                % "netty-codec-http2"                       % V.nettyCodec
-  val googleOauth     = "com.google.oauth-client" % "google-oauth-client"                     % V.googleOauth
-  val sentry          = "io.sentry"               % "sentry"                                  % V.sentry
+  val dataflowRunner  = "org.apache.beam"            % "beam-runners-google-cloud-dataflow-java" % V.beam
+  val directRunner    = "org.apache.beam"            % "beam-runners-direct-java"                % V.beam
+  val metrics         = "io.dropwizard.metrics"      % "metrics-core"                            % V.metrics
+  val slf4j           = "org.slf4j"                  % "slf4j-simple"                            % V.slf4j
+  val nettyCodec      = "io.netty"                   % "netty-codec"                             % V.nettyCodec
+  val nettyCodecHttp  = "io.netty"                   % "netty-codec-http"                        % V.nettyCodec
+  val nettyCodecHttp2 = "io.netty"                   % "netty-codec-http2"                       % V.nettyCodec
+  val googleOauth     = "com.google.oauth-client"    % "google-oauth-client"                     % V.googleOauth
+  val sentry          = "io.sentry"                  % "sentry"                                  % V.sentry
+  val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
 
   // Scala third-party
   val cats          = "org.typelevel" %% "cats-core"                  % V.cats

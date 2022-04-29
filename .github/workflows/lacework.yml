@@ -36,12 +36,26 @@ jobs:
           LW_SCANNER_SAVE_RESULTS: ${{ !contains(steps.version.outputs.tag, 'rc') }}
         run: ./lw-scanner image evaluate snowplow/snowplow-bigquery-loader ${{ steps.ver.outputs.tag }} --build-id ${{ github.run_id }} --no-pull
 
+      - name: Scan snowplow-bigquery-loader distroless
+        env:
+          LW_ACCESS_TOKEN: ${{ secrets.LW_ACCESS_TOKEN }}
+          LW_ACCOUNT_NAME: ${{ secrets.LW_ACCOUNT_NAME }}
+          LW_SCANNER_SAVE_RESULTS: ${{ !contains(steps.version.outputs.tag, 'rc') }}
+        run: ./lw-scanner image evaluate snowplow/snowplow-bigquery-loader ${{ steps.ver.outputs.tag }}-distroless --build-id ${{ github.run_id }} --no-pull
+
       - name: Scan snowplow-bigquery-streamloader
         env:
           LW_ACCESS_TOKEN: ${{ secrets.LW_ACCESS_TOKEN }}
           LW_ACCOUNT_NAME: ${{ secrets.LW_ACCOUNT_NAME }}
           LW_SCANNER_SAVE_RESULTS: ${{ !contains(steps.version.outputs.tag, 'rc') }}
         run: ./lw-scanner image evaluate snowplow/snowplow-bigquery-streamloader ${{ steps.ver.outputs.tag }} --build-id ${{ github.run_id }} --no-pull
+
+      - name: Scan snowplow-bigquery-streamloader distroless
+        env:
+          LW_ACCESS_TOKEN: ${{ secrets.LW_ACCESS_TOKEN }}
+          LW_ACCOUNT_NAME: ${{ secrets.LW_ACCOUNT_NAME }}
+          LW_SCANNER_SAVE_RESULTS: ${{ !contains(steps.version.outputs.tag, 'rc') }}
+        run: ./lw-scanner image evaluate snowplow/snowplow-bigquery-streamloader ${{ steps.ver.outputs.tag }}-distroless --build-id ${{ github.run_id }} --no-pull
 
       - name: Scan snowplow-bigquery-repeater
         env:
@@ -50,9 +64,16 @@ jobs:
           LW_SCANNER_SAVE_RESULTS: ${{ !contains(steps.version.outputs.tag, 'rc') }}
         run: ./lw-scanner image evaluate snowplow/snowplow-bigquery-repeater ${{ steps.ver.outputs.tag }} --build-id ${{ github.run_id }} --no-pull
 
-      - name: Scan snowplow-bigquery-mutator
+      - name: Scan snowplow-bigquery-repeater distroless
         env:
           LW_ACCESS_TOKEN: ${{ secrets.LW_ACCESS_TOKEN }}
           LW_ACCOUNT_NAME: ${{ secrets.LW_ACCOUNT_NAME }}
           LW_SCANNER_SAVE_RESULTS: ${{ !contains(steps.version.outputs.tag, 'rc') }}
-        run: ./lw-scanner image evaluate snowplow/snowplow-bigquery-mutator ${{ steps.ver.outputs.tag }} --build-id ${{ github.run_id }} --no-pull
+        run: ./lw-scanner image evaluate snowplow/snowplow-bigquery-repeater ${{ steps.ver.outputs.tag }}-distroless --build-id ${{ github.run_id }} --no-pull
+
+      - name: Scan snowplow-bigquery-mutator distroless
+        env:
+          LW_ACCESS_TOKEN: ${{ secrets.LW_ACCESS_TOKEN }}
+          LW_ACCOUNT_NAME: ${{ secrets.LW_ACCOUNT_NAME }}
+          LW_SCANNER_SAVE_RESULTS: ${{ !contains(steps.version.outputs.tag, 'rc') }}
+        run: ./lw-scanner image evaluate snowplow/snowplow-bigquery-mutator ${{ steps.ver.outputs.tag }}-distroless --build-id ${{ github.run_id }} --no-pull

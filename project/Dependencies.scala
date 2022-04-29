@@ -107,4 +107,59 @@ object Dependencies {
   // Scala (test only)
   val specs2   = "org.specs2"  %% "specs2-core" % V.specs2 % "test"
   val scioTest = "com.spotify" %% "scio-test"   % V.scio   % "test"
+
+
+  val commonDependencies = Seq(
+      Beam.bigQuery,
+      cats,
+      catsEffect,
+      circe,
+      circeConfig,
+      circeJawn,
+      circeLiteral,
+      circeParser,
+      decline,
+      fs2,
+      googleOauth,
+      logging,
+      slf4j,
+      analyticsSdk,
+      badrows,
+      igluClient,
+      igluCoreCirce,
+      jacksonDatabind,
+      schemaDdl,
+      specs2,
+      nettyCodec,
+      nettyCodecHttp,
+      nettyCodecHttp2,
+      sentry
+    )
+
+  val loaderDependencies = Seq(
+      dataflowRunner,
+      directRunner,
+      metrics,
+      scioCore,
+      scioGoogle,
+      scioTest
+    )
+
+  val streamloaderDependencies = Seq(
+      bigQuery,
+      pubsubFs2Grpc
+    )
+
+  val mutatorDependencies = Seq(
+      bigQuery,
+      pubsub
+    )
+
+  val repeaterDependencies = Seq(
+      gcs,
+      httpClient,
+      pubsub,
+      bigQuery,
+      pubsubFs2Grpc
+    )
 }

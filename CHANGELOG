@@ -1,3 +1,21 @@
+Version 1.3.0 (2022-05-10)
+--------------------------
+Bump google-oauth-client to 1.33.3 (#281)
+Fix graceful shutdown (#260)
+Publish distroless docker images (#279)
+Bump sbt-native-packager to 1.9.9 (#278)
+Bump jackson-databind to 2.13.2.2 (#275)
+Remove explicit version overrides of gson and fast-json (#280)
+Bump netty codec to 4.1.76.Final (#271)
+Bump scio to 0.11.7 (#270)
+Bump google-cloud-bigquery for beam to 2.9.4 (#269)
+Bump beam to 2.38.0 (#268)
+Bump dropwizard metrics to 4.1.31 (#267)
+Bump http4s-async-http-client to 0.22.12 (#266)
+Bump google-cloud-storage to 2.6.1 (#265)
+Bump google-cloud-pubsub to 1.116.4 (#264)
+Bump google-cloud-bigquery to 2.10.10 (#263)
+
 Version 1.2.0 (2022-02-25)
 --------------------------
 Streamloader: add retrySettings to BigQuery client (#248)

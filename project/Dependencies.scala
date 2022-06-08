@@ -98,8 +98,10 @@ object Dependencies {
   val circeConfig   = "io.circe"      %% "circe-config"               % V.circeConfig
   val scioCore      = ("com.spotify"  %% "scio-core"                  % V.scio)
     .exclude("org.codehaus.jackson", "jackson-mapper-asl") // address security vulnerabilities
+    .exclude("org.apache.beam", "beam-sdks-java-extensions-sql") // address security vulnerabilities
   val scioGoogle    = ("com.spotify"  %% "scio-google-cloud-platform" % V.scio)
     .exclude("org.codehaus.jackson", "jackson-mapper-asl") // address security vulnerabilities
+    .exclude("org.apache.beam", "beam-sdks-java-extensions-sql") // address security vulnerabilities
 
   // Scala Snowplow
   val analyticsSdk  = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk

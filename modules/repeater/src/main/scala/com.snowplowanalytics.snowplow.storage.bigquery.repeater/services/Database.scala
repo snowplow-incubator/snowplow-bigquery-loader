@@ -75,8 +75,13 @@ object Database {
       }
   }
 
-  def getClient[F[_]: Sync]: F[BigQuery] =
-    Sync[F].delay(BigQueryOptions.getDefaultInstance.getService)
+  def getClient[F[_]: Sync](projectId: String): F[BigQuery] =
+    Sync[F].delay(
+      BigQueryOptions.newBuilder
+        .setProjectId(projectId)
+        .build
+        .getService
+    )
 
   /** The first argument passed to addRow is an ID used to deduplicate inserts.
     * If there are multiple failed inserts with the same event_id, only one will be inserted in BigQuery.

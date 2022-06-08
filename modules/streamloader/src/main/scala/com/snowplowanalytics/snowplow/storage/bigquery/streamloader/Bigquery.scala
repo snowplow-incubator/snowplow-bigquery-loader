@@ -67,7 +67,7 @@ object Bigquery {
     blocker.delay(bigQuery.insertAll(request))
   }
 
-  def getClient[F[_]: Sync](rs: BigQueryRetrySettings): F[BigQuery] = {
+  def getClient[F[_]: Sync](rs: BigQueryRetrySettings, projectId: String): F[BigQuery] = {
     val retrySettings =
       RetrySettings
         .newBuilder()
@@ -77,7 +77,13 @@ object Bigquery {
         .setTotalTimeout(Duration.ofMinutes(rs.totalTimeout))
         .build
 
-    Sync[F].delay(BigQueryOptions.newBuilder.setRetrySettings(retrySettings).build.getService)
+    Sync[F].delay(
+      BigQueryOptions.newBuilder
+        .setRetrySettings(retrySettings)
+        .setProjectId(projectId)
+        .build
+        .getService
+    )
   }
 
   private def buildRequest(dataset: String, table: String, loaderRows: List[LoaderRow]) = {

@@ -56,8 +56,13 @@ object TableReference {
   }
 
   object BigQueryTable {
-    def getClient: IO[BigQuery] =
-      IO(BigQueryOptions.getDefaultInstance.getService)
+    def getClient(projectId: String): IO[BigQuery] =
+      IO(
+        BigQueryOptions.newBuilder
+          .setProjectId(projectId)
+          .build
+          .getService
+      )
 
     def create(args: MutatorCommand.Create, client: BigQuery): IO[Table] = IO {
       val id =

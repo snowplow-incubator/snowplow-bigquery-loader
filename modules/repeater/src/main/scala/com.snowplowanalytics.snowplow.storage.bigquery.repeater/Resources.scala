@@ -73,7 +73,7 @@ object Resources {
     // It's a function because blocker needs to be created as Resource
     val initResources: F[(Blocker, Sentry[F]) => F[Resources[F]]] = for {
       env      <- Sync[F].delay(cmd.env)
-      bigQuery <- services.Database.getClient[F]
+      bigQuery <- services.Database.getClient[F](cmd.env.projectId)
       bucket <- Sync[F].fromEither(
         validateBucket(env.config.output.deadLetters.bucket)
           .toEither

@@ -143,7 +143,7 @@ object Mutator {
 
   def initialize(env: MutatorEnvironment, verbose: Boolean)(implicit c: Concurrent[IO], logger: Logger[IO]): IO[Either[String, Mutator]] = {
     val mutatorIO: IO[Either[String, Mutator]] = for {
-      bqClient <- TableReference.BigQueryTable.getClient
+      bqClient <- TableReference.BigQueryTable.getClient(env.projectId)
       table = new TableReference.BigQueryTable(
         bqClient,
         env.config.output.good.datasetId,

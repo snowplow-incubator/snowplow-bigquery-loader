@@ -75,7 +75,7 @@ object Resources {
       igluClient     <- Resource.eval[F, Client[F, Json]](clientF)
       metrics        <- Resource.eval(mkMetricsReporter[F](blocker, env.monitoring))
       types          <- mkTypeSink[F](env.projectId, env.config.output.types.topic, env.config.sinkSettings.types, metrics)
-      bigquery       <- Resource.eval[F, BigQuery](Bigquery.getClient(env.config.retrySettings))
+      bigquery       <- Resource.eval[F, BigQuery](Bigquery.getClient(env.config.retrySettings, env.projectId))
       failedInserts  <- mkProducer[F, Bigquery.FailedInsert](
         env.projectId,
         env.config.output.failedInserts.topic,

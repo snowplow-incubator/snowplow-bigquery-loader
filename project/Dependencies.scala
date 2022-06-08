@@ -69,8 +69,6 @@ object Dependencies {
   }
 
   // Java
-  val dataflowRunner  = "org.apache.beam"            % "beam-runners-google-cloud-dataflow-java" % V.beam
-  val directRunner    = "org.apache.beam"            % "beam-runners-direct-java"                % V.beam
   val metrics         = "io.dropwizard.metrics"      % "metrics-core"                            % V.metrics
   val slf4j           = "org.slf4j"                  % "slf4j-simple"                            % V.slf4j
   val nettyCodec      = "io.netty"                   % "netty-codec"                             % V.nettyCodec
@@ -79,6 +77,10 @@ object Dependencies {
   val googleOauth     = "com.google.oauth-client"    % "google-oauth-client"                     % V.googleOauth
   val sentry          = "io.sentry"                  % "sentry"                                  % V.sentry
   val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
+  val dataflowRunner  = ("org.apache.beam"            % "beam-runners-google-cloud-dataflow-java" % V.beam)
+    .exclude("org.codehaus.jackson", "jackson-mapper-asl") // address security vulnerabilities
+  val directRunner    = ("org.apache.beam"            % "beam-runners-direct-java"                % V.beam)
+    .exclude("org.codehaus.jackson", "jackson-mapper-asl") // address security vulnerabilities
 
   // Scala third-party
   val cats          = "org.typelevel" %% "cats-core"                  % V.cats
@@ -92,10 +94,12 @@ object Dependencies {
   val httpClient    = "org.http4s"    %% "http4s-async-http-client"   % V.httpClient
   val logging       = "org.typelevel" %% "log4cats-slf4j"             % V.logging
   val pubsubFs2Grpc = "com.permutive" %% "fs2-google-pubsub-grpc"     % V.pubsubFs2
-  val scioCore      = "com.spotify"   %% "scio-core"                  % V.scio
   val scioRepl      = "com.spotify"   %% "scio-repl"                  % V.scio
-  val scioGoogle    = "com.spotify"   %% "scio-google-cloud-platform" % V.scio
   val circeConfig   = "io.circe"      %% "circe-config"               % V.circeConfig
+  val scioCore      = ("com.spotify"  %% "scio-core"                  % V.scio)
+    .exclude("org.codehaus.jackson", "jackson-mapper-asl") // address security vulnerabilities
+  val scioGoogle    = ("com.spotify"  %% "scio-google-cloud-platform" % V.scio)
+    .exclude("org.codehaus.jackson", "jackson-mapper-asl") // address security vulnerabilities
 
   // Scala Snowplow
   val analyticsSdk  = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk

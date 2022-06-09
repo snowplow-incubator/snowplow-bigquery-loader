@@ -51,6 +51,7 @@ object BuildSettings {
     description := "Snowplow BigQuery Loader Dataflow Job",
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.loader.generated",
     libraryDependencies ++= Dependencies.loaderDependencies,
+    dependencyOverrides += Dependencies.guava,
     resolvers += "Confluent Repository" at "https://packages.confluent.io/maven/"
   )
 

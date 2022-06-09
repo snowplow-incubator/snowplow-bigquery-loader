@@ -29,7 +29,7 @@ object Dependencies {
 
     // Override provided versions to fix security vulnerabilities
     val nettyCodec   = "4.1.76.Final"
-    val googleOauth  = "1.33.3"
+    val googleOauth  = "1.31.0"
     val jackson      = "2.13.2.2"
 
     // Scala third-party

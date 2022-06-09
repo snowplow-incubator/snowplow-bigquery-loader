@@ -27,13 +27,11 @@ object Dependencies {
     val slf4j   = "1.7.32"
     val gson    = "2.8.9" // Override transitive dependency of scio
     val sentry  = "1.7.30"
-    val gson    = "2.8.9"
 
     // Override provided versions to fix security vulnerabilities
     val nettyCodec     = "4.1.68.Final"
     val nettyCodecHttp = "4.1.61.Final"
     val fastjson       = "1.2.69"
-    val jackson        = "2.13.2.2"
     val googleOauth    = "1.33.3"
 
     // Scala third-party
@@ -80,7 +78,6 @@ object Dependencies {
   val nettyCodecHttp2 = "io.netty"                   % "netty-codec-http2"                       % V.nettyCodecHttp
   val googleOauth     = "com.google.oauth-client"    % "google-oauth-client"                     % V.googleOauth
   val sentry          = "io.sentry"                  % "sentry"                                  % V.sentry
-  val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
   val gson            = "com.google.code.gson"        % "gson"                                    % V.gson
   val fastjson        = "com.alibaba"                 % "fastjson"                                % V.fastjson
   val dataflowRunner  = ("org.apache.beam"            % "beam-runners-google-cloud-dataflow-java" % V.beam)
@@ -139,7 +136,6 @@ object Dependencies {
       badrows,
       igluClient,
       igluCoreCirce,
-      jacksonDatabind,
       schemaDdl,
       specs2,
       nettyCodec,

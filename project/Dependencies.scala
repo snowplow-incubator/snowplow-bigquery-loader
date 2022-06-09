@@ -25,11 +25,13 @@ object Dependencies {
     }
     val metrics = "4.1.25"
     val slf4j   = "1.7.32"
+    val gson    = "2.8.9" // Override transitive dependency of scio
     val sentry  = "1.7.30"
 
     // Override provided versions to fix security vulnerabilities
     val nettyCodec     = "4.1.68.Final"
     val nettyCodecHttp = "4.1.61.Final"
+    val fastjson       = "1.2.69"
     val googleOauth    = "1.33.3"
     val jackson        = "2.13.2.2"
 
@@ -75,7 +77,9 @@ object Dependencies {
   val nettyCodec      = "io.netty"                   % "netty-codec"                             % V.nettyCodec
   val nettyCodecHttp  = "io.netty"                   % "netty-codec-http"                        % V.nettyCodecHttp
   val nettyCodecHttp2 = "io.netty"                   % "netty-codec-http2"                       % V.nettyCodecHttp
+  val fastjson        = "com.alibaba"                % "fastjson"                                % V.fastjson
   val googleOauth     = "com.google.oauth-client"    % "google-oauth-client"                     % V.googleOauth
+  val gson            = "com.google.code.gson"       % "gson"                                    % V.gson
   val sentry          = "io.sentry"                  % "sentry"                                  % V.sentry
   val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
   val dataflowRunner  = ("org.apache.beam"            % "beam-runners-google-cloud-dataflow-java" % V.beam)
@@ -140,7 +144,8 @@ object Dependencies {
       nettyCodec,
       nettyCodecHttp,
       nettyCodecHttp2,
-      sentry
+      sentry,
+      gson
     )
 
   val loaderDependencies = Seq(
@@ -149,7 +154,8 @@ object Dependencies {
       metrics,
       scioCore,
       scioGoogle,
-      scioTest
+      scioTest,
+      fastjson
     )
 
   val streamloaderDependencies = Seq(

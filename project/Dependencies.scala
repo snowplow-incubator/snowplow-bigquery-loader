@@ -23,7 +23,7 @@ object Dependencies {
     object Beam {
       val googleCloudBigQuery = "2.9.4" // compatible with google-cloud-bom:0.171.0
     }
-    val metrics = "4.1.31"
+    val metrics = "4.1.25"
     val slf4j   = "1.7.32"
     val sentry  = "1.7.30"
 

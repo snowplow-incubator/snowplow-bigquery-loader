@@ -138,14 +138,13 @@ object Dependencies {
       badrows,
       igluClient,
       igluCoreCirce,
-      jacksonDatabind,
       schemaDdl,
       specs2,
       nettyCodec,
       nettyCodecHttp,
       nettyCodecHttp2,
       sentry,
-      gson
+      gson,
     )
 
   val loaderDependencies = Seq(

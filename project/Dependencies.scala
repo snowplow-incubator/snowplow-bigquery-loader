@@ -32,7 +32,7 @@ object Dependencies {
     val nettyCodec     = "4.1.68.Final"
     val nettyCodecHttp = "4.1.61.Final"
     val fastjson       = "1.2.69"
-    val googleOauth    = "1.33.3"
+    val googleOauth    = "1.31.0"
     val jackson        = "2.13.2.2"
 
     // Scala third-party

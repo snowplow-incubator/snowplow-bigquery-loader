@@ -24,11 +24,43 @@ lazy val common = project
   .in(file("modules/common"))
   .enablePlugins(BuildInfoPlugin)
   .settings(BuildSettings.commonBuildSettings)
+<<<<<<< HEAD
+=======
+  .settings(
+    libraryDependencies ++= Seq(
+      Dependencies.Beam.bigQuery,
+      Dependencies.cats,
+      Dependencies.catsEffect,
+      Dependencies.circe,
+      Dependencies.circeConfig,
+      Dependencies.circeJawn,
+      Dependencies.circeLiteral,
+      Dependencies.circeParser,
+      Dependencies.decline,
+      Dependencies.fs2,
+      Dependencies.logging,
+      Dependencies.slf4j,
+      Dependencies.analyticsSdk,
+      Dependencies.badrows,
+      Dependencies.igluClient,
+      Dependencies.igluCoreCirce,
+      Dependencies.schemaDdl,
+      Dependencies.specs2,
+      Dependencies.nettyCodec,
+      Dependencies.nettyCodecHttp,
+      Dependencies.nettyCodecHttp2,
+      Dependencies.googleOauth,
+      Dependencies.gson,
+      Dependencies.sentry
+    )
+  )
+>>>>>>> parent of ef0228a (Remove explicit version overrides of gson and fast-json (close #280))
 
 lazy val loader = project
   .in(file("modules/loader"))
   .enablePlugins(BuildInfoPlugin, JavaAppPackaging)
   .settings(BuildSettings.loaderBuildSettings)
+<<<<<<< HEAD
   .dependsOn(common % "compile->compile;test->test")
 
 lazy val loaderDistroless = project
@@ -36,6 +68,20 @@ lazy val loaderDistroless = project
   .enablePlugins(BuildInfoPlugin, DockerPlugin, LauncherJarPlugin)
   .settings(sourceDirectory := (loader / sourceDirectory).value)
   .settings(BuildSettings.loaderDistrolessBuildSettings)
+=======
+  .settings(
+    libraryDependencies ++= Seq(
+      Dependencies.dataflowRunner,
+      Dependencies.directRunner,
+      Dependencies.metrics,
+      Dependencies.scioCore,
+      Dependencies.scioGoogle,
+      Dependencies.scioTest,
+      Dependencies.fastjson
+    ),
+    resolvers += "Confluent Repository".at("https://packages.confluent.io/maven/")
+  )
+>>>>>>> parent of ef0228a (Remove explicit version overrides of gson and fast-json (close #280))
   .dependsOn(common % "compile->compile;test->test")
 
 lazy val streamloader = project

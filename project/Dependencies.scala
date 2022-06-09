@@ -25,6 +25,7 @@ object Dependencies {
     }
     val metrics = "4.1.25"
     val slf4j   = "1.7.32"
+    val gson    = "2.8.9" // Override transitive dependency of scio
     val sentry  = "1.7.30"
     val gson    = "2.8.9"
 

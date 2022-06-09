@@ -26,6 +26,7 @@ object Dependencies {
     val metrics = "4.1.31"
     val slf4j   = "1.7.32"
     val sentry  = "1.7.30"
+    val guava   = "29.0-jre"
 
     // Override provided versions to fix security vulnerabilities
     val nettyCodec   = "4.1.76.Final"
@@ -77,6 +78,7 @@ object Dependencies {
   val googleOauth     = "com.google.oauth-client"    % "google-oauth-client"                     % V.googleOauth
   val sentry          = "io.sentry"                  % "sentry"                                  % V.sentry
   val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
+  val guava           = "com.google.guava"           % "guava"                                   % V.guava
   val dataflowRunner  = ("org.apache.beam"            % "beam-runners-google-cloud-dataflow-java" % V.beam)
     .exclude("org.codehaus.jackson", "jackson-mapper-asl") // address security vulnerabilities
   val directRunner    = ("org.apache.beam"            % "beam-runners-direct-java"                % V.beam)
@@ -148,7 +150,8 @@ object Dependencies {
       metrics,
       scioCore,
       scioGoogle,
-      scioTest
+      scioTest,
+      guava
     )
 
   val streamloaderDependencies = Seq(

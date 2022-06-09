@@ -51,6 +51,8 @@ object BuildSettings {
     description := "Snowplow BigQuery Loader Dataflow Job",
     buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.loader.generated",
     libraryDependencies ++= Dependencies.loaderDependencies,
+    // Guava version is downgraded since existing Guava version leads to 'NoSuchMethodError' exception
+    dependencyOverrides += Dependencies.guava,
     resolvers += "Confluent Repository" at "https://packages.confluent.io/maven/"
   )
 

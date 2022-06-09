@@ -26,11 +26,14 @@ object Dependencies {
     val metrics = "4.1.25"
     val slf4j   = "1.7.32"
     val sentry  = "1.7.30"
+    val gson    = "2.8.9"
 
     // Override provided versions to fix security vulnerabilities
-    val nettyCodec   = "4.1.76.Final"
-    val googleOauth  = "1.33.3"
-    val jackson      = "2.13.2.2"
+    val nettyCodec     = "4.1.68.Final"
+    val nettyCodecHttp = "4.1.61.Final"
+    val fastjson       = "1.2.69"
+    val jackson        = "2.13.2.2"
+    val googleOauth    = "1.33.3"
 
     // Scala third-party
     val cats        = "2.6.1"
@@ -72,11 +75,13 @@ object Dependencies {
   val metrics         = "io.dropwizard.metrics"      % "metrics-core"                            % V.metrics
   val slf4j           = "org.slf4j"                  % "slf4j-simple"                            % V.slf4j
   val nettyCodec      = "io.netty"                   % "netty-codec"                             % V.nettyCodec
-  val nettyCodecHttp  = "io.netty"                   % "netty-codec-http"                        % V.nettyCodec
-  val nettyCodecHttp2 = "io.netty"                   % "netty-codec-http2"                       % V.nettyCodec
+  val nettyCodecHttp  = "io.netty"                   % "netty-codec-http"                        % V.nettyCodecHttp
+  val nettyCodecHttp2 = "io.netty"                   % "netty-codec-http2"                       % V.nettyCodecHttp
   val googleOauth     = "com.google.oauth-client"    % "google-oauth-client"                     % V.googleOauth
   val sentry          = "io.sentry"                  % "sentry"                                  % V.sentry
   val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
+  val gson            = "com.google.code.gson"        % "gson"                                    % V.gson
+  val fastjson        = "com.alibaba"                 % "fastjson"                                % V.fastjson
   val dataflowRunner  = ("org.apache.beam"            % "beam-runners-google-cloud-dataflow-java" % V.beam)
     .exclude("org.codehaus.jackson", "jackson-mapper-asl") // address security vulnerabilities
   val directRunner    = ("org.apache.beam"            % "beam-runners-direct-java"                % V.beam)

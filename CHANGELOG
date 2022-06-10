@@ -1,3 +1,10 @@
+Version 1.3.1 (2022-06-10)
+--------------------------
+Pass projectId to BigQuery client (#261)
+Loader: Downgrade Guava to 29.0-jre (#286)
+Exclude beam-sdks-java-extensions-sql from scio-core and scio-google-cloud-platform (#284)
+Exclude jackson-mapper-asl from scio-core and scio-google-cloud-platform (#283)
+
 Version 1.3.0 (2022-05-10)
 --------------------------
 Bump google-oauth-client to 1.33.3 (#281)

@@ -23,12 +23,11 @@ import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 
 object Main extends IOApp {
-  private val MaxConcurrency = 4
 
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
 
   def sink(mutator: Mutator): fs2.Pipe[IO, List[ShreddedType], Unit] =
-    _.parEvalMap(MaxConcurrency)(items => mutator.updateTable(items))
+    _.evalMap(items => mutator.updateTable(items))
 
   def run(args: List[String]): IO[ExitCode] =
     MutatorCli.parse(args) match {

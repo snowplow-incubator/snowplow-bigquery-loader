@@ -13,85 +13,108 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.common.config
 
 import com.snowplowanalytics.iglu.client.Resolver
-import com.snowplowanalytics.iglu.client.resolver.{InitListCache, InitSchemaCache}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model._
 
-import cats.{Id, Monad}
-import cats.data.{EitherT, ValidatedNel}
-import cats.implicits.toShow
-import cats.syntax.either._
-import com.monovore.decline.Opts
-import com.typesafe.config.ConfigFactory
-import io.circe.{Decoder, DecodingFailure, Encoder, Json}
+import cats.implicits._
+import cats.Id
+
+import com.typesafe.config.{Config => TypesafeConfig, ConfigException, ConfigFactory}
+import io.circe.Json
 import io.circe.config.parser
-import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.parser.parse
 
-import java.util.Base64
+import java.nio.file.{Files, Path}
+import scala.jdk.CollectionConverters._
 
-final case class CliConfig(
-  projectId: String,
-  loader: Config.Loader,
-  mutator: Config.Mutator,
-  repeater: Config.Repeater,
-  monitoring: Monitoring
-)
+import com.monovore.decline.Opts
 
 object CliConfig {
-  final case class Environment[A](config: A, resolverJson: Json, projectId: String, monitoring: Monitoring) {
-    def getFullSubName(sub: String): String     = s"projects/$projectId/subscriptions/$sub"
-    def getFullTopicName(topic: String): String = s"projects/$projectId/topics/$topic"
-  }
 
-  object Environment {
-    type LoaderEnvironment   = Environment[Config.Loader]
-    type MutatorEnvironment  = Environment[Config.Mutator]
-    type RepeaterEnvironment = Environment[Config.Repeater]
-  }
+  final case class Raw(
+    config: Option[EncodedHoconOrPath],
+    resolver: EncodedJsonOrPath
+  )
 
-  implicit val cliConfigDecoder: Decoder[CliConfig] = deriveDecoder[CliConfig]
-  implicit val cliConfigEncoder: Encoder[CliConfig] = deriveEncoder[CliConfig]
+  final case class Parsed(
+    config: AllAppsConfig,
+    resolver: Json
+  )
 
   /** CLI option to parse base64-encoded resolver into JSON */
-  val resolverOpt: Opts[Json] = Opts
-    .option[String]("resolver", "Base64-encoded Iglu Resolver configuration (self-describing json)")
-    .mapValidated(validate(decodeBase64Json))
+  val resolverOpt: Opts[EncodedJsonOrPath] =
+    Opts.option[EncodedJsonOrPath]("resolver", "Iglu Resolver configuration (self-describing json)")
 
   /** CLI option to parse base64-encoded config hocon */
-  val configOpt: Opts[CliConfig] =
-    Opts
-      .option[String]("config", "Base64-encoded app configuration (hocon). Defaults to empty string.")
-      .withDefault("")
-      .mapValidated(validate(decodeBase64Hocon))
+  val configOpt: Opts[Option[EncodedHoconOrPath]] =
+    Opts.option[EncodedHoconOrPath]("config", "App configuration (hocon).").orNone
 
-  /** Check if the provided resolverJson can be parsed into a Resolver instance */
-  def validateResolverJson[F[_]: Monad: InitSchemaCache: InitListCache](
-    resolverJson: Json
-  ): EitherT[F, Throwable, Resolver[F]] =
-    EitherT[F, DecodingFailure, Resolver[F]](Resolver.parse[F](resolverJson)).leftMap(df =>
-      new RuntimeException(df.show)
-    )
+  /** CLI option to parse and resolve all arguments */
+  val options: Opts[Parsed] =
+    (configOpt, resolverOpt).mapN(Raw(_, _)).mapValidated { cli =>
+      parseRaw(cli).toValidatedNel
+    }
 
-  def decodeBase64Json(base64Str: String): Either[Throwable, Json] =
+  def parseRaw(raw: Raw): Either[String, Parsed] =
     for {
-      text <- Either.catchNonFatal(new String(Base64.getDecoder.decode(base64Str)))
-      json <- parse(text)
-      _    <- validateResolverJson[Id](json).value
-    } yield json
+      igluJson <- readJson(raw.resolver)
+      tsConfig <- readHocon(raw.config)
+      allApps  <- parseHocon(tsConfig)
+      _        <- Resolver.parse[Id](igluJson).leftMap(e => show"Cannot parse Iglu resolver: $e")
+    } yield Parsed(allApps, igluJson)
 
-  def decodeBase64Hocon(base64Str: String): Either[Throwable, CliConfig] =
-    for {
-      text  <- Either.catchNonFatal(new String(Base64.getDecoder.decode(base64Str)))
-      hocon <- parseHocon(text)
-    } yield hocon
+  def readJson(in: EncodedJsonOrPath): Either[String, Json] =
+    in match {
+      case EncodedOrPath.FromBase64(json) =>
+        json.asRight
+      case EncodedOrPath.PathToContent(path) =>
+        for {
+          text <- textFromFile(path)
+          json <- (parse(text)).leftMap(e => s"Cannot parse JSON in ${path.toAbsolutePath}: ${e.getMessage}")
+        } yield json
+    }
 
-  private def parseHocon(str: String): Either[Throwable, CliConfig] =
-    for {
-      resolved <- Either.catchNonFatal(ConfigFactory.parseString(str).resolve)
-      conf     <- Either.catchNonFatal(ConfigFactory.load(resolved.withFallback(ConfigFactory.load())))
-      cliConf  <- parser.decode[CliConfig](conf)
-    } yield cliConf
+  private def readHocon(in: Option[EncodedHoconOrPath]): Either[String, TypesafeConfig] =
+    in match {
+      case Some(EncodedOrPath.FromBase64(unresolved)) =>
+        Either
+          .catchOnly[ConfigException](unresolved.resolve)
+          .leftMap(e => s"Cannot resolve Base64 HOCON: ${e.getMessage}")
+      case Some(EncodedOrPath.PathToContent(path)) =>
+        for {
+          text <- textFromFile(path)
+          hocon <- Either
+            .catchOnly[ConfigException](ConfigFactory.parseString(text))
+            .leftMap(e => s"Cannot parse HOCON in ${path.toAbsolutePath}: ${e.getMessage}")
+          hocon <- Either
+            .catchOnly[ConfigException](hocon.resolve)
+            .leftMap(e => s"Cannot resolve HOCON in ${path.toAbsolutePath}: ${e.getMessage}")
+        } yield hocon
+      case None =>
+        ConfigFactory.empty.asRight
+    }
 
-  private def validate[In, Out](f: In => Either[Throwable, Out])(a: In): ValidatedNel[String, Out] =
-    f(a).leftMap(_.getMessage).toValidatedNel
+  private def textFromFile(path: Path): Either[String, String] =
+    Either
+      .catchNonFatal(Files.readAllLines(path).asScala.mkString("\n"))
+      .leftMap(e => s"Error reading ${path.toAbsolutePath} file from filesystem: ${e.getMessage}")
+
+  /** Uses the typesafe config layering approach. Loads configurations in the following priority order:
+    *  1. System properties
+    *  2. The provided configuration file
+    *  3. application.conf of our app
+    *  4. reference.conf of any libraries we use
+    */
+  private def parseHocon(in: TypesafeConfig): Either[String, AllAppsConfig] = {
+    val all = namespaced(ConfigFactory.load(namespaced(in.withFallback(namespaced(ConfigFactory.load())))))
+    parser.decode[AllAppsConfig](all).leftMap(_.show)
+  }
+
+  /** Optionally give precedence to configs wrapped in a "snowplow" block. To help avoid polluting config namespace */
+  private def namespaced(config: TypesafeConfig): TypesafeConfig =
+    if (config.hasPath(Namespace))
+      config.getConfig(Namespace).withFallback(config.withoutPath(Namespace))
+    else
+      config
+
+  private val Namespace = "snowplow"
+
 }

@@ -16,8 +16,8 @@ import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field, Type => DataType}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{Codecs, LoaderRow}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.MutatorEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{AllAppsConfig, CliConfig, Environment}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.MutatorEnvironment
 
 import com.google.cloud.bigquery.TimePartitioning
 
@@ -27,9 +27,11 @@ import com.monovore.decline._
 
 /** Mutator-specific CLI configuration */
 object MutatorCli {
-  private val options: Opts[MutatorEnvironment] = (configOpt, resolverOpt).mapN { (config, resolver) =>
-    Environment(config.mutator, resolver, config.projectId, config.monitoring)
-  }
+  private val options: Opts[MutatorEnvironment] =
+    CliConfig.options.map {
+      case CliConfig.Parsed(config, resolver) =>
+        Environment(config.mutator, resolver, config.projectId, config.monitoring)
+    }
 
   private val schema: Opts[SchemaKey] = Opts.option[String]("schema", "Iglu URI to add to the table").mapValidated {
     schema =>

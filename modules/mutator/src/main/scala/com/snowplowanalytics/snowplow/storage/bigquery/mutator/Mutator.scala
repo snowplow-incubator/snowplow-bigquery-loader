@@ -20,7 +20,7 @@ import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema => LoaderSchema, LoaderRow}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.MutatorEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.MutatorEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.Mutator._
 
 import cats.data.EitherT
@@ -103,7 +103,7 @@ class Mutator private (
   def getSchema(key: SchemaKey)(implicit t: Timer[IO], cs: ContextShift[IO], logger: Logger[IO]): IO[Schema] = {
     val action = for {
       response <- EitherT(igluClient.resolver.lookupSchema(key).timeout(10.seconds)).leftMap(fetchError)
-      _        <- EitherT.liftF(logger.info(s"Received $response from Iglu registry"))
+      _        <- EitherT.liftF(logger.info(s"Received schema from Iglu registry: ${response.noSpaces}"))
       schema   <- EitherT.fromOption[IO](Schema.parse(response), invalidSchema(key))
     } yield schema
 

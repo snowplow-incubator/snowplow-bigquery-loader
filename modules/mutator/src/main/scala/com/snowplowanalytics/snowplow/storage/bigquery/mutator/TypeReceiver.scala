@@ -16,7 +16,7 @@ import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData
 import com.snowplowanalytics.iglu.core.circe.implicits._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.MutatorEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.MutatorEnvironment
 
 import cats.effect.{ContextShift, IO}
 import cats.syntax.either._

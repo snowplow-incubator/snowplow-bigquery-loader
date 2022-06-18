@@ -12,8 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.RepeaterEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{CliConfig, Environment}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.RepeaterEnvironment
 
 import cats.data.ValidatedNel
 import cats.implicits._
@@ -28,9 +28,11 @@ object RepeaterCli {
 
   final case class GcsPath(bucket: String, path: String)
 
-  private val options: Opts[RepeaterEnvironment] = (configOpt, resolverOpt).mapN { (config, resolver) =>
-    Environment(config.repeater, resolver, config.projectId, config.monitoring)
-  }
+  private val options: Opts[RepeaterEnvironment] =
+    CliConfig.options.map {
+      case (resolver, config) =>
+        Environment(config.repeater, resolver, config.projectId, config.monitoring)
+    }
 
   private val bufferSize = Opts
     .option[Int](

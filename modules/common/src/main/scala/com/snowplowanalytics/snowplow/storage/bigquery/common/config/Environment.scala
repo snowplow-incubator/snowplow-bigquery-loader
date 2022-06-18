@@ -10,23 +10,20 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
-
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{AllAppsConfig, CliConfig, Environment}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
+package com.snowplowanalytics.snowplow.storage.bigquery.common.config
 
 import io.circe.Json
 
-import cats.implicits._
-import com.monovore.decline._
+import com.snowplowanalytics.iglu.client.Resolver
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Config, Monitoring}
 
-object StreamLoaderCli {
+final case class Environment[A](config: A, resolverJson: Json, projectId: String, monitoring: Monitoring) {
+  def getFullSubName(sub: String): String     = s"projects/$projectId/subscriptions/$sub"
+  def getFullTopicName(topic: String): String = s"projects/$projectId/topics/$topic"
+}
 
-  val command: Command[(Json, AllAppsConfig)] =
-    Command(generated.BuildInfo.name, generated.BuildInfo.description)(CliConfig.options)
-
-  def parse(args: Seq[String]): Either[String, LoaderEnvironment] =
-    for {
-      (resolver, config) <- command.parse(args).leftMap(_.show)
-    } yield Environment(config.loader, resolver, config.projectId, config.monitoring)
+object Environment {
+  type LoaderEnvironment   = Environment[Config.Loader]
+  type MutatorEnvironment  = Environment[Config.Mutator]
+  type RepeaterEnvironment = Environment[Config.Repeater]
 }

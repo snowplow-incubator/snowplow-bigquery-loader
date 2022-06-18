@@ -12,7 +12,7 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.Dropwizard
 
 import cats.syntax.either._

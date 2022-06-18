@@ -20,8 +20,8 @@ import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
 import com.snowplowanalytics.snowplow.badrows.Processor
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.{
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.{
   LoaderEnvironment,
   MutatorEnvironment,
   RepeaterEnvironment
@@ -50,6 +50,7 @@ import java.time.Instant
 import java.util.UUID
 import java.net.URI
 import scala.concurrent.duration.{FiniteDuration, HOURS, MILLISECONDS, NANOSECONDS, SECONDS, TimeUnit}
+import scala.io.Source
 
 object SpecHelpers {
   object meta {
@@ -495,6 +496,26 @@ object SpecHelpers {
                 }
               }"""
 
+    // Missing required `cacheSize` property
+    private[bigquery] val invalidResolverJson =
+      json"""{
+                "schema": "iglu:com.snowplowanalytics.iglu/resolver-config/jsonschema/1-0-1",
+                "data": {
+                  "repositories": [
+                   {
+                      "name": "Iglu Central",
+                      "priority": 0,
+                      "vendorPrefixes": [ "com.snowplowanalytics" ],
+                      "connection": {
+                        "http": {
+                          "uri":"http://iglucentral.com"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }"""
+
     private[bigquery] val validResolverJsonB64 =
       "ewogICJzY2hlbWEiOiAiaWdsdTpjb20uc25vd3Bsb3dhbmFseXRpY3MuaWdsdS9yZXNvbHZlci1jb25maWcvanNvbnNjaGVtYS8xLTAtMSIsCiAgImRhdGEiOiB7CiAgICAiY2FjaGVTaXplIjogNTAwLAogICAgInJlcG9zaXRvcmllcyI6IFsKICAgICB7CiAgICAgICAgIm5hbWUiOiAiSWdsdSBDZW50cmFsIiwKICAgICAgICAicHJpb3JpdHkiOiAwLAogICAgICAgICJ2ZW5kb3JQcmVmaXhlcyI6IFsgImNvbS5zbm93cGxvd2FuYWx5dGljcyIgXSwKICAgICAgICAiY29ubmVjdGlvbiI6IHsKICAgICAgICAgICJodHRwIjogewogICAgICAgICAgICAidXJpIjoiaHR0cDovL2lnbHVjZW50cmFsLmNvbSIKICAgICAgICAgIH0KICAgICAgICB9CiAgICAgIH0KICAgIF0KICB9Cn0="
 
@@ -508,6 +529,9 @@ object SpecHelpers {
 
     private[bigquery] val validHoconB64 =
       "ewogICJwcm9qZWN0SWQiOiAic25vd3Bsb3ctZGF0YSIKCiAgImxvYWRlciI6IHsKICAgICJpbnB1dCI6IHsKICAgICAgInR5cGUiOiAiUHViU3ViIgogICAgICAic3Vic2NyaXB0aW9uIjogImVucmljaGVkLXN1YiIKICAgIH0KCiAgICAib3V0cHV0IjogewogICAgICAiZ29vZCI6IHsKICAgICAgICAidHlwZSI6ICJCaWdRdWVyeSIKICAgICAgICAiZGF0YXNldElkIjogImF0b21pYyIKICAgICAgICAidGFibGVJZCI6ICJldmVudHMiCiAgICAgIH0KCiAgICAgICJiYWQiOiB7CiAgICAgICAgInR5cGUiOiAiUHViU3ViIgogICAgICAgICJ0b3BpYyI6ICJiYWQtdG9waWMiCiAgICAgIH0KCiAgICAgICJ0eXBlcyI6IHsKICAgICAgICAidHlwZSI6ICJQdWJTdWIiCiAgICAgICAgInRvcGljIjogInR5cGVzLXRvcGljIgogICAgICB9CgogICAgICAiZmFpbGVkSW5zZXJ0cyI6IHsKICAgICAgICAidHlwZSI6ICJQdWJTdWIiCiAgICAgICAgInRvcGljIjogImZhaWxlZC1pbnNlcnRzLXRvcGljIgogICAgICB9CiAgICB9CgogICAgImxvYWRNb2RlIjogewogICAgICAidHlwZSI6ICJTdHJlYW1pbmdJbnNlcnRzIgogICAgICAicmV0cnkiOiBmYWxzZQogICAgfQogIH0KCiAgIm11dGF0b3IiOiB7CiAgICAiaW5wdXQiOiB7CiAgICAgICJ0eXBlIjogIlB1YlN1YiIKICAgICAgInN1YnNjcmlwdGlvbiI6ICJtdXRhdG9yLXN1YiIKICAgIH0KCiAgICAib3V0cHV0IjogewogICAgICAiZ29vZCI6ICR7bG9hZGVyLm91dHB1dC5nb29kfQogICAgfQogIH0KCiAgInJlcGVhdGVyIjogewogICAgImlucHV0IjogewogICAgICAidHlwZSI6ICJQdWJTdWIiCiAgICAgICJzdWJzY3JpcHRpb24iOiAiZmFpbGVkLWluc2VydHMtc3ViIgogICAgfQoKICAgICJvdXRwdXQiOiB7CiAgICAgICJnb29kIjogJHtsb2FkZXIub3V0cHV0Lmdvb2R9CgogICAgICAiZGVhZExldHRlcnMiOiB7CiAgICAgICAgInR5cGUiOiAiR2NzIgogICAgICAgICJidWNrZXQiOiAiZ3M6Ly9zb21lLWJ1Y2tldC8iCiAgICAgIH0KICAgIH0KICB9CgogICJtb25pdG9yaW5nIjogewogICAgInN0YXRzZCI6IHsKICAgICAgImhvc3RuYW1lIjogInN0YXRzZC5hY21lLmdsIgogICAgICAicG9ydCI6IDEwMjQKICAgICAgInRhZ3MiOiB7fQogICAgICAicGVyaW9kIjogIjEgc2VjIgogICAgICAicHJlZml4IjogInNub3dwbG93Lm1vbml0b3JpbmciCiAgICB9LAogICAgInN0ZG91dCI6IHsKICAgICAgInBlcmlvZCI6ICIxIHNlYyIKICAgICAgInByZWZpeCI6ICJzbm93cGxvdy5tb25pdG9yaW5nIgogICAgfSwKICAgICJzZW50cnkiOiB7CiAgICAgICJkc24iOiAiaHR0cDovL3NlbnRyeS5hY21lLmNvbSIKICAgIH0sCiAgICAiZHJvcHdpemFyZCI6IHsKICAgICAgInBlcmlvZCI6ICIxIHNlYyIKICAgIH0KICB9Cn0="
+
+    private[bigquery] val validHocon =
+      Source.fromResource("valid-config.hocon").mkString
 
     // Dangling open '{'
     private[bigquery] val invalidHoconB64 =

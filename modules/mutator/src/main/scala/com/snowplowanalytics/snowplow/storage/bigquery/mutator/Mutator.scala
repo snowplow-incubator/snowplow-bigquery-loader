@@ -20,7 +20,7 @@ import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema => LoaderSchema, LoaderRow}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.MutatorEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.MutatorEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.Mutator._
 
 import cats.data.EitherT

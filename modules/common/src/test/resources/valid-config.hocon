@@ -1,0 +1,85 @@
+{
+  "projectId": "snowplow-data"
+
+  "loader": {
+    "input": {
+      "type": "PubSub"
+      "subscription": "enriched-sub"
+    }
+
+    "output": {
+      "good": {
+        "type": "BigQuery"
+        "datasetId": "atomic"
+        "tableId": "events"
+      }
+
+      "bad": {
+        "type": "PubSub"
+        "topic": "bad-topic"
+      }
+
+      "types": {
+        "type": "PubSub"
+        "topic": "types-topic"
+      }
+
+      "failedInserts": {
+        "type": "PubSub"
+        "topic": "failed-inserts-topic"
+      }
+    }
+
+    "loadMode": {
+      "type": "StreamingInserts"
+      "retry": false
+    }
+  }
+
+  "mutator": {
+    "input": {
+      "type": "PubSub"
+      "subscription": "mutator-sub"
+    }
+
+    "output": {
+      "good": ${loader.output.good}
+    }
+  }
+
+  "repeater": {
+    "input": {
+      "type": "PubSub"
+      "subscription": "failed-inserts-sub"
+    }
+
+    "output": {
+      "good": ${loader.output.good}
+
+      "deadLetters": {
+        "type": "Gcs"
+        "bucket": "gs://some-bucket/"
+      }
+    }
+  }
+
+  "monitoring": {
+    "statsd": {
+      "hostname": "statsd.acme.gl"
+      "port": 1024
+      "tags": {}
+      "period": "1 sec"
+      "prefix": "snowplow.monitoring"
+    },
+    "stdout": {
+      "period": "1 sec"
+      "prefix": "snowplow.monitoring"
+    },
+    "sentry": {
+      "dsn": "http://sentry.acme.com"
+    },
+    "dropwizard": {
+      "period": "1 sec"
+    }
+  }
+}

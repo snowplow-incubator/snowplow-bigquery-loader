@@ -13,7 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.repeater
 
 import com.snowplowanalytics.snowplow.badrows.BadRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.RepeaterEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.RepeaterEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp

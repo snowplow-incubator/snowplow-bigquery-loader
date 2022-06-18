@@ -17,7 +17,7 @@ import com.snowplowanalytics.iglu.client.Client
 import com.snowplowanalytics.iglu.client.resolver.{InitListCache, InitSchemaCache}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Monitoring, Output, SinkSettings}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.{StreamBadRow, StreamLoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics

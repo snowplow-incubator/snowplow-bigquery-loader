@@ -12,12 +12,16 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.{
-  Environment,
-  decodeBase64Hocon,
-  decodeBase64Json
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{
+  AllAppsConfig,
+  CliConfig,
+  EncodedHoconOrPath,
+  EncodedJsonOrPath,
+  Environment
 }
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
+
+import cats.implicits._
 
 import com.spotify.scio.Args
 
@@ -26,10 +30,12 @@ import com.spotify.scio.Args
   * Requires --key=value format and ignores unknown options (for Dataflow)
   */
 object LoaderCli {
-  def parse(args: Args): Either[Throwable, LoaderEnvironment] =
-    for {
-      c <- decodeBase64Hocon(args("config"))
-      r <- decodeBase64Json(args("resolver"))
-      e = Environment(c.loader, r, c.projectId, c.monitoring)
-    } yield e
+  def parse(args: Args): Either[Throwable, LoaderEnvironment] = {
+    val result = for {
+      hocon  <- EncodedHoconOrPath.tryEncoded(args("config"))
+      json   <- EncodedJsonOrPath.tryEncoded(args("resolver"))
+      (r, c) <- AllAppsConfig.fromRaw(CliConfig(Some(hocon), json))
+    } yield Environment(c.loader, r, c.projectId, c.monitoring)
+    result.leftMap(e => new IllegalArgumentException(e))
+  }
 }

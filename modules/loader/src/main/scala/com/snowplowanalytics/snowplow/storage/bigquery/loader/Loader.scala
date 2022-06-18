@@ -16,7 +16,7 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.CliConfig.Environment.LoaderEnvironment
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{LoadMode, Monitoring}
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.metrics._
 import com.snowplowanalytics.snowplow.storage.bigquery.loader.IdInstances._

@@ -45,7 +45,8 @@ object StreamLoader {
 
   def run[F[_]: Async: Logger](e: LoaderEnvironment): F[ExitCode] =
     Resources.acquire(e).use { resources =>
-      val eventStream = resources.source.evalMap(parse(resources.igluClient.resolver))
+      implicit val rl: RegistryLookup[F] = resources.registryLookup
+      val eventStream                    = resources.source.evalMap(parse(resources.igluClient.resolver))
 
       val sink: Pipe[F, Parsed[F], Nothing] = _.observeEither(
         resources.badSink,

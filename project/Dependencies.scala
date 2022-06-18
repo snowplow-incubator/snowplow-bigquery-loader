@@ -109,6 +109,7 @@ object Dependencies {
   val analyticsSdk  = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk
   val badrows       = "com.snowplowanalytics" %% "snowplow-badrows"             % V.badrows
   val igluClient    = "com.snowplowanalytics" %% "iglu-scala-client"            % V.igluClient
+  val igluHttp4s    = "com.snowplowanalytics" %% "iglu-scala-client-http4s"     % V.igluClient
   val igluCoreCirce = "com.snowplowanalytics" %% "iglu-core-circe"              % V.igluCore
   val schemaDdl     = "com.snowplowanalytics" %% "schema-ddl"                   % V.schemaDdl
 
@@ -156,6 +157,8 @@ object Dependencies {
 
   val streamloaderDependencies = Seq(
       bigQuery,
+      httpClient,
+      igluHttp4s,
       pubsubFs2Grpc
     )
 

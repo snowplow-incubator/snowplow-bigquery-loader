@@ -20,11 +20,11 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment
 
 import cats.Monad
 import cats.effect._
+import cats.effect.std.Queue
 import cats.effect.implicits._
 import cats.implicits._
 
 import fs2.{Pipe, Stream}
-import fs2.concurrent.{NoneTerminatedQueue, Queue}
 
 import org.typelevel.log4cats.Logger
 
@@ -47,14 +47,14 @@ object StreamLoader {
 
   type Parsed[F[_]] = Either[StreamBadRow[F], StreamLoaderRow[F]]
 
-  def run[F[_]: ContextShift: ConcurrentEffect: Timer: Logger](e: LoaderEnvironment): F[ExitCode] =
+  def run[F[_]: Async: Logger](e: LoaderEnvironment): F[ExitCode] =
     Resources.acquire(e).use { resources =>
       val eventStream = resources.source.evalMap(parse(resources.igluClient.resolver))
 
-      val sink: Pipe[F, Parsed[F], Unit] = _.observeEither(
+      val sink: Pipe[F, Parsed[F], Nothing] = _.observeEither(
         resources.badSink,
         resources.goodSink
-      ).void
+      ).drain
 
       val metrics = resources.metrics.report
 
@@ -92,30 +92,30 @@ object StreamLoader {
     * terminate the source any earlier, because this would shutdown the PubSub consumer too early,
     * and then we would not be able to ack any outstanding records.
     */
-  private def runWithShutdown[F[_]: Concurrent: Timer: Logger, A](
+  private def runWithShutdown[F[_]: Async: Logger, A](
     timeout: FiniteDuration,
     sentry: Sentry[F],
     source: Stream[F, A],
     sink: Pipe[F, A, Unit]
   ): F[Unit] =
-    Queue.synchronousNoneTerminated[F, A].flatMap { queue =>
-      queue
-        .dequeue
+    Queue.synchronous[F, Option[A]].flatMap { queue =>
+      Stream
+        .fromQueueNoneTerminated(queue)
         .through(sink)
-        .concurrently(source.evalMap(x => queue.enqueue1(Some(x))).onFinalize(queue.enqueue1(None)))
+        .concurrently(source.evalMap(x => queue.offer(Some(x))).onFinalize(queue.offer(None)))
         .compile
         .drain
         .start
-        .bracketCase(_.join) {
-          case (_, ExitCase.Completed) =>
+        .bracketCase(_.joinWithNever) {
+          case (_, Outcome.Succeeded(_)) =>
             // The source has completed "naturally".
             // For a infinite source like PubSub this should never happen.
-            Concurrent[F].unit
-          case (fiber, ExitCase.Canceled) =>
+            Async[F].unit
+          case (fiber, Outcome.Canceled()) =>
             // We received a SIGINT.  We want to ack outstanding events before letting the app exit.
             Logger[F].warn("Received a shutdown signal") *>
               terminateStream(queue, fiber, timeout)
-          case (fiber, ExitCase.Error(e)) =>
+          case (fiber, Outcome.Errored(e)) =>
             // The source had a runtime exception.  We want to ack oustanding events, and raise the original exception.
             Logger[F].error(e)("Exception caused loader to terminate") *>
               sentry.trackException(e) *>
@@ -125,14 +125,19 @@ object StreamLoader {
         }
     }
 
-  private def terminateStream[F[_]: Concurrent: Timer: Logger, A](
-    queue: NoneTerminatedQueue[F, A],
-    fiber: Fiber[F, Unit],
+  private def terminateStream[F[_]: Async: Logger, A](
+    queue: Queue[F, Option[A]],
+    fiber: Fiber[F, Throwable, Unit],
     timeout: FiniteDuration
   ): F[Unit] =
     for {
       _ <- Logger[F].warn(s"Terminating the stream. Waiting for $timeout for it to complete")
-      _ <- queue.enqueue1(None)
-      _ <- fiber.join.timeoutTo(timeout, Logger[F].warn("Aborted waiting for stream to complete") *> fiber.cancel)
+      _ <- queue.offer(None)
+      _ <- fiber
+        .join
+        .timeoutTo(
+          timeout,
+          Logger[F].warn("Aborted waiting for stream to complete") *> fiber.cancel.as(Outcome.Succeeded(Async[F].unit))
+        )
     } yield ()
 }

@@ -23,7 +23,7 @@ object Main extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] =
     StreamLoaderCli.parse(args) match {
-      case Right(env) => StreamLoader.run(env)
+      case Right(env) => StreamLoader.run[IO](env)
       case Left(help) => unsafeLogger.error(help.toString).as(ExitCode.Error)
     }
 }

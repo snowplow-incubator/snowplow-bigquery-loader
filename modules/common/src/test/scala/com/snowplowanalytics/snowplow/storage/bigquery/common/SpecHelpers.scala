@@ -40,7 +40,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monit
   Sentry => SentryConfig
 }
 
-import cats.Id
+import cats.{Applicative, Id}
 import cats.effect.Clock
 import io.circe.Json
 import io.circe.literal._
@@ -49,7 +49,7 @@ import io.circe.parser.parse
 import java.time.Instant
 import java.util.UUID
 import java.net.URI
-import scala.concurrent.duration.{FiniteDuration, HOURS, MILLISECONDS, NANOSECONDS, SECONDS, TimeUnit}
+import scala.concurrent.duration.{FiniteDuration, HOURS, MILLISECONDS, NANOSECONDS, SECONDS}
 import scala.io.Source
 
 object SpecHelpers {
@@ -89,11 +89,13 @@ object SpecHelpers {
 
   object implicits {
     implicit val idClock: Clock[Id] = new Clock[Id] {
-      def realTime(unit: TimeUnit): Id[Long] =
-        unit.convert(System.currentTimeMillis(), MILLISECONDS)
+      def realTime: FiniteDuration =
+        FiniteDuration(System.currentTimeMillis, MILLISECONDS)
 
-      def monotonic(unit: TimeUnit): Id[Long] =
-        unit.convert(System.nanoTime(), NANOSECONDS)
+      def monotonic: FiniteDuration =
+        FiniteDuration(System.nanoTime(), NANOSECONDS)
+
+      def applicative: Applicative[Id] = implicitly[Applicative[Id]]
     }
   }
 
@@ -558,10 +560,10 @@ object SpecHelpers {
     private val consumerSettings =
       ConsumerSettings(maxQueueSize, parallelPullCount, maxAckExtensionPeriod, awaitTerminatePeriod)
 
-    private val bqWriteRequestThreshold: Int            = 500
-    private val bqWriteRequestTimeout: FiniteDuration   = FiniteDuration(1L, SECONDS)
-    private val bqWriteRequestSizeLimit: Int            = 10000000
-    private val goodSinkConcurrency: Int                = 1024
+    private val bqWriteRequestThreshold: Int          = 500
+    private val bqWriteRequestTimeout: FiniteDuration = FiniteDuration(1L, SECONDS)
+    private val bqWriteRequestSizeLimit: Int          = 10000000
+    private val goodSinkConcurrency: Int              = 1024
     private val sinkSettingsGood = SinkSettings.Good(
       bqWriteRequestThreshold,
       bqWriteRequestTimeout,

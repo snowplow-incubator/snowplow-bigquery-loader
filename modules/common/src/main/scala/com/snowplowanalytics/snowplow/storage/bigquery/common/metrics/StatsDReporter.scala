@@ -19,7 +19,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.Me
   RepeaterMetricsSnapshot
 }
 
-import cats.effect.{Blocker, ContextShift, Resource, Sync, Timer}
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 import org.typelevel.log4cats.Logger
 
@@ -38,14 +38,13 @@ object StatsDReporter {
   private val FailedInsertCountName = "failed_inserts"
   private val BadCountName          = "bad"
   private val UninsertableName      = "uninsertable"
-  private val RepeaterInsertedName  = "repeater_inserted"
+  //private val RepeaterInsertedName  = "repeater_inserted"
 
   /** A reporter which sends metrics from the registry to the StatsD server. */
-  def make[F[_]: Sync: ContextShift: Timer: Logger](
-    blocker: Blocker,
+  def make[F[_]: Sync: Logger](
     config: Statsd
   ): Resource[F, Metrics.Reporter[F]] =
-    Resource.fromAutoCloseable(Sync[F].delay(new DatagramSocket)).map(impl[F](blocker, config, _))
+    Resource.fromAutoCloseable(Sync[F].delay(new DatagramSocket)).map(impl[F](config, _))
 
   /**
     * The stream calls `InetAddress.getByName` each time there is a new batch of metrics. This allows
@@ -57,17 +56,16 @@ object StatsDReporter {
     * so there could be a delay in following a DNS record change.  For the Docker image we release
     * the cache time is 30 seconds.
     */
-  private def impl[F[_]: Sync: ContextShift: Timer: Logger](
-    blocker: Blocker,
+  private def impl[F[_]: Sync: Logger](
     monitoringConfig: Statsd,
     socket: DatagramSocket
   ): Metrics.Reporter[F] =
     new Metrics.Reporter[F] {
       def report(snapshot: MetricsSnapshot): F[Unit] =
         (for {
-          inetAddr <- blocker.delay(InetAddress.getByName(monitoringConfig.hostname))
+          inetAddr <- Sync[F].interruptible(InetAddress.getByName(monitoringConfig.hostname))
           _ <- serializeMetrics(snapshot, monitoringConfig).traverse_(
-            sendMetric[F](blocker, socket, inetAddr, monitoringConfig.port)
+            sendMetric[F](socket, inetAddr, monitoringConfig.port)
           )
         } yield ()).handleErrorWith { t =>
           Logger[F].error(t)("Caught exception sending metrics")
@@ -103,8 +101,7 @@ object StatsDReporter {
       }
   }
 
-  private def sendMetric[F[_]: ContextShift: Sync](
-    blocker: Blocker,
+  private def sendMetric[F[_]: Sync](
     socket: DatagramSocket,
     addr: InetAddress,
     port: Int
@@ -113,6 +110,6 @@ object StatsDReporter {
   ): F[Unit] = {
     val bytes  = metric.getBytes(UTF_8)
     val packet = new DatagramPacket(bytes, bytes.length, addr, port)
-    blocker.delay(socket.send(packet))
+    Sync[F].interruptible(socket.send(packet))
   }
 }

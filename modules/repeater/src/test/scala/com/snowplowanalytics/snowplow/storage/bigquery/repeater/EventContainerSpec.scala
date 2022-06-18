@@ -23,20 +23,20 @@ import org.specs2.mutable.Specification
 class EventContainerSpec extends Specification {
   "EventContainer" should {
     "have isomorphic codecs" in {
-      val eventId = UUID.randomUUID()
+      val eventId   = UUID.randomUUID()
       val etlTstamp = Instant.now()
       val testJson =
         parse(s"""
-          | {
-          |   "event_id": "$eventId",
-          |   "etl_tstamp": "$etlTstamp",
-          |   "example_field1": "example_val1",
-          |   "example_field2": "example_val2"
-          | }
-          |""".stripMargin)
+                 | {
+                 |   "event_id": "$eventId",
+                 |   "etl_tstamp": "$etlTstamp",
+                 |   "example_field1": "example_val1",
+                 |   "example_field2": "example_val2"
+                 | }
+                 |""".stripMargin)
       val originalEventContainer = EventContainer(eventId, etlTstamp, testJson.toOption.get.asObject.get)
-      val resultEventContainer = originalEventContainer.asJson.as[EventContainer].toOption.get
-      originalEventContainer mustEqual(resultEventContainer)
+      val resultEventContainer   = originalEventContainer.asJson.as[EventContainer].toOption.get
+      originalEventContainer mustEqual (resultEventContainer)
     }
   }
 }

@@ -19,7 +19,6 @@ import com.snowplowanalytics.snowplow.storage.bigquery.repeater.services.Storage
 
 import cats.data.EitherT
 import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.cloud.bigquery._
 import fs2.{Chunk, Stream}
@@ -40,32 +39,31 @@ object Flow {
     * @param resources All application resources
     * @param events Stream of events from Pub/Sub
     */
-  def sink[F[_]: Logger: Timer: Concurrent: ContextShift](
+  def sink[F[_]: Logger: Async](
     resources: Resources[F]
   )(events: EventStream[F]): Stream[F, Unit] =
     events.parEvalMapUnordered(resources.concurrency) { event =>
-      val insert = checkAndInsert[F](
+      checkAndInsert[F](
         resources.bigQuery,
         resources.env.config.output.good.datasetId,
         resources.env.config.output.good.tableId,
         resources.backoffPeriod
       )(event)
-      resources.insertBlocker.blockOn(insert).flatMap {
+      .flatMap {
         case Right(Inserted) => resources.metrics.repeaterInsertedCount
         case Right(_)        => Sync[F].unit
         // format: off
-        case Left(d) => resources.uninsertable.enqueue1(d)
+        case Left(d: BadRow) => resources.uninsertable.offer(d)
         // format: on
       }
     }
 
   /** Dequeue uninsertable events and sink them to GCS */
-  def dequeueUninsertable[F[_]: Timer: Concurrent: Logger](
+  def dequeueUninsertable[F[_]: Async: Logger](
     resources: Resources[F]
   ): Stream[F, Unit] =
-    resources
-      .uninsertable
-      .dequeueChunk(resources.bufferSize)
+    Stream
+      .fromQueueUnterminated(resources.uninsertable, resources.bufferSize)
       .groupWithin(resources.bufferSize, resources.timeout.seconds)
       .evalMap(sinkBadChunk(resources.counter, resources.bucket, resources.metrics))
 
@@ -73,7 +71,7 @@ object Flow {
     * Sink whole chunk of uninsertable events to a file.
     * The filename is composed of time and chunk number.
     */
-  def sinkBadChunk[F[_]: Timer: Sync: Logger](
+  def sinkBadChunk[F[_]: Sync: Logger](
     counter: Ref[F, Int],
     bucket: GcsPath,
     metrics: Metrics[F]

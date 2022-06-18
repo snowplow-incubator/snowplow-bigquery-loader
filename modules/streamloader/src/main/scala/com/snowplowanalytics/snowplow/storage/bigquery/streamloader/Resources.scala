@@ -26,14 +26,13 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.Sentry
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.FailedInsert
 
 import cats.Applicative
-import cats.effect.{Async, Blocker, Concurrent, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
+import cats.effect.{Async, Resource, Sync}
 import cats.implicits._
 import com.google.cloud.bigquery.BigQuery
 import com.permutive.pubsub.producer.{Model, PubsubProducer}
 import com.permutive.pubsub.producer.encoder.MessageEncoder
 import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerConfig}
 import fs2.{Pipe, Stream}
-import fs2.concurrent.Queue
 import io.circe.Json
 
 import org.typelevel.log4cats.Logger
@@ -44,8 +43,8 @@ import scala.concurrent.duration._
 final class Resources[F[_]](
   val source: Stream[F, Payload[F]],
   val igluClient: Client[F, Json],
-  val badSink: Pipe[F, StreamBadRow[F], Unit],
-  val goodSink: Pipe[F, StreamLoaderRow[F], Unit],
+  val badSink: Pipe[F, StreamBadRow[F], Nothing],
+  val goodSink: Pipe[F, StreamLoaderRow[F], Nothing],
   val metrics: Metrics[F],
   val sentry: Sentry[F]
 )
@@ -58,7 +57,7 @@ object Resources {
     * @tparam F effect type that can allocate Iglu cache
     * @return allocated `Resources`
     */
-  def acquire[F[_]: Concurrent: ContextShift: InitSchemaCache: InitListCache: ConcurrentEffect: Timer: Logger](
+  def acquire[F[_]: Async: InitSchemaCache: InitListCache: Logger](
     env: LoaderEnvironment
   ): Resource[F, Resources[F]] = {
     val clientF: F[Client[F, Json]] = Client.parseDefault[F](env.resolverJson).value.flatMap {
@@ -70,10 +69,8 @@ object Resources {
 
     // format: off
     for {
-      blocker        <- Blocker[F]
-      source         = Source.getStream[F](env.projectId, env.config.input.subscription, blocker, env.config.consumerSettings)
       igluClient     <- Resource.eval[F, Client[F, Json]](clientF)
-      metrics        <- Resource.eval(mkMetricsReporter[F](blocker, env.monitoring))
+      metrics        <- Resource.eval(mkMetricsReporter[F](env.monitoring))
       types          <- mkTypeSink[F](env.projectId, env.config.output.types.topic, env.config.sinkSettings.types, metrics)
       bigquery       <- Resource.eval[F, BigQuery](Bigquery.getClient(env.config.retrySettings, env.projectId))
       failedInserts  <- mkProducer[F, Bigquery.FailedInsert](
@@ -84,7 +81,8 @@ object Resources {
       )
       badSink        <- mkBadSink[F](env.projectId, env.config.output.bad.topic, env.config.sinkSettings.bad.sinkConcurrency, metrics, env.config.sinkSettings.bad)
       sentry         <- Sentry.init(env.monitoring.sentry)
-      goodSink       = mkGoodSink[F](blocker, env.config.output.good, bigquery, failedInserts, metrics, types, env.config.sinkSettings.good, env.config.sinkSettings.types)
+      goodSink       = mkGoodSink[F](env.config.output.good, bigquery, failedInserts, metrics, types, env.config.sinkSettings.good, env.config.sinkSettings.types)
+      source         = Source.getStream[F](env.projectId, env.config.input.subscription, env.config.consumerSettings)
     } yield new Resources[F](source, igluClient, badSink, goodSink, metrics, sentry)
     // format: on
   }
@@ -109,13 +107,13 @@ object Resources {
   // TODO: Can failed inserts be given their own sink like bad rows and types?
 
   // Acks the event after processing it as a `BadRow`
-  private def mkBadSink[F[_]: Concurrent: Logger](
+  private def mkBadSink[F[_]: Async: Logger](
     projectId: String,
     topic: String,
     maxConcurrency: Int,
     metrics: Metrics[F],
     sinkSettingsBad: SinkSettings.Bad
-  ): Resource[F, Pipe[F, StreamBadRow[F], Unit]] =
+  ): Resource[F, Pipe[F, StreamBadRow[F], Nothing]] =
     mkProducer[F, BadRow](
       projectId,
       topic,
@@ -124,16 +122,16 @@ object Resources {
     ).map { p =>
       _.parEvalMapUnordered(maxConcurrency) { badRow =>
         p.produce(badRow.row) *> badRow.ack *> metrics.badCount
-      }
+      }.drain
     }
 
   // Does not ack the event -- it still needs to end up in one of the other targets
-  private def mkTypeSink[F[_]: Concurrent: Logger](
+  private def mkTypeSink[F[_]: Async: Logger](
     projectId: String,
     topic: String,
     sinkSettingsTypes: SinkSettings.Types,
     metrics: Metrics[F]
-  ): Resource[F, Pipe[F, Set[ShreddedType], Unit]] =
+  ): Resource[F, Pipe[F, Set[ShreddedType], Nothing]] =
     mkProducer[F, Set[ShreddedType]](
       projectId,
       topic,
@@ -142,7 +140,7 @@ object Resources {
     ).map { p =>
       _.parEvalMapUnordered(sinkSettingsTypes.sinkConcurrency) { types =>
         p.produce(types).void *> metrics.typesCount(types.size)
-      }
+      }.drain
     }
 
   /** Write good events through a BigQuery sink and pipe observed types through a Pub/Sub sink.
@@ -157,23 +155,23 @@ object Resources {
     * @param bufferOverflowQueue A Queue in which put events that are left over from a batch after taking as many as
     *                            possible without breaching the streaming inserts request size limit
     */
-  private def mkGoodSink[F[_]: Concurrent: ContextShift: Timer](
-    blocker: Blocker,
+  private def mkGoodSink[F[_]: Async](
     good: Output.BigQuery,
     bigQuery: BigQuery,
     producer: PubsubProducer[F, FailedInsert],
     metrics: Metrics[F],
-    typeSink: Pipe[F, Set[ShreddedType], Unit],
+    typeSink: Pipe[F, Set[ShreddedType], Nothing],
     sinkSettingsGood: SinkSettings.Good,
     sinkSettingsTypes: SinkSettings.Types
-  ): Pipe[F, StreamLoaderRow[F], Unit] = {
-    val goodPipe: Pipe[F, StreamLoaderRow[F], Unit] = {
+  ): Pipe[F, StreamLoaderRow[F], Nothing] = {
+    val goodPipe: Pipe[F, StreamLoaderRow[F], Nothing] = {
       _.through(batchWithin(sinkSettingsGood.bqWriteRequestThreshold, sinkSettingsGood.bqWriteRequestTimeout))
         .through(batchBySize(getSize[F], sinkSettingsGood.bqWriteRequestSizeLimit))
         .parEvalMapUnordered(sinkSettingsGood.sinkConcurrency) { slrows =>
-          Bigquery.insert(producer, metrics, slrows.map(_.row))(Bigquery.mkInsert(good, bigQuery, blocker)) *>
+          Bigquery.insert(producer, metrics, slrows.map(_.row))(Bigquery.mkInsert(good, bigQuery)) *>
             slrows.traverse_(_.ack)
         }
+        .drain
     }
 
     // There is no guarantee that any side effects from `observe(goodPipe)` will be executed before side effects in `through(typeSink)`.
@@ -215,7 +213,7 @@ object Resources {
     * @param n How many As to put in the batch.
     * @param t How long to wait before finalising the batch
     */
-  private[streamloader] def batchWithin[F[_]: Timer: Concurrent, A](
+  private[streamloader] def batchWithin[F[_]: Async, A](
     n: Int,
     t: FiniteDuration
   ): Pipe[F, A, List[A]] =
@@ -227,15 +225,14 @@ object Resources {
     * @param t Time window to aggregate over if n limit is not reached.
     * @return  A pipe that does not change the type of elements but discards non-unique values within the group.
     */
-  private[streamloader] def aggregateTypes[F[_]: Timer: Concurrent](
+  private[streamloader] def aggregateTypes[F[_]: Async](
     n: Int,
     t: FiniteDuration
   ): Pipe[F, Set[ShreddedType], Set[ShreddedType]] =
     _.through(batchWithin(n, t)).map(_.toSet.flatten)
 
-  private def mkMetricsReporter[F[_]: ConcurrentEffect: ContextShift: Timer: Logger](
-    blocker: Blocker,
+  private def mkMetricsReporter[F[_]: Async: Logger](
     monitoringConfig: Monitoring
   ): F[Metrics[F]] =
-    Metrics.build[F](blocker, monitoringConfig, ReportingApp.StreamLoader)
+    Metrics.build[F](monitoringConfig, ReportingApp.StreamLoader)
 }

@@ -29,7 +29,7 @@ import sbtdynver.DynVerPlugin.autoImport._
 object BuildSettings {
   lazy val projectSettings = Seq(
     organization := "com.snowplowanalytics",
-    scalaVersion := "2.13.2",
+    scalaVersion := "2.13.8",
     buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description, BuildInfoKey.action("userAgent") {
       s"${name.value}/${version.value}"
     }),
@@ -119,9 +119,6 @@ object BuildSettings {
       "-target",
       "1.8",
       "-Xlint"
-    ),
-    scalacOptions := Seq(
-      "-Ywarn-unused:-nowarn"
     )
   )
 
@@ -165,9 +162,13 @@ object BuildSettings {
     assembly / assemblyMergeStrategy := {
       // merge strategy for fixing netty conflict
       case PathList("io", "netty", xs @ _*)                => MergeStrategy.first
+      case PathList("org", "hamcrest", xs @ _*)            => MergeStrategy.first
+      case PathList("META-INF", "native-image", xs @ _*)   => MergeStrategy.discard
       case PathList("META-INF", "native-image", xs @ _*)   => MergeStrategy.discard
       case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.discard
       case x if x.endsWith("module-info.class")            => MergeStrategy.first
+      case x if x.endsWith("git.properties")               => MergeStrategy.first
+      case x if x.matches("google/.*\\.proto")             => MergeStrategy.first
       case x =>
         val oldStrategy = (assembly / assemblyMergeStrategy).value
         oldStrategy(x)

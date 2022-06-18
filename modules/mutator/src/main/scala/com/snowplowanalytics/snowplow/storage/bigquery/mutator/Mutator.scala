@@ -21,14 +21,14 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema => LoaderSchema, LoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.MutatorEnvironment
-import com.snowplowanalytics.snowplow.storage.bigquery.mutator.Mutator._
 
 import cats.data.EitherT
 import cats.effect._
-import cats.effect.concurrent.{MVar, MVar2}
 import cats.implicits._
 import com.google.cloud.bigquery.Field
 import io.circe.Json
+
+import fs2.{Pipe, Stream}
 
 import org.typelevel.log4cats.Logger
 
@@ -43,48 +43,84 @@ import scala.util.control.NonFatal
   * @param tableReference object responsible for table interactions
   * @param state current state of the table, source of truth
   */
-class Mutator private (
-  igluClient: Client[IO, Json],
-  tableReference: TableReference,
-  state: MVar2[IO, MutatorState],
-  verbose: Boolean
-) {
+object Mutator {
+  case class MutatorError(message: String) extends Throwable
 
-  /** Add all new columns to a table */
-  def updateTable(inventoryItems: List[Data.ShreddedType])(implicit t: Timer[IO], cs: ContextShift[IO], logger: Logger[IO]): IO[Unit] =
-    // format: off
+  case class MutatorState(fields: Vector[Field], received: Long) {
+    def increment: MutatorState =
+      if (received >= Long.MaxValue - 1) MutatorState(fields, 0) else MutatorState(fields, received + 1)
+
+    def add(field: Field): MutatorState =
+      MutatorState(fields :+ field, received)
+  }
+
+  def filterFields(existingColumns: Vector[String], newItems: List[ShreddedType]): List[ShreddedType] =
+    newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
+
+  def initialize(
+    env: MutatorEnvironment,
+    verbose: Boolean
+  )(implicit c: Concurrent[IO], logger: Logger[IO]): EitherT[IO, String, Pipe[IO, List[ShreddedType], Unit]] =
     for {
-      _ <- if (verbose)
-      { logger.info(s"Received ${inventoryItems.map(x => s"${x.shredProperty} ${x.schemaKey.toSchemaUri}").mkString(", ")}") }
-      else { IO.unit }
-      MutatorState(fields, _) <- state.read
-      existingColumns = fields.map(_.getName)
-      fieldsToAdd     = filterFields(existingColumns, inventoryItems)
-      _           <- fieldsToAdd.traverse_(item => addField(item).recoverWith(logAddItem(item))).timeout(30.seconds)
-      latestState <- state.take
-      _           <- state.put(latestState.increment)
-      _ <- if (latestState.received % 100 == 0) { logState(latestState) } else { IO.unit }
-    } yield ()
-  // format: on
+      bqClient <- EitherT.liftF(TableReference.BigQueryTable.getClient(env.projectId))
+      table = new TableReference.BigQueryTable(
+        bqClient,
+        env.config.output.good.datasetId,
+        env.config.output.good.tableId
+      )
+      fields     <- EitherT.liftF(table.getFields)
+      igluClient <- Client.parseDefault[IO](env.resolverJson).leftMap(_.show)
+      _          <- EitherT.liftF[IO, String, Unit](addField(table, LoaderRow.LoadTstampField))
+      ref        <- EitherT.liftF(Ref.of(MutatorState(fields, 0)))
+    } yield pipe(igluClient, table, ref, verbose)
+
+  def pipe(igluClient: Client[IO, Json], tableReference: TableReference, ref: Ref[IO, MutatorState], verbose: Boolean)(
+    implicit logger: Logger[IO]
+  ): Pipe[IO, List[ShreddedType], Unit] =
+    in =>
+      for {
+        inventoryItems <- in
+        _ <- Stream.eval(
+          if (verbose)
+            logger.info(
+              s"Received ${inventoryItems.map(x => s"${x.shredProperty} ${x.schemaKey.toSchemaUri}").mkString(", ")}"
+            )
+          else IO.unit
+        )
+        state <- Stream.eval(ref.get)
+        existingColumns = state.fields.map(_.getName)
+        fieldsToAdd     = filterFields(existingColumns, inventoryItems)
+        state <- Stream.eval(fieldsToAdd.foldLeftM(state)(addShreddedType(tableReference, igluClient, _, _)))
+        state <- Stream.emit(state.increment)
+        _     <- Stream.eval(if (state.received % 100 == 0) logState(state) else IO.unit)
+        _     <- Stream.eval(ref.set(state))
+      } yield ()
 
   /** Perform ALTER TABLE */
-  def addField(inventoryItem: ShreddedType)(implicit t: Timer[IO], cs: ContextShift[IO], logger: Logger[IO]): IO[Unit] =
-    for {
-      schema <- getSchema(inventoryItem.schemaKey)
+  def addShreddedType(
+    tableReference: TableReference,
+    igluClient: Client[IO, Json],
+    state: MutatorState,
+    inventoryItem: ShreddedType
+  )(implicit logger: Logger[IO]): IO[MutatorState] = {
+    val result = for {
+      schema <- getSchema(igluClient, inventoryItem.schemaKey)
       field = getField(inventoryItem, schema)
-      _  <- tableReference.addField(field)
-      st <- state.take
-      _  <- state.put(st.add(field))
-      _  <- logger.info(s"Added ${field.getName}")
-    } yield ()
+      _ <- tableReference.addField(field)
+      _ <- logger.info(s"Added ${field.getName}")
+    } yield state.add(field)
+
+    result.recoverWith(logAddItem(inventoryItem).andThen(_.as(state))).timeout(30.seconds)
+  }
 
   /** Add only one field to table */
-  def addField(field: DdlField)(implicit logger: Logger[IO]): IO[Unit] =
+  def addField(tableReference: TableReference, field: DdlField)(implicit logger: Logger[IO]): IO[Unit] =
     for {
       fields <- tableReference.getFields
-      contains = fields.exists(_.getName == field.name)
+      contains    = fields.exists(_.getName == field.name)
       addFieldOps = tableReference.addField(Adapter.adaptField(field))
-      _ <- if (contains) logger.info(s"${field.name} already exists") else addFieldOps *> logger.info(s"Added ${field.name}")
+      _ <- if (contains) logger.info(s"${field.name} already exists")
+      else addFieldOps *> logger.info(s"Added ${field.name}")
     } yield ()
 
   /** Transform Iglu Schema into valid BigQuery field */
@@ -100,7 +136,7 @@ class Mutator private (
   }
 
   /** Receive the JSON Schema from the Iglu registry */
-  def getSchema(key: SchemaKey)(implicit t: Timer[IO], cs: ContextShift[IO], logger: Logger[IO]): IO[Schema] = {
+  def getSchema(igluClient: Client[IO, Json], key: SchemaKey)(implicit logger: Logger[IO]): IO[Schema] = {
     val action = for {
       response <- EitherT(igluClient.resolver.lookupSchema(key).timeout(10.seconds)).leftMap(fetchError)
       _        <- EitherT.liftF(logger.info(s"Received $response from Iglu registry"))
@@ -124,40 +160,6 @@ class Mutator private (
   private def logAddItem(item: Data.ShreddedType)(implicit logger: Logger[IO]): PartialFunction[Throwable, IO[Unit]] = {
     case NonFatal(error) =>
       logger.error(error)(s"Failed to add ${item.schemaKey.toSchemaUri} as ${item.shredProperty.name}")
-  }
-}
-
-object Mutator {
-  case class MutatorError(message: String) extends Throwable
-
-  case class MutatorState(fields: Vector[Field], received: Long) {
-    def increment: MutatorState =
-      if (received >= Long.MaxValue - 1) MutatorState(fields, 0) else MutatorState(fields, received + 1)
-
-    def add(field: Field): MutatorState =
-      MutatorState(fields :+ field, received)
-  }
-
-  def filterFields(existingColumns: Vector[String], newItems: List[ShreddedType]): List[ShreddedType] =
-    newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
-
-  def initialize(env: MutatorEnvironment, verbose: Boolean)(implicit c: Concurrent[IO], logger: Logger[IO]): IO[Either[String, Mutator]] = {
-    val mutatorIO: IO[Either[String, Mutator]] = for {
-      bqClient <- TableReference.BigQueryTable.getClient(env.projectId)
-      table = new TableReference.BigQueryTable(
-        bqClient,
-        env.config.output.good.datasetId,
-        env.config.output.good.tableId
-      )
-      fields     <- table.getFields
-      state      <- MVar.of(MutatorState(fields, 0))
-      igluClient <- Client.parseDefault[IO](env.resolverJson).value.flatMap(IO.fromEither)
-    } yield new Mutator(igluClient, table, state, verbose).asRight
-    val res = for {
-      mutator <- EitherT(mutatorIO)
-      _ <- EitherT.liftF[IO, String, Unit](mutator.addField(LoaderRow.LoadTstampField))
-    } yield mutator
-    res.value
   }
 
   private def invalidSchema(schema: SchemaKey) =

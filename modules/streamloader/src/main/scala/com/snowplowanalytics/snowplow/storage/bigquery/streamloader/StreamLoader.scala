@@ -15,20 +15,16 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.RegistryLookup
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.{LoaderRow, Sentry}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
 
 import cats.Monad
 import cats.effect._
-import cats.effect.implicits._
 import cats.implicits._
 
-import fs2.{Pipe, Stream}
-import fs2.concurrent.{NoneTerminatedQueue, Queue}
+import fs2.Pipe
 
 import org.typelevel.log4cats.Logger
-
-import scala.concurrent.duration.FiniteDuration
 
 object StreamLoader {
   private val processor: Processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
@@ -47,21 +43,24 @@ object StreamLoader {
 
   type Parsed[F[_]] = Either[StreamBadRow[F], StreamLoaderRow[F]]
 
-  def run[F[_]: ContextShift: ConcurrentEffect: Timer: Logger](e: LoaderEnvironment): F[ExitCode] =
+  def run[F[_]: Async: Logger](e: LoaderEnvironment): F[ExitCode] =
     Resources.acquire(e).use { resources =>
       val eventStream = resources.source.evalMap(parse(resources.igluClient.resolver))
 
-      val sink: Pipe[F, Parsed[F], Unit] = _.observeEither(
+      val sink: Pipe[F, Parsed[F], Nothing] = _.observeEither(
         resources.badSink,
         resources.goodSink
-      ).void
+      ).drain
 
       val metrics = resources.metrics.report
 
       Logger[F].info(
         s"BQ Stream Loader ${generated.BuildInfo.version} has started. Listening ${e.config.input.subscription}"
       ) *>
-        runWithShutdown(e.config.terminationTimeout, resources.sentry, eventStream.concurrently(metrics), sink)
+        Shutdown
+          .run(e.config.terminationTimeout, resources.sentry, eventStream.concurrently(metrics), sink)
+          .compile
+          .drain
           .attempt
           .flatMap {
             case Right(_) =>
@@ -79,60 +78,4 @@ object StreamLoader {
       case Left(row)  => StreamBadRow[F](row, payload.ack).asLeft[StreamLoaderRow[F]]
     }
 
-  /**
-    * This is the machinery needed to make sure outstanding records are acked before the app
-    * terminates
-    *
-    * The stream runs on a separate fiber so that we can manually handle SIGINT.
-    *
-    * We use a queue as a level of indirection between the soure and the sink. When we receive a
-    * SIGINT or exception then we terminate the fiber by pushing a `None` to the queue.
-    *
-    * The source is only cancelled after the sink has been allowed to finish cleanly. We must not
-    * terminate the source any earlier, because this would shutdown the PubSub consumer too early,
-    * and then we would not be able to ack any outstanding records.
-    */
-  private def runWithShutdown[F[_]: Concurrent: Timer: Logger, A](
-    timeout: FiniteDuration,
-    sentry: Sentry[F],
-    source: Stream[F, A],
-    sink: Pipe[F, A, Unit]
-  ): F[Unit] =
-    Queue.synchronousNoneTerminated[F, A].flatMap { queue =>
-      queue
-        .dequeue
-        .through(sink)
-        .concurrently(source.evalMap(x => queue.enqueue1(Some(x))).onFinalize(queue.enqueue1(None)))
-        .compile
-        .drain
-        .start
-        .bracketCase(_.join) {
-          case (_, ExitCase.Completed) =>
-            // The source has completed "naturally".
-            // For a infinite source like PubSub this should never happen.
-            Concurrent[F].unit
-          case (fiber, ExitCase.Canceled) =>
-            // We received a SIGINT.  We want to ack outstanding events before letting the app exit.
-            Logger[F].warn("Received a shutdown signal") *>
-              terminateStream(queue, fiber, timeout)
-          case (fiber, ExitCase.Error(e)) =>
-            // The source had a runtime exception.  We want to ack oustanding events, and raise the original exception.
-            Logger[F].error(e)("Exception caused loader to terminate") *>
-              sentry.trackException(e) *>
-              terminateStream(queue, fiber, timeout).handleErrorWith { e2 =>
-                Logger[F].error(e2)("Caught exception shutting down the stream")
-              } *> Concurrent[F].raiseError(e)
-        }
-    }
-
-  private def terminateStream[F[_]: Concurrent: Timer: Logger, A](
-    queue: NoneTerminatedQueue[F, A],
-    fiber: Fiber[F, Unit],
-    timeout: FiniteDuration
-  ): F[Unit] =
-    for {
-      _ <- Logger[F].warn(s"Terminating the stream. Waiting for $timeout for it to complete")
-      _ <- queue.enqueue1(None)
-      _ <- fiber.join.timeoutTo(timeout, Logger[F].warn("Aborted waiting for stream to complete") *> fiber.cancel)
-    } yield ()
 }

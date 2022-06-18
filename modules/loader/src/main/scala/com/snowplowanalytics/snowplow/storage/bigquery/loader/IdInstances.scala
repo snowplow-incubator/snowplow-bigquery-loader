@@ -12,17 +12,19 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import cats.Id
+import cats.{Applicative, Id}
 import cats.effect.Clock
 
-import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, NANOSECONDS}
 
 object IdInstances {
   implicit val idClock: Clock[Id] = new Clock[Id] {
-    def realTime(unit: TimeUnit): Id[Long] =
-      unit.convert(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+    def realTime: FiniteDuration =
+      FiniteDuration(System.currentTimeMillis, MILLISECONDS)
 
-    def monotonic(unit: TimeUnit): Id[Long] =
-      unit.convert(System.nanoTime(), TimeUnit.NANOSECONDS)
+    def monotonic: FiniteDuration =
+      FiniteDuration(System.nanoTime(), NANOSECONDS)
+
+    def applicative: Applicative[Id] = implicitly[Applicative[Id]]
   }
 }

@@ -16,7 +16,8 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.{ShreddedType, UnstructEvent}
 
-import cats.effect.{Concurrent, ContextShift, IO, Timer}
+import cats.effect.IO
+import cats.effect.unsafe.IORuntime
 import fs2.Stream
 import org.specs2.mutable.Specification
 
@@ -25,9 +26,7 @@ import scala.util.Random
 
 class ResourcesSpec extends Specification {
 
-  implicit val CS: ContextShift[IO] = IO.contextShift(concurrent.ExecutionContext.global)
-  implicit val C: Concurrent[IO]    = IO.ioConcurrentEffect
-  implicit val T: Timer[IO]         = IO.timer(concurrent.ExecutionContext.global)
+  implicit val runtime: IORuntime = IORuntime.global
 
   private def mkShreddedType(n: Int): ShreddedType = {
     val schemaKey = SchemaKey("com.acme", "example", "jsonschema", SchemaVer.Full(1, 0, n))
@@ -112,8 +111,8 @@ class ResourcesSpec extends Specification {
       val output1   = input1.through(aggregateTypes(Int.MaxValue, 1.second)).compile.toList.unsafeRunSync()
       val expected1 = mkShreddedTypes(List(Set(1, 2, 3, 4, 5, 6, 7)))
 
-      val input2    = (Stream.emits(mkShreddedTypes(List(Set(1, 2)))) ++ Stream.sleep_(1.seconds)).repeatN(6).take(5)
-      val output2   = input2.through(aggregateTypes(Int.MaxValue, 1.second)).compile.toList.unsafeRunSync()
+      val input2    = (Stream.emits(mkShreddedTypes(List(Set(1, 2)))) ++ Stream.sleep_[IO](1.seconds)).repeatN(6).take(5)
+      val output2   = input2.through(aggregateTypes(Int.MaxValue, 500.millis)).compile.toList.unsafeRunSync()
       val expected2 = mkShreddedTypes(List(Set(1, 2), Set(1, 2), Set(1, 2), Set(1, 2), Set(1, 2)))
 
       output1 must beEqualTo(expected1)

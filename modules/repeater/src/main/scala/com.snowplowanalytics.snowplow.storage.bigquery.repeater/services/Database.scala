@@ -77,10 +77,7 @@ object Database {
 
   def getClient[F[_]: Sync](projectId: String): F[BigQuery] =
     Sync[F].delay(
-      BigQueryOptions.newBuilder
-        .setProjectId(projectId)
-        .build
-        .getService
+      BigQueryOptions.newBuilder.setProjectId(projectId).build.getService
     )
 
   /** The first argument passed to addRow is an ID used to deduplicate inserts.

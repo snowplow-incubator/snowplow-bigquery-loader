@@ -16,7 +16,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{BigQueryRetrySettings, Output}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 
-import cats.effect.{Blocker, ContextShift, Sync}
+import cats.effect.Sync
 import cats.implicits._
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.gax.retrying.RetrySettings
@@ -58,13 +58,12 @@ object Bigquery {
         metrics.latency(earliestCollectorTstamp) *> metrics.goodCount(loaderRows.length)
     }
 
-  def mkInsert[F[_]: Sync: ContextShift](
+  def mkInsert[F[_]: Sync](
     good: Output.BigQuery,
-    bigQuery: BigQuery,
-    blocker: Blocker
+    bigQuery: BigQuery
   ): List[LoaderRow] => F[InsertAllResponse] = { lrs =>
     val request = buildRequest(good.datasetId, good.tableId, lrs)
-    blocker.delay(bigQuery.insertAll(request))
+    Sync[F].blocking(bigQuery.insertAll(request))
   }
 
   def getClient[F[_]: Sync](rs: BigQueryRetrySettings, projectId: String): F[BigQuery] = {
@@ -78,11 +77,7 @@ object Bigquery {
         .build
 
     Sync[F].delay(
-      BigQueryOptions.newBuilder
-        .setRetrySettings(retrySettings)
-        .setProjectId(projectId)
-        .build
-        .getService
+      BigQueryOptions.newBuilder.setRetrySettings(retrySettings).setProjectId(projectId).build.getService
     )
   }
 

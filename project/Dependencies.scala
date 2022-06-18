@@ -35,20 +35,20 @@ object Dependencies {
 
     // Scala third-party
     val cats        = "2.6.1"
-    val catsEffect  = "2.5.4"
+    val catsEffect  = "3.3.12"
     val circe       = "0.14.1"
     val decline     = "1.4.0"
-    val fs2         = "2.5.9"
-    val httpClient  = "0.22.12"
-    val logging     = "1.5.1"
-    val pubsubFs2   = "0.18.1"
+    val fs2         = "3.2.8"
+    val httpClient  = "0.23.12"
+    val logging     = "2.3.1"
+    val pubsubFs2   = "0.20.0"
     val scio        = "0.11.7"
     val circeConfig = "0.8.0"
 
     // Scala Snowplow
     val analyticsSdk = "2.1.0"
-    val badrows      = "2.1.1"
-    val igluClient   = "1.1.1"
+    val badrows      = "2.2.0"
+    val igluClient   = "2.0.0"
     val igluCore     = "1.0.1"
     val schemaDdl    = "0.14.4"
 
@@ -93,7 +93,7 @@ object Dependencies {
   val circeParser   = "io.circe"      %% "circe-parser"               % V.circe
   val decline       = "com.monovore"  %% "decline"                    % V.decline
   val fs2           = "co.fs2"        %% "fs2-core"                   % V.fs2
-  val httpClient    = "org.http4s"    %% "http4s-async-http-client"   % V.httpClient
+  val httpClient    = "org.http4s"    %% "http4s-ember-client"        % V.httpClient
   val logging       = "org.typelevel" %% "log4cats-slf4j"             % V.logging
   val pubsubFs2Grpc = "com.permutive" %% "fs2-google-pubsub-grpc"     % V.pubsubFs2
   val scioRepl      = "com.spotify"   %% "scio-repl"                  % V.scio

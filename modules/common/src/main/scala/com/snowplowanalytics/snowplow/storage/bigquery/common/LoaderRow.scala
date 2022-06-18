@@ -128,8 +128,9 @@ object LoaderRow {
       }
 
     aggregated
-      .map((LoadTstampField.name, "AUTO")::_)
-      .leftMap(errors => s"Unexpected types in transformed event: ${errors.mkString_(",")}").toEither
+      .map((LoadTstampField.name, "AUTO") :: _)
+      .leftMap(errors => s"Unexpected types in transformed event: ${errors.mkString_(",")}")
+      .toEither
   }
 
   /** Group list of contexts by their full URI and transform values into ready to load rows */

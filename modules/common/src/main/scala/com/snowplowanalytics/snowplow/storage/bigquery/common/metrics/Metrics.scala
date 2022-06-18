@@ -15,8 +15,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common.metrics
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring
 
 import cats.{Applicative, Monad}
-import cats.effect.{Async, Blocker, Clock, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
-import cats.effect.concurrent.Ref
+import cats.effect.{Async, Clock, Ref, Resource, Sync, Temporal}
 import cats.implicits._
 import fs2.Stream
 
@@ -99,7 +98,15 @@ object Metrics {
         typesCount            <- Ref.of[F, Int](0)
         uninsertableCount     <- Ref.of[F, Int](0)
         repeaterInsertedCount <- Ref.of[F, Int](0)
-      } yield MetricsRefs(latency, goodCount, failedInsertCount, badCount, typesCount, uninsertableCount, repeaterInsertedCount)
+      } yield MetricsRefs(
+        latency,
+        goodCount,
+        failedInsertCount,
+        badCount,
+        typesCount,
+        uninsertableCount,
+        repeaterInsertedCount
+      )
 
     def snapshot[F[_]: Monad](refs: MetricsRefs[F], app: ReportingApp): F[MetricsSnapshot] =
       for {
@@ -111,25 +118,25 @@ object Metrics {
         uninsertableCount     <- refs.uninsertableCount.getAndSet(0)
         repeaterInsertedCount <- refs.repeaterInsertedCount.getAndSet(0)
       } yield app match {
-        case ReportingApp.StreamLoader => LoaderMetricsSnapshot(maybeLatency, goodCount, failedInsertCount, badCount, typesCount)
-        case ReportingApp.Repeater     => RepeaterMetricsSnapshot(uninsertableCount, repeaterInsertedCount)
+        case ReportingApp.StreamLoader =>
+          LoaderMetricsSnapshot(maybeLatency, goodCount, failedInsertCount, badCount, typesCount)
+        case ReportingApp.Repeater => RepeaterMetricsSnapshot(uninsertableCount, repeaterInsertedCount)
       }
   }
 
-  def build[F[_]: ContextShift: ConcurrentEffect: Timer: Logger](
-    blocker: Blocker,
+  def build[F[_]: Async: Logger](
     monitoringConfig: Monitoring,
     app: ReportingApp
   ): F[Metrics[F]] =
     monitoringConfig match {
       case Monitoring(None, None, _, _) => noop[F].pure[F]
-      case Monitoring(statsd, stdout, _, _)=>
+      case Monitoring(statsd, stdout, _, _) =>
         (MetricsRefs.init[F], MetricsRefs.init[F]).mapN { (statsdRefs, stdoutRefs) =>
           new Metrics[F] {
             def report: Stream[F, Unit] = {
               val rep1 = statsd
                 .map { config =>
-                  reporterStream(StatsDReporter.make[F](blocker, config), statsdRefs, config.period, app)
+                  reporterStream(StatsDReporter.make[F](config), statsdRefs, config.period, app)
                 }
                 .getOrElse(Stream.never[F])
 
@@ -144,9 +151,9 @@ object Metrics {
 
             def latency(collectorTstamp: Long): F[Unit] =
               for {
-                now <- Clock[F].realTime(MILLISECONDS)
-                _   <- statsdRefs.latency.set(Some(now - collectorTstamp))
-                _   <- stdoutRefs.latency.set(Some(now - collectorTstamp))
+                now <- Clock[F].realTime
+                _   <- statsdRefs.latency.set(Some(now.toMillis - collectorTstamp))
+                _   <- stdoutRefs.latency.set(Some(now.toMillis - collectorTstamp))
               } yield ()
 
             def goodCount(n: Int): F[Unit] =
@@ -182,7 +189,7 @@ object Metrics {
       def repeaterInsertedCount: F[Unit]          = Applicative[F].unit
     }
 
-  private def reporterStream[F[_]: Sync: Timer: ContextShift](
+  private def reporterStream[F[_]: Temporal](
     reporter: Resource[F, Reporter[F]],
     metrics: MetricsRefs[F],
     period: FiniteDuration,

@@ -18,13 +18,14 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.MutatorEnvironment
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
+import cats.effect.std.Queue
+import cats.effect.unsafe.IORuntime
 import cats.syntax.either._
 import cats.syntax.show._
 import com.google.api.gax.rpc.FixedHeaderProvider
 import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver, Subscriber}
 import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
-import fs2.concurrent.Queue
 import io.circe.{Decoder, DecodingFailure, Error, Json}
 import io.circe.jawn.parse
 
@@ -36,7 +37,8 @@ import java.util.concurrent.TimeUnit
   * PubSub consumer, listening for shredded types and
   * enqueing them into common type queue
   */
-class TypeReceiver(queue: Queue[IO, List[ShreddedType]], verbose: Boolean)(implicit logger: Logger[IO]) extends MessageReceiver {
+class TypeReceiver(queue: Queue[IO, List[ShreddedType]], verbose: Boolean)(implicit logger: Logger[IO])
+    extends MessageReceiver {
   def receiveMessage(message: PubsubMessage, consumer: AckReplyConsumer): Unit = {
     val loggingF: IO[Unit] = if (verbose) {
       logger.info(message.getData.toStringUtf8)
@@ -46,7 +48,7 @@ class TypeReceiver(queue: Queue[IO, List[ShreddedType]], verbose: Boolean)(impli
 
     val itemsF: IO[Either[Error, List[ShreddedType]]] = IO.delay {
       for {
-        json <- parse(message.getData.toStringUtf8)
+        json          <- parse(message.getData.toStringUtf8)
         invetoryItems <- TypeReceiver.decodeItems(json)
       } yield invetoryItems
     }
@@ -55,22 +57,18 @@ class TypeReceiver(queue: Queue[IO, List[ShreddedType]], verbose: Boolean)(impli
       case Right(Nil) =>
         IO.delay(consumer.ack())
       case Right(inventoryItems) =>
-        queue
-          .enqueue1(inventoryItems)
-          .runAsync { callback =>
-            notificationCallback(consumer)(callback)
-          }.toIO
-      case i@Left(_) =>
+        queue.offer(inventoryItems).attempt.map(notificationCallback(consumer))
+      case i @ Left(_) =>
         notificationCallback(consumer)(i)
     }
 
     val io: IO[Unit] = for {
-      _ <- loggingF
+      _     <- loggingF
       items <- itemsF
-      _ <- dequeueF(items)
+      _     <- dequeueF(items)
     } yield ()
 
-    io.unsafeRunSync()
+    io.unsafeRunSync()(IORuntime.global)
   }
 
   private def notificationCallback(consumer: AckReplyConsumer)(either: Either[Throwable, _]): IO[Unit] =
@@ -106,7 +104,7 @@ object TypeReceiver {
       }
     }
 
-  def initQueue(size: Int)(implicit cs: ContextShift[IO]): IO[Queue[IO, List[ShreddedType]]] =
+  def initQueue(size: Int): IO[Queue[IO, List[ShreddedType]]] =
     Queue.bounded[IO, List[ShreddedType]](size)
 
   def apply(queue: Queue[IO, List[ShreddedType]], verbose: Boolean)(implicit logger: Logger[IO]): TypeReceiver =

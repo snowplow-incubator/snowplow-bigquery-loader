@@ -18,6 +18,7 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs._
 
 import cats.effect.{IO, Resource}
+import cats.effect.unsafe.IORuntime
 import com.google.cloud.pubsub.v1.Publisher
 import com.google.protobuf.ByteString
 import com.google.pubsub.v1.PubsubMessage
@@ -38,8 +39,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * }}}
   */
 object TypePublisher {
-  implicit val cs    = IO.contextShift(global)
-  implicit val timer = IO.timer(global)
+  implicit val runtime = IORuntime.global
 
   val inventoryItems = List(
     ShreddedType(

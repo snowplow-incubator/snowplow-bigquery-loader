@@ -20,8 +20,7 @@ import fs2.Stream
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
-object Repeater extends SafeIOApp {
-  private val StreamConcurrency = 3
+object Repeater extends IOApp {
 
   val processor: Processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
@@ -32,19 +31,18 @@ object Repeater extends SafeIOApp {
       case Right(command) =>
         Resources.acquire[IO](command).use { resources =>
           val bqSink = services
-              .PubSub
-              .getEvents(
-                resources.insertBlocker,
-                resources.env.projectId,
-                resources.env.config.input.subscription,
-                resources.uninsertable
-              )
-              .interruptWhen(resources.stop)
-              .through[IO, Unit](Flow.sink(resources))
+            .PubSub
+            .getEvents(
+              resources.env.projectId,
+              resources.env.config.input.subscription,
+              resources.uninsertable
+            )
+            .interruptWhen(resources.stop)
+            .through[IO, Unit](Flow.sink(resources))
 
           val uninsertableSink = Flow.dequeueUninsertable(resources)
           val metricsStream    = resources.metrics.report
-          val process = Stream(bqSink, uninsertableSink, metricsStream).parJoin[IO, Unit](StreamConcurrency)
+          val process          = bqSink.merge(uninsertableSink).merge(metricsStream)
 
           process.compile.drain.attempt.flatMap {
             case Right(_) =>

@@ -16,7 +16,7 @@ import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field, Type => DataType}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{Codecs, LoaderRow}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{AllAppsConfig, CliConfig, Environment}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{CliConfig, Environment}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.MutatorEnvironment
 
 import com.google.cloud.bigquery.TimePartitioning

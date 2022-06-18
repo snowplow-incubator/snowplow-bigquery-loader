@@ -111,7 +111,7 @@ object LoaderRow {
   /** Extract all set canonical properties in BQ-compatible format */
   def transformAtomic(event: Event): Either[String, List[(String, Any)]] = {
     val aggregated =
-      event.atomic.filter { case (_, value) => !value.isNull }.toList.traverse[ValidatedNel[String, ?], (String, Any)] {
+      event.atomic.filter { case (_, value) => !value.isNull }.toList.traverse[ValidatedNel[String, *], (String, Any)] {
         case (key, value) =>
           value
             .fold(
@@ -128,8 +128,9 @@ object LoaderRow {
       }
 
     aggregated
-      .map((LoadTstampField.name, "AUTO")::_)
-      .leftMap(errors => s"Unexpected types in transformed event: ${errors.mkString_(",")}").toEither
+      .map((LoadTstampField.name, "AUTO") :: _)
+      .leftMap(errors => s"Unexpected types in transformed event: ${errors.mkString_(",")}")
+      .toEither
   }
 
   /** Group list of contexts by their full URI and transform values into ready to load rows */
@@ -148,7 +149,7 @@ object LoaderRow {
           .sequence
           .map(_.sequence.map(rows => (columnName, Adapter.adaptRow(Row.Repeated(rows)))))
     }
-    grouped.toList.sequence.map(_.sequence[ValidatedNel[FailureDetails.LoaderIgluError, ?], (String, AnyRef)])
+    grouped.toList.sequence.map(_.sequence[ValidatedNel[FailureDetails.LoaderIgluError, *], (String, AnyRef)])
   }
 
   /**

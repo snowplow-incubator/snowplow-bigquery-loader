@@ -39,7 +39,7 @@ object Storage {
     metrics: Metrics[F]
   ): F[Unit] = {
     val blobInfo = BlobInfo.newBuilder(bucketName, fileName).build()
-    val content  = Stream.chunk(rows).map(_.compact).intersperse("\n").through(text.utf8Encode).compile.to(Array)
+    val content  = Stream.chunk(rows).map(_.compact).intersperse("\n").through(text.utf8.encode).compile.to(Array)
 
     // format: off
     Logger[F].info(s"Preparing write to $fileName with ${rows.size} items") *>

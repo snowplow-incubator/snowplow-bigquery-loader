@@ -18,7 +18,7 @@ import com.snowplowanalytics.iglu.core.SchemaVer.Full
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Row.{Primitive, Record, Repeated}
 import com.snowplowanalytics.snowplow.badrows.Processor
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.{transformJson, LoadTstampField}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.{LoadTstampField, transformJson}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.implicits.idClock
 
 import cats.Id

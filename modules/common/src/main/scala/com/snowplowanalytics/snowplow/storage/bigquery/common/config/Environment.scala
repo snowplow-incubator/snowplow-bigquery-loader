@@ -14,7 +14,6 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common.config
 
 import io.circe.Json
 
-import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Config, Monitoring}
 
 final case class Environment[A](config: A, resolverJson: Json, projectId: String, monitoring: Monitoring) {

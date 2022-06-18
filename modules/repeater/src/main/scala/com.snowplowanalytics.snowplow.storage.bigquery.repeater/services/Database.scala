@@ -35,7 +35,7 @@ object Database {
   ): F[Either[BadRow, Unit]] = {
     val request = buildRequest(dataset, table, eventContainer)
     Sync[F]
-      .delay(client.insertAll(request))
+      .blocking(client.insertAll(request))
       .attempt
       .map {
         case Right(response) if response.hasErrors =>
@@ -77,10 +77,7 @@ object Database {
 
   def getClient[F[_]: Sync](projectId: String): F[BigQuery] =
     Sync[F].delay(
-      BigQueryOptions.newBuilder
-        .setProjectId(projectId)
-        .build
-        .getService
+      BigQueryOptions.newBuilder.setProjectId(projectId).build.getService
     )
 
   /** The first argument passed to addRow is an ID used to deduplicate inserts.

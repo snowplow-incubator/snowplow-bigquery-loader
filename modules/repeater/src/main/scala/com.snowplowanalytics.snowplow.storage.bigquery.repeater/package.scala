@@ -13,7 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery
 
 import com.permutive.pubsub.consumer.ConsumerRecord
-import fs2.concurrent.Queue
+import cats.effect.std.Queue
 import fs2.Stream
 
 package object repeater {

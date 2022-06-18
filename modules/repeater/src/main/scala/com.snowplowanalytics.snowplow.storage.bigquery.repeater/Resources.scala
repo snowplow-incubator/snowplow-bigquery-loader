@@ -20,19 +20,16 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.Re
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Sentry
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.RepeaterCli.{GcsPath, validateBucket}
 
-import cats.Show
 import cats.effect._
-import cats.effect.concurrent.Ref
+import cats.effect.std.Queue
 import cats.syntax.all._
 import com.google.cloud.bigquery._
 import fs2.{Chunk, Stream}
-import fs2.concurrent.{Queue, SignallingRef}
+import fs2.concurrent.{SignallingRef}
 import org.typelevel.log4cats.Logger
 import org.joda.time.Instant
 
-import java.util.concurrent.Executors
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext
 
 /**
   * @param bigQuery BigQuery client provided by SDK
@@ -46,7 +43,7 @@ import scala.concurrent.ExecutionContext
   * @param backoffPeriod Time to wait before trying to re-insert events
   * @param concurrency Number of streams to execute inserts
   */
-final class Resources[F[_]: Sync](
+final class Resources[F[_]](
   val bigQuery: BigQuery,
   val bucket: GcsPath,
   val env: RepeaterEnvironment,
@@ -57,7 +54,6 @@ final class Resources[F[_]: Sync](
   val timeout: Int,
   val backoffPeriod: Int,
   val concurrency: Int,
-  val insertBlocker: Blocker,
   val jobStartTime: Instant,
   val metrics: Metrics[F],
   val sentry: Sentry[F]
@@ -67,11 +63,11 @@ object Resources {
   private val QueueSize = 100
 
   /** Allocate all resources */
-  def acquire[F[_]: ConcurrentEffect: ContextShift: Timer: Logger](
+  def acquire[F[_]: Async: Logger](
     cmd: RepeaterCli.ListenCommand
   ): Resource[F, Resources[F]] = {
     // It's a function because blocker needs to be created as Resource
-    val initResources: F[(Blocker, Sentry[F]) => F[Resources[F]]] = for {
+    val initResources: F[(Sentry[F]) => F[Resources[F]]] = for {
       env      <- Sync[F].delay(cmd.env)
       bigQuery <- services.Database.getClient[F](cmd.env.projectId)
       bucket <- Sync[F].fromEither(
@@ -87,8 +83,8 @@ object Resources {
         s"Initializing Repeater from ${env.config.input.subscription} to ${env.config.output.good} with $concurrency streams"
       )
       jobStartTime <- Sync[F].delay(Instant.now())
-    } yield (b: Blocker, sentry: Sentry[F]) =>
-      mkMetricsReporter[F](b, env.monitoring).map(m =>
+    } yield (sentry: Sentry[F]) =>
+      mkMetricsReporter[F](env.monitoring).map(m =>
         new Resources[F](
           bigQuery,
           bucket,
@@ -100,26 +96,21 @@ object Resources {
           cmd.timeout,
           cmd.backoffPeriod,
           concurrency,
-          b,
           jobStartTime,
           m,
           sentry
         )
       )
-
-    val createBlocker = Sync[F].delay(Executors.newCachedThreadPool()).map(ExecutionContext.fromExecutorService)
     for {
-      blocker   <- Resource.make(createBlocker)(ec => Sync[F].delay(ec.shutdown())).map(Blocker.liftExecutionContext)
       sentry    <- Sentry.init(cmd.env.monitoring.sentry)
-      resources <- Resource.make(initResources.flatMap(init => init.apply(blocker, sentry)))(release[F])
+      resources <- Resource.make(initResources.flatMap(init => init.apply(sentry)))(release[F])
     } yield resources
   }
 
-  def mkMetricsReporter[F[_]: ConcurrentEffect: ContextShift: Timer: Logger](
-    blocker: Blocker,
+  def mkMetricsReporter[F[_]: Async: Logger](
     monitoringConfig: Monitoring
   ): F[Metrics[F]] =
-    Metrics.build[F](blocker, monitoringConfig, ReportingApp.Repeater)
+    Metrics.build[F](monitoringConfig, ReportingApp.Repeater)
 
   /**
     * Try to get uninsertable events into the queue all at once,
@@ -128,15 +119,15 @@ object Resources {
   def pullRemaining[F[_]: Sync](
     uninsertable: Queue[F, BadRow]
   ): F[List[BadRow]] = {
-    val last = Stream.repeatEval(uninsertable.tryDequeueChunk1(20)).takeWhile(_.isDefined).flatMap {
-      case Some(chunk) => Stream.chunk(chunk)
-      case None        => Stream.empty
+    val last = Stream.repeatEval(uninsertable.tryTake).takeWhile(_.isDefined).flatMap {
+      case Some(item) => Stream.emit(item)
+      case None       => Stream.empty
     }
     last.compile.toList
   }
 
   /** Stop pulling data from Pub/Sub and flush uninsertable queue into GCS bucket */
-  def release[F[_]: ConcurrentEffect: Timer: Logger](res: Resources[F]): F[Unit] = {
+  def release[F[_]: Async: Logger](res: Resources[F]): F[Unit] = {
     val flushUninsertable = for {
       uninsertable <- pullRemaining[F](res.uninsertable)
       chunk = Chunk.seq(uninsertable)
@@ -148,7 +139,7 @@ object Resources {
         Logger[F].warn(s"Terminating. Flushed $count events that could not be inserted into BigQuery")
       }
 
-    val forceful = Timer[F].sleep(5.seconds) *> Logger[F].error(
+    val forceful = Async[F].sleep(5.seconds) *> Logger[F].error(
       "Terminated without flushing after 5 seconds"
     )
     Concurrent[F].race(graceful, forceful).void

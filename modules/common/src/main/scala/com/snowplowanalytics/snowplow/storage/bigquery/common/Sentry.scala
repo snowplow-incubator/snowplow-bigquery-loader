@@ -32,10 +32,12 @@ object Sentry {
         val acquire = Sync[F].delay(RSentry.init(SentryOptions.defaults(uri.toString)))
         Resource
           .make(acquire)(client => Sync[F].delay(client.closeConnection()))
-          .map(sentryClient => new Sentry[F] {
-            def trackException(e: Throwable): F[Unit] =
-              Sync[F].delay(sentryClient.sendException(e))
-          })
+          .map(sentryClient =>
+            new Sentry[F] {
+              def trackException(e: Throwable): F[Unit] =
+                Sync[F].delay(sentryClient.sendException(e))
+            }
+          )
           .evalTap { _ =>
             Logger[F].info(s"Sentry has been initialised at $uri")
           }

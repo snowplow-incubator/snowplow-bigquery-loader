@@ -139,7 +139,7 @@ object Mutator {
   def getSchema(igluClient: Client[IO, Json], key: SchemaKey)(implicit logger: Logger[IO]): IO[Schema] = {
     val action = for {
       response <- EitherT(igluClient.resolver.lookupSchema(key).timeout(10.seconds)).leftMap(fetchError)
-      _        <- EitherT.liftF(logger.info(s"Received $response from Iglu registry"))
+      _        <- EitherT.liftF(logger.info(s"Received schema from Iglu registry: ${response.noSpaces}"))
       schema   <- EitherT.fromOption[IO](Schema.parse(response), invalidSchema(key))
     } yield schema
 

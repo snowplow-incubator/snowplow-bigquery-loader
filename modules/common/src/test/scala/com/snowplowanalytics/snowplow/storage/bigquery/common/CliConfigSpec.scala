@@ -7,18 +7,13 @@
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the Apache License Version 2.0 is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{
-  AllAppsConfig,
-  CliConfig,
-  EncodedHoconOrPath,
-  EncodedJsonOrPath
-}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.EncodedHoconOrPath.Base64Hocon
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.EncodedJsonOrPath.Base64Json
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{CliConfig, EncodedHoconOrPath, EncodedJsonOrPath}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.EncodedOrPath.FromBase64
 
 import com.monovore.decline.Argument
 import com.typesafe.config.ConfigFactory
@@ -31,7 +26,7 @@ class CliConfigSpec extends Specification {
       val input    = SpecHelpers.configs.validResolverJsonB64
       val result   = implicitly[Argument[EncodedJsonOrPath]].read(input).toEither
       val expected = SpecHelpers.configs.validResolverJson
-      result must beRight(Base64Json(expected))
+      result must beRight(FromBase64(expected))
     }
 
     "fail with invalid JSON" in {
@@ -59,15 +54,15 @@ class CliConfigSpec extends Specification {
     "succeed with valid json and hocon" in {
       val hocon    = ConfigFactory.parseString(SpecHelpers.configs.validHocon)
       val resolver = SpecHelpers.configs.validResolverJson
-      val input    = CliConfig(Some(Base64Hocon(hocon)), Base64Json(resolver))
-      val result   = AllAppsConfig.fromRaw(input)
+      val input    = CliConfig.Raw(Some(FromBase64(hocon)), FromBase64(resolver))
+      val result   = CliConfig.parseRaw(input)
       result must beRight
     }
     "fail with valid JSON which does not validate against iglu:com.snowplowanalytics.iglu/resolver-config/jsonschema/1-0-1" in {
       val hocon    = ConfigFactory.parseString(SpecHelpers.configs.validHocon)
       val resolver = SpecHelpers.configs.invalidResolverJson
-      val input    = CliConfig(Some(Base64Hocon(hocon)), Base64Json(resolver))
-      val result   = AllAppsConfig.fromRaw(input)
+      val input    = CliConfig.Raw(Some(FromBase64(hocon)), FromBase64(resolver))
+      val result   = CliConfig.parseRaw(input)
       result must beLeft
     }
   }

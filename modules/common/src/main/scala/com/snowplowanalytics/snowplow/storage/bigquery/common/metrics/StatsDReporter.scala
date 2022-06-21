@@ -38,7 +38,6 @@ object StatsDReporter {
   private val FailedInsertCountName = "failed_inserts"
   private val BadCountName          = "bad"
   private val UninsertableName      = "uninsertable"
-  //private val RepeaterInsertedName  = "repeater_inserted"
 
   /** A reporter which sends metrics from the registry to the StatsD server. */
   def make[F[_]: Sync: Logger](

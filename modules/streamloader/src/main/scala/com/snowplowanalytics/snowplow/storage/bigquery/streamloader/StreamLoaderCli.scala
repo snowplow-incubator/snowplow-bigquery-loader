@@ -12,21 +12,19 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{AllAppsConfig, CliConfig, Environment}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{CliConfig, Environment}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
-
-import io.circe.Json
 
 import cats.implicits._
 import com.monovore.decline._
 
 object StreamLoaderCli {
 
-  val command: Command[(Json, AllAppsConfig)] =
+  val command: Command[CliConfig.Parsed] =
     Command(generated.BuildInfo.name, generated.BuildInfo.description)(CliConfig.options)
 
   def parse(args: Seq[String]): Either[String, LoaderEnvironment] =
     for {
-      (resolver, config) <- command.parse(args).leftMap(_.show)
-    } yield Environment(config.loader, resolver, config.projectId, config.monitoring)
+      parsed <- command.parse(args).leftMap(_.show)
+    } yield Environment(parsed.config.loader, parsed.resolver, parsed.config.projectId, parsed.config.monitoring)
 }

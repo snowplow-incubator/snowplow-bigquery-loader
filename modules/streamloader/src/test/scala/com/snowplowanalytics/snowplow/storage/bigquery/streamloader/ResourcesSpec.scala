@@ -124,9 +124,9 @@ class ResourcesSpec extends Specification {
     import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Resources.batchBySize
 
     "correctly batch inputs by size" in {
-      val input = List.range(0, 10)
+      val input               = List.range(0, 10)
       val getSize: Int => Int = _ => 1
-      val Threshold = 3
+      val Threshold           = 3
 
       val batched = Stream.emit(input).through(batchBySize(getSize, Threshold)).toList
 
@@ -134,9 +134,9 @@ class ResourcesSpec extends Specification {
     }
 
     "return a single batch to insert if threshold is not exceeded" in {
-      val input = List.range(0, 10)
+      val input               = List.range(0, 10)
       val getSize: Int => Int = _ => 1
-      val Threshold = 10
+      val Threshold           = 10
 
       val batched = Stream.emit(input).through(batchBySize(getSize, Threshold)).toList
 
@@ -144,9 +144,9 @@ class ResourcesSpec extends Specification {
     }
 
     "return an empty list if given an empty batch" in {
-      val input = List.empty[Int]
+      val input               = List.empty[Int]
       val getSize: Int => Int = _ => 1
-      val Threshold = 10
+      val Threshold           = 10
 
       val batched = Stream.emit(input).through(batchBySize(getSize, Threshold)).toList
 

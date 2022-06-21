@@ -12,16 +12,14 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{
-  AllAppsConfig,
-  CliConfig,
-  EncodedHoconOrPath,
-  EncodedJsonOrPath,
-  Environment
-}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.{CliConfig, EncodedOrPath, Environment}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
 
 import cats.implicits._
+
+import io.circe.Json
+
+import com.typesafe.config.{Config => TypesafeConfig}
 
 import com.spotify.scio.Args
 
@@ -32,10 +30,10 @@ import com.spotify.scio.Args
 object LoaderCli {
   def parse(args: Args): Either[Throwable, LoaderEnvironment] = {
     val result = for {
-      hocon  <- EncodedHoconOrPath.tryEncoded(args("config"))
-      json   <- EncodedJsonOrPath.tryEncoded(args("resolver"))
-      (r, c) <- AllAppsConfig.fromRaw(CliConfig(Some(hocon), json))
-    } yield Environment(c.loader, r, c.projectId, c.monitoring)
+      hocon  <- EncodedOrPath.tryEncoded[TypesafeConfig](args("config"))
+      json   <- EncodedOrPath.tryEncoded[Json](args("resolver"))
+      parsed <- CliConfig.parseRaw(CliConfig.Raw(Some(hocon), json))
+    } yield Environment(parsed.config.loader, parsed.resolver, parsed.config.projectId, parsed.config.monitoring)
     result.leftMap(e => new IllegalArgumentException(e))
   }
 }

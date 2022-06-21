@@ -29,7 +29,7 @@ import com.monovore.decline._
 object MutatorCli {
   private val options: Opts[MutatorEnvironment] =
     CliConfig.options.map {
-      case (resolver, config) =>
+      case CliConfig.Parsed(config, resolver) =>
         Environment(config.mutator, resolver, config.projectId, config.monitoring)
     }
 

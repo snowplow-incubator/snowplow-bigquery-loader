@@ -30,7 +30,7 @@ object RepeaterCli {
 
   private val options: Opts[RepeaterEnvironment] =
     CliConfig.options.map {
-      case (resolver, config) =>
+      case CliConfig.Parsed(config, resolver) =>
         Environment(config.repeater, resolver, config.projectId, config.monitoring)
     }
 

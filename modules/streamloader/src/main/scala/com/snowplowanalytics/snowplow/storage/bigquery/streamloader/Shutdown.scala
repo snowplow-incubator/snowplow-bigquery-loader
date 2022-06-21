@@ -117,7 +117,7 @@ object Shutdown {
     timeout: FiniteDuration
   ): F[Unit] =
     for {
-      _ <- Logger[F].warn(s"Terminating transformed sink. Waiting $timeout for it to complete")
+      _ <- Logger[F].warn(s"Terminating event sink. Waiting $timeout for it to complete")
       _ <- queue.offer(None)
       _ <- sig.get.timeoutTo(timeout, Logger[F].warn(s"Sink not complete after $timeout, aborting"))
     } yield ()

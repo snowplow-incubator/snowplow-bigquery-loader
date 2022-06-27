@@ -32,7 +32,8 @@ object StdoutReporter {
             val failedInsert    = s"FailedInsert = ${lms.failedInsertCount}"
             val badEvent        = s"BadEvent = ${lms.badCount}"
             val types           = s"Types = ${lms.typesCount}"
-            Logger[F].info(s"$logPeriod, $total, $good, $failedInsert, $badEvent, $types")
+            val latency         = s"Latency = ${lms.latency.getOrElse(0)}"
+            Logger[F].info(s"$logPeriod, $total, $good, $failedInsert, $badEvent, $types, $latency")
           case rms: Metrics.MetricsSnapshot.RepeaterMetricsSnapshot =>
             val logPeriod    = s"${Metrics.normalizeMetric(config.prefix, "Statistics")} = ${config.period}"
             val uninsertable = s"UninsertableEvents = ${rms.uninsertableCount}"

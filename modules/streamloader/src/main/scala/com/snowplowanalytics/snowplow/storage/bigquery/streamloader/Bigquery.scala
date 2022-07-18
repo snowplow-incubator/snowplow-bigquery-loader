@@ -46,16 +46,11 @@ object Bigquery {
   ): F[Unit] =
     mkInsert(loaderRows).flatMap {
       case response if response.hasErrors =>
-        val errorIndex = response.getInsertErrors.keySet()
-        val failed     = loaderRows.zipWithIndex.filter { case (_, i) => errorIndex.contains(i.toLong) }.map(_._1)
-        val tableRows = failed.map { lr =>
-          lr.data.setFactory(GsonFactory.getDefaultInstance)
-          FailedInsert(lr.data.toString)
-        }
-        tableRows.traverse_(fi => failedInsertProducer.produce(fi)) *> metrics.failedInsertCount(tableRows.length)
+        val (failed, successful) = extractFailedAndSuccessfulRows(loaderRows, response)
+        handleFailedRows(metrics, failedInsertProducer, failed) *>
+          handleSuccessfulRows(metrics, successful)
       case _ =>
-        val earliestCollectorTstamp = loaderRows.map(_.collectorTstamp).min.getMillis
-        metrics.latency(earliestCollectorTstamp) *> metrics.goodCount(loaderRows.length)
+        handleSuccessfulRows(metrics, loaderRows)
     }
 
   def mkInsert[F[_]: Sync](
@@ -79,6 +74,40 @@ object Bigquery {
     Sync[F].delay(
       BigQueryOptions.newBuilder.setRetrySettings(retrySettings).setProjectId(projectId).build.getService
     )
+  }
+
+  private def extractFailedAndSuccessfulRows(
+    loaderRows: List[LoaderRow],
+    response: InsertAllResponse
+  ): (List[LoaderRow], List[LoaderRow]) = {
+    val errorIndex = response.getInsertErrors.keySet()
+    loaderRows.zipWithIndex.partitionMap {
+      case (failedRow, index) if errorIndex.contains(index.toLong) =>
+        Left(failedRow)
+      case (successfulRow, _) =>
+        Right(successfulRow)
+    }
+  }
+
+  private def handleFailedRows[F[_]: Sync](
+    metrics: Metrics[F],
+    failedInsertProducer: PubsubProducer[F, FailedInsert],
+    rows: List[LoaderRow]
+  ): F[Unit] = {
+    val tableRows = rows.map { lr =>
+      lr.data.setFactory(GsonFactory.getDefaultInstance)
+      FailedInsert(lr.data.toString)
+    }
+
+    tableRows.traverse_(fi => failedInsertProducer.produce(fi)) *> metrics.failedInsertCount(tableRows.length)
+  }
+
+  private def handleSuccessfulRows[F[_]: Sync](
+    metrics: Metrics[F],
+    rows: List[LoaderRow]
+  ): F[Unit] = {
+    val earliestCollectorTstamp = rows.map(_.collectorTstamp).min.getMillis
+    metrics.latency(earliestCollectorTstamp) *> metrics.goodCount(rows.length)
   }
 
   private def buildRequest(dataset: String, table: String, loaderRows: List[LoaderRow]) = {

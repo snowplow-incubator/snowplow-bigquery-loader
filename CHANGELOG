@@ -1,3 +1,9 @@
+Version 1.4.1 (2022-07-19)
+--------------------------
+Fix metrics when inserts has some failed rows (#296)
+Streamloader: add latency to stdout metrics reporter (#297)
+Ensure docker image has latest openssl and libfreetype6 versions (#295)
+
 Version 1.4.0 (2022-06-22)
 --------------------------
 Bump google-cloud-storage to 2.7.2 (#293)

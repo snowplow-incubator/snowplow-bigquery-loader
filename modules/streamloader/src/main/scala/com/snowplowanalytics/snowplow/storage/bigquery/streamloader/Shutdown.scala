@@ -96,20 +96,24 @@ object Shutdown {
           }
       }
       .concurrently {
-        source
-          .evalMap(x => queue.offer(Some(x)))
-          .onFinalizeCase {
-            case ExitCase.Succeeded =>
-              // The source has completed "naturally".
-              Logger[F].info("Reached the end of the source of events")
-            case ExitCase.Canceled =>
-              Logger[F].info("Source of events was cancelled")
-            case ExitCase.Errored(e) =>
-              sentry.trackException(e) *>
-                Logger[F].error(e)("Error in the source of events")
-          }
-          .onFinalize(queue.offer(None))
+        source.evalMap(x => queue.offer(Some(x))).onFinalizeCase {
+          case ExitCase.Succeeded =>
+            // The source has completed "naturally".
+            Logger[F].info("Reached the end of the source of events") *>
+              closeQueue(queue)
+          case ExitCase.Canceled =>
+            Logger[F].info("Source of events was cancelled")
+          case ExitCase.Errored(e) =>
+            sentry.trackException(e) *>
+              Logger[F].error(e)("Error in the source of events") *>
+              terminateStream(queue, sig, timeout)
+        }
       }
+
+  // Closing the queue allows the sink to finish once all pending events have been flushed to BigQuery.
+  // We spawn it as a Fiber because `queue.offer(None)` can hang if the queue is already closed.
+  private def closeQueue[F[_]: Async, A](queue: Queue[F, Option[A]]): F[Unit] =
+    queue.offer(None).start.void
 
   private def terminateStream[F[_]: Async, A](
     queue: Queue[F, Option[A]],
@@ -118,7 +122,7 @@ object Shutdown {
   ): F[Unit] =
     for {
       _ <- Logger[F].warn(s"Terminating event sink. Waiting $timeout for it to complete")
-      _ <- queue.offer(None)
+      _ <- closeQueue(queue)
       _ <- sig.get.timeoutTo(timeout, Logger[F].warn(s"Sink not complete after $timeout, aborting"))
     } yield ()
 }

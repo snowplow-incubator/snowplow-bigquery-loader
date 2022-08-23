@@ -105,10 +105,11 @@ object Bigquery {
   private def handleSuccessfulRows[F[_]: Sync](
     metrics: Metrics[F],
     rows: List[LoaderRow]
-  ): F[Unit] = {
-    val earliestCollectorTstamp = rows.map(_.collectorTstamp).min.getMillis
-    metrics.latency(earliestCollectorTstamp) *> metrics.goodCount(rows.length)
-  }
+  ): F[Unit] =
+    if (rows.nonEmpty) {
+      val earliestCollectorTstamp = rows.map(_.collectorTstamp).min.getMillis
+      metrics.latency(earliestCollectorTstamp) *> metrics.goodCount(rows.length)
+    } else Sync[F].unit
 
   private def buildRequest(dataset: String, table: String, loaderRows: List[LoaderRow]) = {
     val tableRows = loaderRows.map(lr => RowToInsert.of(lr.data)).asJava

@@ -88,6 +88,6 @@ limitations under the License.
 [setup-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/setup.png
 [contributing-image]: https://d3i6fms1cm1j0i.cloudfront.net/github/images/contributing.png
 
-[techdocs]: https://docs.snowplowanalytics.com/docs/setup-snowplow-on-gcp/setup-bigquery-destination/bigquery-loader-0-6-0/
-[setup]: https://docs.snowplowanalytics.com/docs/setup-snowplow-on-gcp/setup-bigquery-destination/bigquery-loader-0-6-0/#setup-guide
+[techdocs]: https://docs.snowplow.io/docs/pipeline-components-and-applications/loaders-storage-targets/bigquery-loader/
+[setup]: https://docs.snowplow.io/docs/pipeline-components-and-applications/loaders-storage-targets/bigquery-loader/snowplow-bigquery-loader-configuration-reference/
 [contributing]: https://github.com/snowplow/snowplow/wiki/Contributing

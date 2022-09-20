@@ -1,3 +1,7 @@
+Version 1.4.3 (2022-09-20)
+--------------------------
+Bump snakeyaml to 1.32 (#305)
+
 Version 1.4.2 (2022-08-23)
 --------------------------
 Stream loader: Fix metrics when an insert has no successful rows (#302)

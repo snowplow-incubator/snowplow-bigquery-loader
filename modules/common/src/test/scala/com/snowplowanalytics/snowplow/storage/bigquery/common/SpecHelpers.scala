@@ -553,12 +553,13 @@ object SpecHelpers {
     private val lOutput: LoaderOutputs       = LoaderOutputs(good, bad, types, failedInserts)
     private val loadMode: LoadMode           = StreamingInserts(false)
 
-    private val maxQueueSize: Int      = 1000
-    private val parallelPullCount: Int = 1
+    private val maxQueueSize: Int      = 3000
+    private val maxRequestBytes: Int   = 50000000
+    private val parallelPullCount: Int = 3
     private val maxAckExtensionPeriod  = FiniteDuration(1L, HOURS)
     private val awaitTerminatePeriod   = FiniteDuration(30L, SECONDS)
     private val consumerSettings =
-      ConsumerSettings(maxQueueSize, parallelPullCount, maxAckExtensionPeriod, awaitTerminatePeriod)
+      ConsumerSettings(maxQueueSize, maxRequestBytes, parallelPullCount, maxAckExtensionPeriod, awaitTerminatePeriod)
 
     private val bqWriteRequestThreshold: Int          = 500
     private val bqWriteRequestTimeout: FiniteDuration = FiniteDuration(1L, SECONDS)

@@ -52,8 +52,9 @@
     # Advanced settings for the loader.input subscriber
     # For defaults refer to https://github.com/permutive/fs2-google-pubsub/blob/master/fs2-google-pubsub-grpc/src/main/scala/com/permutive/pubsub/consumer/grpc/PubsubGoogleConsumerConfig.scala
     "consumerSettings": {
-      "maxQueueSize": 1000
+      "maxQueueSize": 3000
       "parallelPullCount": 3
+      "maxRequestBytes": 50000000
       "maxAckExtensionPeriod": "10 seconds"
       "awaitTerminatePeriod": "30 seconds"
     }

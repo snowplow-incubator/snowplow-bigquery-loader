@@ -108,6 +108,7 @@ object model {
 
   final case class ConsumerSettings(
     maxQueueSize: Int,
+    maxRequestBytes: Int,
     parallelPullCount: Int,
     maxAckExtensionPeriod: FiniteDuration,
     awaitTerminatePeriod: FiniteDuration

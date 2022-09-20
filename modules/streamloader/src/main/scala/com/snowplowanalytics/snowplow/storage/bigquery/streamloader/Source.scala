@@ -13,10 +13,11 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.ConsumerSettings
-
 import org.typelevel.log4cats.Logger
-
 import cats.effect.Sync
+import com.google.api.gax.batching.FlowController.LimitExceededBehavior
+import com.google.api.gax.batching.FlowControlSettings
+import com.google.pubsub.v1.PubsubMessage
 import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
 import com.permutive.pubsub.consumer.Model
 import fs2.Stream
@@ -26,17 +27,35 @@ object Source {
     projectId: String,
     subscription: String,
     cs: ConsumerSettings
-  ): Stream[F, Payload[F]] =
-    PubsubGoogleConsumer.subscribe[F, String](
-      Model.ProjectId(projectId),
-      Model.Subscription(subscription),
-      (msg, err, _, _) => Logger[F].error(err)(s"Error from PubSub message $msg"),
-      config = PubsubGoogleConsumerConfig(
-        cs.maxQueueSize,
-        cs.parallelPullCount,
-        cs.maxAckExtensionPeriod,
-        cs.awaitTerminatePeriod,
-        onFailedTerminate = _ => Sync[F].unit
+  ): Stream[F, Payload[F]] = {
+
+    val onFailedTerminate: Throwable => F[Unit] =
+      t => Logger[F].error(s"Failed to terminate PubSub consumer: ${t.getMessage} ")
+
+    val flowControlSettings: FlowControlSettings =
+      FlowControlSettings
+        .newBuilder()
+        .setMaxOutstandingElementCount(cs.maxQueueSize)
+        .setMaxOutstandingRequestBytes(cs.maxRequestBytes)
+        .setLimitExceededBehavior(LimitExceededBehavior.Block)
+        .build()
+
+    val pubSubConfig =
+      PubsubGoogleConsumerConfig(
+        maxQueueSize = cs.maxQueueSize,
+        parallelPullCount = cs.parallelPullCount,
+        maxAckExtensionPeriod = cs.maxAckExtensionPeriod,
+        awaitTerminatePeriod = cs.awaitTerminatePeriod,
+        onFailedTerminate = onFailedTerminate,
+        customizeSubscriber = Some(builder => builder.setFlowControlSettings(flowControlSettings))
       )
+
+    val errorHandler: (PubsubMessage, Throwable, F[Unit], F[Unit]) => F[Unit] =
+      (message, error, _, _) =>
+        Logger[F].error(error)(s"Failed to decode message: $message")
+
+    PubsubGoogleConsumer.subscribe[F, String](
+      Model.ProjectId(projectId), Model.Subscription(subscription), errorHandler, pubSubConfig
     )
+  }
 }

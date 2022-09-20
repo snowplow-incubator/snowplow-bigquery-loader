@@ -32,6 +32,7 @@ object Dependencies {
     val nettyCodec   = "4.1.76.Final"
     val googleOauth  = "1.33.3"
     val jackson      = "2.13.2.2"
+    val snakeYaml    = "1.32"
 
     // Scala third-party
     val cats        = "2.6.1"
@@ -79,6 +80,7 @@ object Dependencies {
   val sentry          = "io.sentry"                  % "sentry"                                  % V.sentry
   val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
   val guava           = "com.google.guava"           % "guava"                                   % V.guava
+  val snakeYaml       = "org.yaml"                   % "snakeyaml"                               % V.snakeYaml
   val dataflowRunner  = ("org.apache.beam"            % "beam-runners-google-cloud-dataflow-java" % V.beam)
     .exclude("org.codehaus.jackson", "jackson-mapper-asl") // address security vulnerabilities
   val directRunner    = ("org.apache.beam"            % "beam-runners-direct-java"                % V.beam)
@@ -152,7 +154,8 @@ object Dependencies {
       scioCore,
       scioGoogle,
       scioTest,
-      guava
+      guava,
+      snakeYaml
     )
 
   val streamloaderDependencies = Seq(

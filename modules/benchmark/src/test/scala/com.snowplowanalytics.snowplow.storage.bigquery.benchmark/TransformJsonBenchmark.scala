@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 class TransformJsonBenchmark {
   @Benchmark
   def transformJson(state: States.ExampleEventState): Unit = {
-    LoaderRow.transformJson[Id](state.resolver, state.adClickSchemaKey)(state.unstruct.unstruct_event.data.get.data)
+    LoaderRow.transformJson[Id](state.resolver, state.lookup, state.adClickSchemaKey)(state.unstruct.unstruct_event.data.get.data)
     ()
   }
 }

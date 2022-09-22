@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
 class GroupContextsBenchmark {
   @Benchmark
   def groupContexts(state: States.ExampleEventState): Unit = {
-    LoaderRow.groupContexts(state.resolver, state.contexts)
+    LoaderRow.groupContexts(state.resolver, state.lookup, state.contexts)
     ()
   }
 }

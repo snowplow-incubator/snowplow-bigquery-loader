@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 class FromEventBenchmark {
   @Benchmark
   def fromEvent(state: States.ExampleEventState): Unit = {
-    LoaderRow.fromEvent[Id](state.resolver, state.processor)(state.baseEvent)
+    LoaderRow.fromEvent[Id](state.resolver, state.processor, state.lookup)(state.baseEvent)
     ()
   }
 }

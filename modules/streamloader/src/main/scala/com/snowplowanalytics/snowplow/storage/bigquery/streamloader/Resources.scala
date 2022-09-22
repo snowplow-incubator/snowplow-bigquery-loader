@@ -16,6 +16,8 @@ import java.nio.charset.StandardCharsets.UTF_8
 import com.snowplowanalytics.iglu.client.Client
 import com.snowplowanalytics.iglu.client.resolver.{InitListCache, InitSchemaCache}
 import com.snowplowanalytics.iglu.client.resolver.registries.{Http4sRegistryLookup, RegistryLookup}
+import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
+import com.snowplowanalytics.lrumap.CreateLruMap
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
@@ -23,7 +25,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Moni
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.{StreamBadRow, StreamLoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp
-import com.snowplowanalytics.snowplow.storage.bigquery.common.Sentry
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{FieldKey, LookupProperties, Sentry}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.FailedInsert
 
 import cats.Applicative
@@ -41,7 +43,6 @@ import org.http4s.ember.client.EmberClientBuilder
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
-
 final class Resources[F[_]](
   val source: Stream[F, Payload[F]],
   val igluClient: Client[F, Json],
@@ -49,7 +50,8 @@ final class Resources[F[_]](
   val goodSink: Pipe[F, StreamLoaderRow[F], Nothing],
   val metrics: Metrics[F],
   val sentry: Sentry[F],
-  val registryLookup: RegistryLookup[F]
+  val registryLookup: RegistryLookup[F],
+  val lookup: LookupProperties[F]
 )
 
 object Resources {
@@ -85,10 +87,11 @@ object Resources {
       badSink        <- mkBadSink[F](env.projectId, env.config.output.bad.topic, env.config.sinkSettings.bad.sinkConcurrency, metrics, env.config.sinkSettings.bad)
       sentry         <- Sentry.init(env.monitoring.sentry)
       http           <- EmberClientBuilder.default[F].build
+      lookup         <- Resource.eval(CreateLruMap[F, FieldKey, Field].create(500))
       goodSink       = mkGoodSink[F](env.config.output.good, bigquery, failedInserts, metrics, types, env.config.sinkSettings.good, env.config.sinkSettings.types)
       source         = Source.getStream[F](env.projectId, env.config.input.subscription, env.config.consumerSettings)
       registryLookup = Http4sRegistryLookup(http)
-    } yield new Resources[F](source, igluClient, badSink, goodSink, metrics, sentry, registryLookup)
+    } yield new Resources[F](source, igluClient, badSink, goodSink, metrics, sentry, registryLookup, lookup)
     // format: on
   }
 

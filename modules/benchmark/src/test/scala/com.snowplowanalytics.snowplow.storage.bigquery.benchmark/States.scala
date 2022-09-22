@@ -24,6 +24,7 @@ object States {
     val unstruct         = baseEvent.copy(unstruct_event = SpecHelpers.events.adClickUnstructEvent)
     val contexts         = SpecHelpers.events.geoContexts
     val resolver         = SpecHelpers.iglu.resolver
+    val lookup           = SpecHelpers.cache.lookup
     val processor        = SpecHelpers.meta.processor
     val idClock          = SpecHelpers.implicits.idClock
   }

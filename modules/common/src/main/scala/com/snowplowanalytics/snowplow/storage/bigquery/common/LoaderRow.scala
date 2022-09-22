@@ -23,7 +23,7 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload, Processor}
 
 import cats.Monad
-import cats.data.{NonEmptyList, Validated, ValidatedNel}
+import cats.data.{EitherT, NonEmptyList, Validated, ValidatedNel}
 import cats.effect.Clock
 import cats.implicits._
 import com.google.api.services.bigquery.model.TableRow
@@ -51,25 +51,25 @@ object LoaderRow {
     * @param record An enriched TSV line.
     * @return Either a BadRow with error messages or a row that is ready to be loaded.
     */
-  def parse[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], processor: Processor)(
+  def parse[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], processor: Processor, lookup: LookupProperties[F])(
     record: String
   ): F[Either[BadRow, LoaderRow]] =
     Event.parse(record) match {
       case Validated.Valid(event) =>
-        fromEvent[F](igluClient, processor)(event)
+        fromEvent[F](igluClient, processor, lookup)(event)
       case Validated.Invalid(error) =>
         val badRowError = BadRow.LoaderParsingError(processor, error, Payload.RawPayload(record))
         Monad[F].pure(badRowError.asLeft)
     }
 
   /** Parse JSON object provided by Snowplow Analytics SDK */
-  def fromEvent[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], processor: Processor)(
+  def fromEvent[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], processor: Processor, lookup: LookupProperties[F])(
     event: Event
   ): F[Either[BadRow, LoaderRow]] = {
     val atomic                   = transformAtomic(event)
-    val contexts: F[Transformed] = groupContexts[F](igluClient, event.contexts.data.toVector)
+    val contexts: F[Transformed] = groupContexts[F](igluClient, lookup, event.contexts.data.toVector)
     val derivedContexts: F[Transformed] =
-      groupContexts(igluClient, event.derived_contexts.data.toVector)
+      groupContexts(igluClient, lookup, event.derived_contexts.data.toVector)
 
     val selfDescribingEvent: F[Transformed] = event
       .unstruct_event
@@ -77,7 +77,7 @@ object LoaderRow {
       .map {
         case SelfDescribingData(schema, data) =>
           val columnName = Schema.getColumnName(ShreddedType(UnstructEvent, schema))
-          transformJson[F](igluClient, schema)(data).map(_.map { row =>
+          transformJson[F](igluClient, lookup, schema)(data).map(_.map { row =>
             List((columnName, Adapter.adaptRow(row)))
           })
       }
@@ -136,13 +136,14 @@ object LoaderRow {
   /** Group list of contexts by their full URI and transform values into ready to load rows */
   def groupContexts[F[_]: Monad: RegistryLookup: Clock](
     igluClient: Resolver[F],
+    lookup: LookupProperties[F],
     contexts: Vector[SelfDescribingData[Json]]
   ): F[ValidatedNel[FailureDetails.LoaderIgluError, List[(String, AnyRef)]]] = {
     val grouped = contexts.groupBy(_.schema).map {
       case (key, groupedContexts) =>
         val contexts   = groupedContexts.map(_.data) // Strip away URI
         val columnName = Schema.getColumnName(ShreddedType(Contexts(CustomContexts), key))
-        val getRow     = transformJson[F](igluClient, key)(_)
+        val getRow     = transformJson[F](igluClient,lookup, key)(_)
         contexts
           .toList
           .map(getRow)
@@ -156,9 +157,16 @@ object LoaderRow {
     * Get BigQuery-compatible table rows from data-only JSON payload
     * Can be transformed to contexts (via Repeated) later only remain ue-compatible
     */
-  def transformJson[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], schemaKey: SchemaKey)(
+  def transformJson[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], lookup: LookupProperties[F], schemaKey: SchemaKey)(
     data: Json
-  ): F[ValidatedNel[FailureDetails.LoaderIgluError, Row]] =
+  ): F[Validated[NonEmptyList[FailureDetails.LoaderIgluError], Row]] =
+    EitherT.liftF(lookup.get(schemaKey)).flatMap {
+      case Some(field) => EitherT.pure[F, FailureDetails.LoaderIgluError](field).leftMap(NonEmptyList.one(_))
+      case None => EitherT(getSchemaAsField(igluClient, schemaKey)).semiflatTap(field => lookup.put(schemaKey, field))
+    }.value.map(_.flatMap(field => Row.cast(field)(data).leftMap(e => e.map(castError(schemaKey))).toEither).toValidated)
+
+
+  private def getSchemaAsField[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], schemaKey: SchemaKey): F[Either[NonEmptyList[FailureDetails.LoaderIgluError], Field]] =
     igluClient
       .lookupSchema(schemaKey)
       .map(
@@ -166,8 +174,6 @@ object LoaderRow {
           NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(schemaKey, e))
         }.flatMap(schema => DdlSchema.parse(schema).toRight(invalidSchema(schemaKey)))
           .map(schema => Field.build("", schema, false))
-          .flatMap(field => Row.cast(field)(data).leftMap(e => e.map(castError(schemaKey))).toEither)
-          .toValidated
       )
 
   def castError(schemaKey: SchemaKey)(error: CastError): FailureDetails.LoaderIgluError =

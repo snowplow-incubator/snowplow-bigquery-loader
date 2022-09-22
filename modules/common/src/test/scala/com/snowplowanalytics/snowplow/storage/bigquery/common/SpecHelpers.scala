@@ -12,11 +12,15 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
+import cats.effect.Clock
+import cats.{Applicative, Id}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.Registry
 import com.snowplowanalytics.iglu.core._
+import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
+import com.snowplowanalytics.lrumap.CreateLruMap
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
 import com.snowplowanalytics.snowplow.badrows.Processor
@@ -26,7 +30,6 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment
   MutatorEnvironment,
   RepeaterEnvironment
 }
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model._
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Config.{
   LoaderOutputs,
   MutatorOutput,
@@ -39,17 +42,15 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monit
   Stdout,
   Sentry => SentryConfig
 }
-
-import cats.{Applicative, Id}
-import cats.effect.Clock
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model._
 import io.circe.Json
 import io.circe.literal._
 import io.circe.parser.parse
 
+import java.net.URI
 import java.time.Instant
 import java.util.UUID
-import java.net.URI
-import scala.concurrent.duration.{FiniteDuration, HOURS, MILLISECONDS, NANOSECONDS, SECONDS}
+import scala.concurrent.duration.{DurationInt, FiniteDuration, HOURS, MILLISECONDS, NANOSECONDS, SECONDS}
 import scala.io.Source
 
 object SpecHelpers {
@@ -87,13 +88,23 @@ object SpecHelpers {
         .getOrElse(throw new RuntimeException("SpecHelpers.parseSchema received invalid JSON Schema"))
   }
 
-  object implicits {
+  object clocks {
     implicit val idClock: Clock[Id] = new Clock[Id] {
       def realTime: FiniteDuration =
         FiniteDuration(System.currentTimeMillis, MILLISECONDS)
 
       def monotonic: FiniteDuration =
         FiniteDuration(System.nanoTime(), NANOSECONDS)
+
+      def applicative: Applicative[Id] = implicitly[Applicative[Id]]
+    }
+
+    def stoppedTimeClock(timeInMs: Long): Clock[Id] = new Clock[Id] {
+      def realTime: FiniteDuration =
+        FiniteDuration(timeInMs, MILLISECONDS)
+
+      def monotonic: FiniteDuration =
+        FiniteDuration(timeInMs * 1000000, NANOSECONDS)
 
       def applicative: Applicative[Id] = implicitly[Applicative[Id]]
     }
@@ -225,7 +236,7 @@ object SpecHelpers {
                 }
               }"""
 
-    private val schemas = Map(
+    private[bigquery] val schemas = Map(
       SchemaMap("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))             -> adClick,
       SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0))  -> geolocation100,
       SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 1, 0))  -> geolocation110,
@@ -235,14 +246,59 @@ object SpecHelpers {
       SchemaMap("com.snowplowanalytics.snowplow", "nullable_array_event", "jsonschema", SchemaVer.Full(1, 0, 0)) -> nullableArrayEvent
     )
 
-    private val staticRegistry = Registry.InMemory(Registry.Config("InMemory", 1, List.empty), schemas.toList.map {
-      case (k, v) => SelfDescribingSchema(k, v)
-    })
+    private[bigquery] def cachedSchemas(schema: Json): Map[SchemaMap, Json] =
+      Map(SchemaMap("com.snowplowanalytics.snowplow", "test_schema", "jsonschema", SchemaVer.Full(1, 0, 0)) -> schema)
 
-    private[bigquery] val resolver: Resolver[Id] = Resolver[Id](List(staticRegistry), None)
+    private[bigquery] def staticRegistry(schemas: Map[SchemaMap, Json]) =
+      Registry.InMemory(Registry.Config("InMemory", 0, List.empty), schemas.toList.map {
+        case (k, v) => SelfDescribingSchema(k, v)
+      })
+
+    private[bigquery] def resolver(registry: Registry): Resolver[Id] = Resolver.init[Id](10, Some(10.seconds), registry)
 
     private[bigquery] val adClickSchemaKey =
       SchemaKey("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))
+
+    //single 'field1' field
+    private[bigquery] val `original schema - 1 field`: Json =
+      json"""
+         {
+             "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+             "description": "Test schema 1",
+             "self": {
+                 "vendor": "com.snowplowanalytics.snowplow",
+                 "name": "test_schema",
+                 "format": "jsonschema",
+                 "version": "1-0-0"
+             },
+
+             "type": "object",
+             "properties": {
+               "field1": { "type": "string"}
+              }
+         }
+        """
+
+    //same key as schema1, but with additional `field2` field.
+    private[bigquery] val `patched schema - 2 fields`: Json =
+      json"""
+         {
+             "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+             "description": "Test schema 1",
+             "self": {
+                 "vendor": "com.snowplowanalytics.snowplow",
+                 "name": "test_schema",
+                 "format": "jsonschema",
+                 "version": "1-0-0"
+             },
+
+             "type": "object",
+             "properties": {
+               "field1": { "type": "string" },
+               "field2": { "type": "integer" }
+              }
+         }
+        """
   }
 
   object events {
@@ -637,5 +693,9 @@ object SpecHelpers {
       Environment(mutator, validResolverJson, projectId, monitoring)
     private[bigquery] val repeaterEnv: RepeaterEnvironment =
       Environment(repeater, validResolverJson, projectId, monitoring)
+  }
+
+  object cache {
+    private[bigquery] val fieldCache: FieldCache[Id] = CreateLruMap[Id, FieldKey, Field].create(100)
   }
 }

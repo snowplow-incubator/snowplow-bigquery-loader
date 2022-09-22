@@ -13,7 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.benchmark
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.implicits.idClock
+import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.clocks.idClock
 
 import cats.Id
 import org.openjdk.jmh.annotations._
@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 class TransformJsonBenchmark {
   @Benchmark
   def transformJson(state: States.ExampleEventState): Unit = {
-    LoaderRow.transformJson[Id](state.resolver, state.adClickSchemaKey)(state.unstruct.unstruct_event.data.get.data)
+    LoaderRow.transformJson[Id](state.resolver, state.fieldCache, state.adClickSchemaKey)(state.unstruct.unstruct_event.data.get.data)
     ()
   }
 }

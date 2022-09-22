@@ -31,13 +31,14 @@ import org.specs2.mutable.Specification
 class LoaderRowSpec extends Specification {
   val processor: Processor   = SpecHelpers.meta.processor
   val resolver: Resolver[Id] = SpecHelpers.iglu.resolver
+  val lookup: LookupProperties[Id] = SpecHelpers.cache.lookup
 
   "groupContexts" should {
     "group contexts with same version" in {
       val contexts = SpecHelpers.events.geoContexts
 
       val result = LoaderRow
-        .groupContexts(resolver, contexts)
+        .groupContexts(resolver, lookup, contexts)
         .toEither
         .map(x => x.map { case (k, v) => (k, v.asInstanceOf[java.util.List[String]].size()) }.toMap)
 
@@ -98,13 +99,13 @@ class LoaderRowSpec extends Specification {
       )
 
       // OUTPUTS
-      val resultPlain = LoaderRow.fromEvent(resolver, processor)(inputPlain)
-      val resultC     = LoaderRow.fromEvent(resolver, processor)(inputC)
-      val resultDc    = LoaderRow.fromEvent(resolver, processor)(inputDc)
-      val resultUe    = LoaderRow.fromEvent(resolver, processor)(inputUe)
-      val resultUeC   = LoaderRow.fromEvent(resolver, processor)(inputUeC)
-      val resultUeDc  = LoaderRow.fromEvent(resolver, processor)(inputUeDc)
-      val resultUeDcC = LoaderRow.fromEvent(resolver, processor)(inputUeDcC)
+      val resultPlain = LoaderRow.fromEvent(resolver, processor, lookup)(inputPlain)
+      val resultC     = LoaderRow.fromEvent(resolver, processor, lookup)(inputC)
+      val resultDc    = LoaderRow.fromEvent(resolver, processor, lookup)(inputDc)
+      val resultUe    = LoaderRow.fromEvent(resolver, processor, lookup)(inputUe)
+      val resultUeC   = LoaderRow.fromEvent(resolver, processor, lookup)(inputUeC)
+      val resultUeDc  = LoaderRow.fromEvent(resolver, processor, lookup)(inputUeDc)
+      val resultUeDcC = LoaderRow.fromEvent(resolver, processor, lookup)(inputUeDcC)
 
       // EXPECTATIONS
       val cValue  = adaptRow(Repeated(List(Record(List(("id", Primitive("deadbeef-0000-1111-2222-deadbeef3333")))))))
@@ -207,6 +208,7 @@ class LoaderRowSpec extends Specification {
       val result =
         transformJson(
           resolver,
+          lookup,
           SchemaKey("com.snowplowanalytics.snowplow", "nullable_array_event", "jsonschema", Full(1, 0, 0))
         )(json).toEither
 
@@ -216,7 +218,7 @@ class LoaderRowSpec extends Specification {
 
   "parse" should {
     "succeed with an event whose schema has an [array, null] property" in {
-      LoaderRow.parse(resolver, processor)(SpecHelpers.events.nullableArrayUnstructEvent) must beRight
+      LoaderRow.parse(resolver, processor, lookup)(SpecHelpers.events.nullableArrayUnstructEvent) must beRight
     }
   }
 }

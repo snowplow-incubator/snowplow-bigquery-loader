@@ -12,9 +12,12 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
-import com.snowplowanalytics.iglu.client.Resolver
-
 import cats.Id
+import com.snowplowanalytics.iglu.client.Resolver
+import com.snowplowanalytics.iglu.client.resolver.Resolver.parseConfig
+import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
+import com.snowplowanalytics.lrumap.CreateLruMap
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{FieldCache, FieldKey}
 import io.circe.Json
 
 object singleton {
@@ -29,6 +32,22 @@ object singleton {
         synchronized {
           if (instance == null) {
             instance = Resolver.parse[Id](r).fold(e => throw new RuntimeException(e.toString), identity)
+          }
+        }
+      }
+      instance
+    }
+  }
+
+  object FieldLookupSingleton {
+    @volatile private var instance: FieldCache[Id] = _
+
+    def get(r: Json): FieldCache[Id] = {
+      val cacheSize = parseConfig(r).map(_.cacheSize).getOrElse(500)
+      if (instance == null) {
+        synchronized {
+          if (instance == null) {
+            instance = CreateLruMap[Id, FieldKey, Field].create(cacheSize)
           }
         }
       }

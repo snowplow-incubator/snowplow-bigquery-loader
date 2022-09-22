@@ -12,44 +12,32 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
+import cats.effect.Clock
+import cats.{Id, Applicative}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.Registry
 import com.snowplowanalytics.iglu.core._
+import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
+import com.snowplowanalytics.lrumap.CreateLruMap
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
-import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{UnstructEvent, Contexts}
 import com.snowplowanalytics.snowplow.badrows.Processor
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.{
-  LoaderEnvironment,
-  MutatorEnvironment,
-  RepeaterEnvironment
-}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Config.{
-  LoaderOutputs,
-  MutatorOutput,
-  RepeaterOutputs
-}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.{RepeaterEnvironment, MutatorEnvironment, LoaderEnvironment}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Config.{LoaderOutputs, RepeaterOutputs, MutatorOutput}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.LoadMode.StreamingInserts
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.{
-  Dropwizard,
-  Statsd,
-  Stdout,
-  Sentry => SentryConfig
-}
-
-import cats.{Applicative, Id}
-import cats.effect.Clock
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.{Dropwizard, Statsd, Stdout, Sentry => SentryConfig}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model._
 import io.circe.Json
 import io.circe.literal._
 import io.circe.parser.parse
 
+import java.net.URI
 import java.time.Instant
 import java.util.UUID
-import java.net.URI
-import scala.concurrent.duration.{FiniteDuration, HOURS, MILLISECONDS, NANOSECONDS, SECONDS}
+import scala.concurrent.duration.{FiniteDuration, NANOSECONDS, MILLISECONDS, SECONDS, HOURS}
 import scala.io.Source
 
 object SpecHelpers {
@@ -87,13 +75,23 @@ object SpecHelpers {
         .getOrElse(throw new RuntimeException("SpecHelpers.parseSchema received invalid JSON Schema"))
   }
 
-  object implicits {
+  object clocks {
     implicit val idClock: Clock[Id] = new Clock[Id] {
       def realTime: FiniteDuration =
         FiniteDuration(System.currentTimeMillis, MILLISECONDS)
 
       def monotonic: FiniteDuration =
         FiniteDuration(System.nanoTime(), NANOSECONDS)
+
+      def applicative: Applicative[Id] = implicitly[Applicative[Id]]
+    }
+
+    def stoppedTimeClock(timeInMs: Long): Clock[Id] = new Clock[Id] {
+      def realTime: FiniteDuration =
+        FiniteDuration(timeInMs, MILLISECONDS)
+
+      def monotonic: FiniteDuration =
+        FiniteDuration(timeInMs * 1000000, NANOSECONDS)
 
       def applicative: Applicative[Id] = implicitly[Applicative[Id]]
     }
@@ -637,5 +635,9 @@ object SpecHelpers {
       Environment(mutator, validResolverJson, projectId, monitoring)
     private[bigquery] val repeaterEnv: RepeaterEnvironment =
       Environment(repeater, validResolverJson, projectId, monitoring)
+  }
+
+  object cache {
+    private[bigquery] val fieldCache: FieldCache[Id] = CreateLruMap[Id, FieldKey, Field].create(100)
   }
 }

@@ -12,14 +12,15 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import com.snowplowanalytics.iglu.client.{Client, ClientError}
+import com.snowplowanalytics.iglu.client.ClientError
+import com.snowplowanalytics.iglu.client.resolver.Resolver
 import com.snowplowanalytics.iglu.core.SchemaKey
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{Mode, Field => DdlField}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, Schema => LoaderSchema, LoaderRow}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, LoaderRow, Schema => LoaderSchema}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.MutatorEnvironment
 
 import cats.data.EitherT
@@ -39,7 +40,7 @@ import scala.util.control.NonFatal
   * Mutator is stateful worker that emits `alter table` requests.
   * It does not depend on any source of requests (such as PubSub topic)
   *
-  * @param igluClient iglu resolver, responsible for fetching schemas
+  * @param resolver iglu resolver, responsible for fetching schemas
   * @param tableReference object responsible for table interactions
   * @param state current state of the table, source of truth
   */
@@ -57,6 +58,12 @@ object Mutator {
   def filterFields(existingColumns: Vector[String], newItems: List[ShreddedType]): List[ShreddedType] =
     newItems.filterNot(item => existingColumns.contains(LoaderSchema.getColumnName(item)))
 
+  private def mkResolver(igluConfig: Json): EitherT[IO, String, Resolver[IO]] =
+    EitherT
+      .fromEither[IO](Resolver.parseConfig(igluConfig))
+      .flatMap(conf => Resolver.fromConfig[IO](conf))
+      .leftMap(failure => failure.show)
+
   def initialize(
     env: MutatorEnvironment,
     verbose: Boolean
@@ -68,13 +75,13 @@ object Mutator {
         env.config.output.good.datasetId,
         env.config.output.good.tableId
       )
-      fields     <- EitherT.liftF(table.getFields)
-      igluClient <- Client.parseDefault[IO](env.resolverJson).leftMap(_.show)
-      _          <- EitherT.liftF[IO, String, Unit](addField(table, LoaderRow.LoadTstampField))
-      ref        <- EitherT.liftF(Ref.of(MutatorState(fields, 0)))
-    } yield pipe(igluClient, table, ref, verbose)
+      fields   <- EitherT.liftF(table.getFields)
+      resolver <- mkResolver(env.resolverJson)
+      _        <- EitherT.liftF[IO, String, Unit](addField(table, LoaderRow.LoadTstampField))
+      ref      <- EitherT.liftF(Ref.of(MutatorState(fields, 0)))
+    } yield pipe(resolver, table, ref, verbose)
 
-  def pipe(igluClient: Client[IO, Json], tableReference: TableReference, ref: Ref[IO, MutatorState], verbose: Boolean)(
+  def pipe(resolver: Resolver[IO], tableReference: TableReference, ref: Ref[IO, MutatorState], verbose: Boolean)(
     implicit logger: Logger[IO]
   ): Pipe[IO, List[ShreddedType], Unit] =
     in =>
@@ -90,7 +97,7 @@ object Mutator {
         state <- Stream.eval(ref.get)
         existingColumns = state.fields.map(_.getName)
         fieldsToAdd     = filterFields(existingColumns, inventoryItems)
-        state <- Stream.eval(fieldsToAdd.foldLeftM(state)(addShreddedType(tableReference, igluClient, _, _)))
+        state <- Stream.eval(fieldsToAdd.foldLeftM(state)(addShreddedType(tableReference, resolver, _, _)))
         state <- Stream.emit(state.increment)
         _     <- Stream.eval(if (state.received % 100 == 0) logState(state) else IO.unit)
         _     <- Stream.eval(ref.set(state))
@@ -99,12 +106,12 @@ object Mutator {
   /** Perform ALTER TABLE */
   def addShreddedType(
     tableReference: TableReference,
-    igluClient: Client[IO, Json],
+    resolver: Resolver[IO],
     state: MutatorState,
     inventoryItem: ShreddedType
   )(implicit logger: Logger[IO]): IO[MutatorState] = {
     val result = for {
-      schema <- getSchema(igluClient, inventoryItem.schemaKey)
+      schema <- getSchema(resolver, inventoryItem.schemaKey)
       field = getField(inventoryItem, schema)
       _ <- tableReference.addField(field)
       _ <- logger.info(s"Added ${field.getName}")
@@ -136,9 +143,9 @@ object Mutator {
   }
 
   /** Receive the JSON Schema from the Iglu registry */
-  def getSchema(igluClient: Client[IO, Json], key: SchemaKey)(implicit logger: Logger[IO]): IO[Schema] = {
+  def getSchema(resolver: Resolver[IO], key: SchemaKey)(implicit logger: Logger[IO]): IO[Schema] = {
     val action = for {
-      response <- EitherT(igluClient.resolver.lookupSchema(key).timeout(10.seconds)).leftMap(fetchError)
+      response <- EitherT(resolver.lookupSchema(key).timeout(10.seconds)).leftMap(fetchError) //todo lookupschema result
       _        <- EitherT.liftF(logger.info(s"Received schema from Iglu registry: ${response.noSpaces}"))
       schema   <- EitherT.fromOption[IO](Schema.parse(response), invalidSchema(key))
     } yield schema

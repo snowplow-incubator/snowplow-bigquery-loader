@@ -14,15 +14,14 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import com.snowplowanalytics.iglu.client.resolver.Resolver
 import com.snowplowanalytics.iglu.core.SchemaKey
-import com.snowplowanalytics.iglu.core.SchemaVer.Full
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Row.{Primitive, Record, Repeated}
 import com.snowplowanalytics.snowplow.badrows.Processor
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.{LoadTstampField, transformJson}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.{transformJson, LoadTstampField}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.implicits.idClock
-
 import cats.Id
 import com.google.api.services.bigquery.model.TableRow
+import com.snowplowanalytics.iglu.core.SchemaVer.Full
 import io.circe.literal._
 import io.circe.parser.parse
 import org.joda.time.Instant
@@ -31,13 +30,14 @@ import org.specs2.mutable.Specification
 class LoaderRowSpec extends Specification {
   val processor: Processor   = SpecHelpers.meta.processor
   val resolver: Resolver[Id] = SpecHelpers.iglu.resolver
+  val fieldCache: FieldCache[Id] = SpecHelpers.cache.fieldCache
 
   "groupContexts" should {
     "group contexts with same version" in {
       val contexts = SpecHelpers.events.geoContexts
 
       val result = LoaderRow
-        .groupContexts(resolver, contexts)
+        .groupContexts(resolver, fieldCache, contexts)
         .toEither
         .map(x => x.map { case (k, v) => (k, v.asInstanceOf[java.util.List[String]].size()) }.toMap)
 
@@ -98,13 +98,13 @@ class LoaderRowSpec extends Specification {
       )
 
       // OUTPUTS
-      val resultPlain = LoaderRow.fromEvent(resolver, processor)(inputPlain)
-      val resultC     = LoaderRow.fromEvent(resolver, processor)(inputC)
-      val resultDc    = LoaderRow.fromEvent(resolver, processor)(inputDc)
-      val resultUe    = LoaderRow.fromEvent(resolver, processor)(inputUe)
-      val resultUeC   = LoaderRow.fromEvent(resolver, processor)(inputUeC)
-      val resultUeDc  = LoaderRow.fromEvent(resolver, processor)(inputUeDc)
-      val resultUeDcC = LoaderRow.fromEvent(resolver, processor)(inputUeDcC)
+      val resultPlain = LoaderRow.fromEvent(resolver, processor, fieldCache)(inputPlain)
+      val resultC     = LoaderRow.fromEvent(resolver, processor, fieldCache)(inputC)
+      val resultDc    = LoaderRow.fromEvent(resolver, processor, fieldCache)(inputDc)
+      val resultUe    = LoaderRow.fromEvent(resolver, processor, fieldCache)(inputUe)
+      val resultUeC   = LoaderRow.fromEvent(resolver, processor, fieldCache)(inputUeC)
+      val resultUeDc  = LoaderRow.fromEvent(resolver, processor, fieldCache)(inputUeDc)
+      val resultUeDcC = LoaderRow.fromEvent(resolver, processor, fieldCache)(inputUeDcC)
 
       // EXPECTATIONS
       val cValue  = adaptRow(Repeated(List(Record(List(("id", Primitive("deadbeef-0000-1111-2222-deadbeef3333")))))))
@@ -180,7 +180,7 @@ class LoaderRowSpec extends Specification {
 
       // format: off
       val tstamp = event.collector_tstamp.toEpochMilli
-      
+
       val expectedPlain = LoaderRow(new Instant(tstamp), tableRowPlain, inputPlain.inventory)
       val expectedC     = LoaderRow(new Instant(tstamp), tableRowC, inputC.inventory)
       val expectedDc    = LoaderRow(new Instant(tstamp), tableRowDc, inputDc.inventory)
@@ -207,6 +207,7 @@ class LoaderRowSpec extends Specification {
       val result =
         transformJson(
           resolver,
+          fieldCache,
           SchemaKey("com.snowplowanalytics.snowplow", "nullable_array_event", "jsonschema", Full(1, 0, 0))
         )(json).toEither
 
@@ -216,7 +217,7 @@ class LoaderRowSpec extends Specification {
 
   "parse" should {
     "succeed with an event whose schema has an [array, null] property" in {
-      LoaderRow.parse(resolver, processor)(SpecHelpers.events.nullableArrayUnstructEvent) must beRight
+      LoaderRow.parse(resolver, processor, fieldCache)(SpecHelpers.events.nullableArrayUnstructEvent) must beRight
     }
   }
 }

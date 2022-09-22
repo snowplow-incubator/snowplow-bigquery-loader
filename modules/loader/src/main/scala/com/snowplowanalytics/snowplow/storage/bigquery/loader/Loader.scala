@@ -163,7 +163,8 @@ object Loader {
     */
   private def parse(resolverJson: Json)(record: String): Either[BadRow, LoaderRow] = {
     val resolver = singleton.ResolverSingleton.get(resolverJson)
-    LoaderRow.parse[Id](resolver, processor)(record)
+    val lookup = singleton.FieldLookupSingleton.get(resolverJson)
+    LoaderRow.parse[Id](resolver, processor, lookup)(record)
   }
 
   private def updateMetrics(cTstamp: Instant, monitoring: Monitoring) = monitoring match {

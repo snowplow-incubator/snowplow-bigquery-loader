@@ -13,7 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.benchmark
 
 import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
-import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.implicits.idClock
+import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.clocks.idClock
 
 import org.openjdk.jmh.annotations._
 
@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
 class GroupContextsBenchmark {
   @Benchmark
   def groupContexts(state: States.ExampleEventState): Unit = {
-    LoaderRow.groupContexts(state.resolver, state.contexts)
+    LoaderRow.groupContexts(state.resolver, state.fieldCache, state.contexts)
     ()
   }
 }

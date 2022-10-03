@@ -117,7 +117,7 @@ object LoaderRow {
             .fold(
               s"null in $key".invalidNel,
               b => b.validNel,
-              i => i.toInt.orElse(i.toBigDecimal).getOrElse(i.toDouble).validNel,
+              i => i.toInt.orElse[Any](i.toBigDecimal).getOrElse(i.toDouble).validNel,
               s => s.validNel,
               _ => s"array ${value.noSpaces} in $key".invalidNel,
               _ => s"object ${value.noSpaces} in $key".invalidNel

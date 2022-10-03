@@ -75,7 +75,7 @@ object EventContainer {
     json.fold(
       null,
       b => b,
-      i => i.toInt.orElse(i.toBigInt.map(_.bigInteger)).getOrElse(i.toDouble),
+      i => i.toInt.orElse[Any](i.toBigInt.map(_.bigInteger)).getOrElse(i.toDouble),
       s => s,
       a => decomposeArray(a),
       o => decomposeObject(o)

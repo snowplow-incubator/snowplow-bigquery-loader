@@ -29,7 +29,7 @@ import sbtdynver.DynVerPlugin.autoImport._
 object BuildSettings {
   lazy val projectSettings = Seq(
     organization := "com.snowplowanalytics",
-    scalaVersion := "2.13.8",
+    scalaVersion := "2.13.9",
     buildInfoKeys := Seq[BuildInfoKey](organization, name, version, description, BuildInfoKey.action("userAgent") {
       s"${name.value}/${version.value}"
     }),

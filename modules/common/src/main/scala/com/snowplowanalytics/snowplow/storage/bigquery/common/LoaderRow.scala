@@ -31,15 +31,19 @@ import io.circe.{Encoder, Json}
 import io.circe.generic.semiauto._
 import io.circe.syntax._
 import org.joda.time.Instant
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 /** Row ready to be passed into Loader stream and Mutator topic */
 case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])
 
 object LoaderRow {
-
   type Transformed = ValidatedNel[FailureDetails.LoaderIgluError, List[(String, AnyRef)]]
 
   val LoadTstampField = Field("load_tstamp", Type.Timestamp, Mode.Nullable)
+
+  val tempLogger: Logger = LoggerFactory.getLogger(classOf[LoaderRow])
+  tempLogger.info("This is a log message that should show up once when LoaderRow object is created.")
 
   /**
     * Parse the enriched TSV line into a loader row, that can be loaded into BigQuery.
@@ -159,11 +163,16 @@ object LoaderRow {
     */
   def transformJson[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], lookup: LookupProperties[F], schemaKey: SchemaKey)(
     data: Json
-  ): F[Validated[NonEmptyList[FailureDetails.LoaderIgluError], Row]] =
+  ): F[Validated[NonEmptyList[FailureDetails.LoaderIgluError], Row]] = {
     EitherT.liftF(lookup.get(schemaKey)).flatMap {
-      case Some(field) => EitherT.pure[F, FailureDetails.LoaderIgluError](field).leftMap(NonEmptyList.one(_))
-      case None => EitherT(getSchemaAsField(igluClient, schemaKey)).semiflatTap(field => lookup.put(schemaKey, field))
+      case Some(field) => EitherT.pure[F, FailureDetails.LoaderIgluError](field).leftMap(NonEmptyList.one)
+      case None => {
+        tempLogger.info(s"We got schemakey ${schemaKey}. We are making it a field and adding to the cache.")
+        EitherT(getSchemaAsField(igluClient, schemaKey)).semiflatTap(field => lookup.put(schemaKey, field))
+      }
     }.value.map(_.flatMap(field => Row.cast(field)(data).leftMap(e => e.map(castError(schemaKey))).toEither).toValidated)
+  }
+
 
 
   private def getSchemaAsField[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], schemaKey: SchemaKey): F[Either[NonEmptyList[FailureDetails.LoaderIgluError], Field]] =

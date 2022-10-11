@@ -14,16 +14,15 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.RegistryLookup
-import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
+import com.snowplowanalytics.iglu.core.{SelfDescribingData, SchemaKey}
 import com.snowplowanalytics.iglu.schemaddl.bigquery._
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.{Schema => DdlSchema}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
-import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload, Processor}
-
+import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor, Failure, Payload, FailureDetails}
 import cats.Monad
-import cats.data.{NonEmptyList, Validated, ValidatedNel}
+import cats.data.{Validated, ValidatedNel, NonEmptyList}
 import cats.effect.Clock
 import cats.implicits._
 import com.google.api.services.bigquery.model.TableRow
@@ -31,6 +30,10 @@ import io.circe.{Encoder, Json}
 import io.circe.generic.semiauto._
 import io.circe.syntax._
 import org.joda.time.Instant
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+import scala.concurrent.duration.FiniteDuration
 
 /** Row ready to be passed into Loader stream and Mutator topic */
 case class LoaderRow(collectorTstamp: Instant, data: TableRow, inventory: Set[ShreddedType])
@@ -41,6 +44,8 @@ object LoaderRow {
 
   val LoadTstampField = Field("load_tstamp", Type.Timestamp, Mode.Nullable)
 
+  val tempLogger: Logger = LoggerFactory.getLogger(classOf[LoaderRow])
+  tempLogger.info("This is a log message that should show up once when LoaderRow object is created.")
   /**
     * Parse the enriched TSV line into a loader row, that can be loaded into BigQuery.
     * If Loader is able to figure out that row cannot be loaded into BQ,
@@ -158,17 +163,25 @@ object LoaderRow {
     */
   def transformJson[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], schemaKey: SchemaKey)(
     data: Json
-  ): F[ValidatedNel[FailureDetails.LoaderIgluError, Row]] =
-    igluClient
-      .lookupSchema(schemaKey)
-      .map(
-        _.leftMap { e =>
-          NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(schemaKey, e))
-        }.flatMap(schema => DdlSchema.parse(schema).toRight(invalidSchema(schemaKey)))
-          .map(schema => Field.build("", schema, false))
-          .flatMap(field => Row.cast(field)(data).leftMap(e => e.map(castError(schemaKey))).toEither)
-          .toValidated
-      )
+  ): F[ValidatedNel[FailureDetails.LoaderIgluError, Row]] = {
+    Clock[F].timed {
+      igluClient
+        .lookupSchema(schemaKey)
+        .map(
+          _.leftMap { e =>
+            NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(schemaKey, e))
+          }.flatMap(schema => DdlSchema.parse(schema).toRight(invalidSchema(schemaKey)))
+            .map(schema => Field.build("", schema, false))
+            .flatMap(field => Row.cast(field)(data).leftMap(e => e.map(castError(schemaKey))).toEither)
+            .toValidated
+        )
+    }.map { case (duration: FiniteDuration, maybeRow: Validated[NonEmptyList[FailureDetails.LoaderIgluError], Row]) =>
+      tempLogger.info(s"It took ${duration.toMillis} millis to transformJson - control")
+      maybeRow
+    }
+
+  }
+
 
   def castError(schemaKey: SchemaKey)(error: CastError): FailureDetails.LoaderIgluError =
     error match {

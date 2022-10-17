@@ -14,15 +14,16 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import com.snowplowanalytics.iglu.client.resolver.Resolver
 import com.snowplowanalytics.iglu.core.SchemaKey
-import com.snowplowanalytics.iglu.core.SchemaVer.Full
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Row.{Primitive, Record, Repeated}
 import com.snowplowanalytics.snowplow.badrows.Processor
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.{LoadTstampField, transformJson}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.{transformJson, LoadTstampField}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.implicits.idClock
-
 import cats.Id
 import com.google.api.services.bigquery.model.TableRow
+import com.snowplowanalytics.iglu.core.SchemaVer.Full
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data._
+import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.UnstructEvent
 import io.circe.literal._
 import io.circe.parser.parse
 import org.joda.time.Instant
@@ -205,11 +206,13 @@ class LoaderRowSpec extends Specification {
   "transformJson" should {
     "succeed with an event whose schema has an [array, null] property" in {
       val json = parse(SpecHelpers.events.nullableArrayUnstructData).getOrElse(json"""{"n": "a"}""")
+      val schemaKey = SchemaKey("com.snowplowanalytics.snowplow", "nullable_array_event", "jsonschema", Full(1, 0, 0))
       val result =
         transformJson(
           resolver,
           lookup,
-          SchemaKey("com.snowplowanalytics.snowplow", "nullable_array_event", "jsonschema", Full(1, 0, 0))
+          SchemaKey("com.snowplowanalytics.snowplow", "nullable_array_event", "jsonschema", Full(1, 0, 0)),
+          ShreddedType(UnstructEvent, schemaKey)
         )(json).toEither
 
       result must beRight

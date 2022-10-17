@@ -14,30 +14,28 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import java.nio.charset.StandardCharsets.UTF_8
 import com.snowplowanalytics.iglu.client.Client
-import com.snowplowanalytics.iglu.client.resolver.{InitListCache, InitSchemaCache}
-import com.snowplowanalytics.iglu.client.resolver.registries.{Http4sRegistryLookup, RegistryLookup}
-import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
+import com.snowplowanalytics.iglu.client.resolver.{InitSchemaCache, InitListCache}
+import com.snowplowanalytics.iglu.client.resolver.registries.{RegistryLookup, Http4sRegistryLookup}
 import com.snowplowanalytics.lrumap.CreateLruMap
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Monitoring, Output, SinkSettings}
-import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.{StreamBadRow, StreamLoaderRow}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Output, SinkSettings, Monitoring}
+import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.{StreamLoaderRow, StreamBadRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp
-import com.snowplowanalytics.snowplow.storage.bigquery.common.{FieldKey, LookupProperties, Sentry}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{LookupProperties, Sentry, FieldKey}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.FailedInsert
-
 import cats.Applicative
 import cats.effect.{Async, Resource, Sync}
 import cats.implicits._
 import com.google.cloud.bigquery.BigQuery
-import com.permutive.pubsub.producer.{Model, PubsubProducer}
+import com.permutive.pubsub.producer.{PubsubProducer, Model}
 import com.permutive.pubsub.producer.encoder.MessageEncoder
 import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerConfig}
-import fs2.{Pipe, Stream}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.FieldValue
+import fs2.{Stream, Pipe}
 import io.circe.Json
-
 import org.typelevel.log4cats.Logger
 import org.http4s.ember.client.EmberClientBuilder
 
@@ -87,7 +85,7 @@ object Resources {
       badSink        <- mkBadSink[F](env.projectId, env.config.output.bad.topic, env.config.sinkSettings.bad.sinkConcurrency, metrics, env.config.sinkSettings.bad)
       sentry         <- Sentry.init(env.monitoring.sentry)
       http           <- EmberClientBuilder.default[F].build
-      lookup         <- Resource.eval(CreateLruMap[F, FieldKey, Field].create(500))
+      lookup         <- Resource.eval(CreateLruMap[F, FieldKey, FieldValue].create(500))
       goodSink       = mkGoodSink[F](env.config.output.good, bigquery, failedInserts, metrics, types, env.config.sinkSettings.good, env.config.sinkSettings.types)
       source         = Source.getStream[F](env.projectId, env.config.input.subscription, env.config.consumerSettings)
       registryLookup = Http4sRegistryLookup(http)

@@ -14,9 +14,9 @@ package com.snowplowanalytics.snowplow.storage.bigquery.loader
 
 import cats.Id
 import com.snowplowanalytics.iglu.client.Resolver
-import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
 import com.snowplowanalytics.lrumap.CreateLruMap
-import com.snowplowanalytics.snowplow.storage.bigquery.common.{FieldKey, LookupProperties}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.FieldValue
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{LookupProperties, FieldKey}
 import io.circe.Json
 
 object singleton {
@@ -45,7 +45,7 @@ object singleton {
       if (instance == null) {
         synchronized {
           if (instance == null) {
-            instance = CreateLruMap[Id, FieldKey, Field].create(500)
+            instance = CreateLruMap[Id, FieldKey, FieldValue].create(500)
           }
         }
       }

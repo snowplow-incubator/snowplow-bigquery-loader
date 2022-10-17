@@ -17,7 +17,6 @@ import cats.{Applicative, Id}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.Registry
 import com.snowplowanalytics.iglu.core._
-import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.lrumap.CreateLruMap
@@ -628,6 +627,6 @@ object SpecHelpers {
   }
 
   object cache {
-    private[bigquery] val lookup: LookupProperties[Id] = CreateLruMap[Id, FieldKey, Field].create(100)
+    private[bigquery] val lookup: LookupProperties[Id] = CreateLruMap[Id, FieldKey, FieldValue].create(100)
   }
 }

@@ -36,7 +36,7 @@ import io.circe.parser.parse
 import java.net.URI
 import java.time.Instant
 import java.util.UUID
-import scala.concurrent.duration.{FiniteDuration, HOURS, MILLISECONDS, NANOSECONDS, SECONDS}
+import scala.concurrent.duration.{FiniteDuration, NANOSECONDS, MILLISECONDS, SECONDS, HOURS}
 import scala.io.Source
 
 object SpecHelpers {

@@ -13,7 +13,6 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import java.nio.charset.StandardCharsets.UTF_8
-import com.snowplowanalytics.iglu.client.Client
 import com.snowplowanalytics.iglu.client.resolver.{InitSchemaCache, InitListCache}
 import com.snowplowanalytics.iglu.client.resolver.registries.{RegistryLookup, Http4sRegistryLookup}
 import com.snowplowanalytics.lrumap.CreateLruMap
@@ -26,13 +25,14 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{LookupProperties, Sentry, FieldKey}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.FailedInsert
-import cats.Applicative
 import cats.effect.{Async, Resource, Sync}
 import cats.implicits._
 import com.google.cloud.bigquery.BigQuery
 import com.permutive.pubsub.producer.{PubsubProducer, Model}
 import com.permutive.pubsub.producer.encoder.MessageEncoder
 import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerConfig}
+import com.snowplowanalytics.iglu.client.resolver.Resolver
+import com.snowplowanalytics.iglu.client.resolver.Resolver.ResolverConfig
 import com.snowplowanalytics.snowplow.storage.bigquery.common.FieldValue
 import fs2.{Stream, Pipe}
 import io.circe.Json
@@ -43,17 +43,33 @@ import scala.annotation.tailrec
 import scala.concurrent.duration._
 final class Resources[F[_]](
   val source: Stream[F, Payload[F]],
-  val igluClient: Client[F, Json],
+  val resolver: Resolver[F],
   val badSink: Pipe[F, StreamBadRow[F], Nothing],
   val goodSink: Pipe[F, StreamLoaderRow[F], Nothing],
   val metrics: Metrics[F],
   val sentry: Sentry[F],
   val registryLookup: RegistryLookup[F],
-  val lookup: LookupProperties[F]
+  val lookup: LookupProperties[F] //todo rename - what kind of lookup?!
 )
 
 object Resources {
 
+  private def mkResolverConfig[F[_]: Sync](igluConfig: Json): Resource[F, ResolverConfig] = Resource.eval {
+    Resolver.parseConfig(igluConfig) match {
+      case Right(resolverConfig) => Sync[F].pure(resolverConfig)
+      case Left(error) => Sync[F].raiseError[ResolverConfig](new RuntimeException(s"Error while parsing Iglu resolver config: ${error.getMessage()}"))
+    }
+  }
+
+  private def mkResolver[F[_]: Sync: InitSchemaCache: InitListCache](resolverConfig: ResolverConfig): Resource[F, Resolver[F]] = Resource.eval {
+    Resolver.fromConfig[F](resolverConfig)
+      .leftMap(e => new RuntimeException(s"Error while parsing Iglu resolver config: ${e.getMessage()}"))
+      .value
+      .flatMap {
+        case Right(init) => Sync[F].pure(init)
+        case Left(error) => Sync[F].raiseError[Resolver[F]](error)
+      }
+  }
   /**
     * Initialise and allocate resources, and clients containing cache and mutable state.
     * @param env parsed environment config
@@ -63,16 +79,10 @@ object Resources {
   def acquire[F[_]: Async: InitSchemaCache: InitListCache: Logger](
     env: LoaderEnvironment
   ): Resource[F, Resources[F]] = {
-    val clientF: F[Client[F, Json]] = Client.parseDefault[F](env.resolverJson).value.flatMap {
-      case Right(client) =>
-        Applicative[F].pure(client)
-      case Left(error) =>
-        Sync[F].raiseError[Client[F, Json]](new RuntimeException(s"Cannot decode Iglu Client: ${error.show}"))
-    }
-
     // format: off
     for {
-      igluClient     <- Resource.eval[F, Client[F, Json]](clientF)
+      resolverConfig  <- mkResolverConfig(env.resolverJson)
+      resolver        <- mkResolver(resolverConfig)
       metrics        <- Resource.eval(mkMetricsReporter[F](env.monitoring))
       types          <- mkTypeSink[F](env.projectId, env.config.output.types.topic, env.config.sinkSettings.types, metrics)
       bigquery       <- Resource.eval[F, BigQuery](Bigquery.getClient(env.config.retrySettings, env.projectId))
@@ -89,7 +99,7 @@ object Resources {
       goodSink       = mkGoodSink[F](env.config.output.good, bigquery, failedInserts, metrics, types, env.config.sinkSettings.good, env.config.sinkSettings.types)
       source         = Source.getStream[F](env.projectId, env.config.input.subscription, env.config.consumerSettings)
       registryLookup = Http4sRegistryLookup(http)
-    } yield new Resources[F](source, igluClient, badSink, goodSink, metrics, sentry, registryLookup, lookup)
+    } yield new Resources[F](source, resolver, badSink, goodSink, metrics, sentry, registryLookup, lookup)
     // format: on
   }
 

@@ -26,6 +26,9 @@ import cats.data.{EitherT, Validated, ValidatedNel, NonEmptyList}
 import cats.effect.Clock
 import cats.implicits._
 import com.google.api.services.bigquery.model.TableRow
+import com.snowplowanalytics.iglu.client.resolver.Resolver.ResolverResult
+import com.snowplowanalytics.iglu.client.resolver.TTL
+import com.snowplowanalytics.snowplow.badrows.FailureDetails.LoaderIgluError
 import io.circe.{Encoder, Json}
 import io.circe.generic.semiauto._
 import io.circe.syntax._
@@ -79,9 +82,8 @@ object LoaderRow {
       .data
       .map {
         case SelfDescribingData(schema, data) =>
-//          val columnName = Schema.getColumnName(ShreddedType(UnstructEvent, schema))
           transformJson[F](igluClient, lookup, schema, ShreddedType(UnstructEvent, schema))(data).map(_.map { row: (ColumnName, Row) =>
-            List((row._1, Adapter.adaptRow(row._2)))
+            List((row._1, Adapter.adaptRow(row._2))) //fixme - also not great
           })
       }
       .getOrElse(Monad[F].pure(List.empty[(String, AnyRef)].validNel[FailureDetails.LoaderIgluError]))
@@ -141,18 +143,18 @@ object LoaderRow {
     igluClient: Resolver[F],
     lookup: LookupProperties[F],
     contexts: Vector[SelfDescribingData[Json]]
-  ): F[ValidatedNel[FailureDetails.LoaderIgluError, List[(String, AnyRef)]]] = {
+  ): F[ValidatedNel[FailureDetails.LoaderIgluError, List[(ColumnName, AnyRef)]]] = {
     val grouped = contexts.groupBy(_.schema).map {
       case (key, groupedContexts) =>
-        val contexts: Seq[Json] = groupedContexts.map(_.data) // Strip away URI
+        val contexts: Seq[Json] = groupedContexts.map(_.data)
         val shreddedType = ShreddedType(Contexts(CustomContexts), key)
-//        val columnName = Schema.getColumnName(ShreddedType(Contexts(CustomContexts), key))
         val getRow = transformJson[F](igluClient,lookup, key, shreddedType)(_)
+
         contexts
           .toList
           .map(getRow)
           .sequence
-          .map(_.sequence.map(rows => (rows.head._1, Adapter.adaptRow(Row.Repeated(rows.map(_._2)))))) // T-T this is awful
+          .map(_.sequence.map{ rows => (rows.head._1, Adapter.adaptRow(Row.Repeated(rows.map(_._2))))}) // fixme - this sucks
     }
     grouped.toList.sequence.map(_.sequence[ValidatedNel[FailureDetails.LoaderIgluError, *], (String, AnyRef)])
   }
@@ -161,31 +163,61 @@ object LoaderRow {
     * Get BigQuery-compatible table rows from data-only JSON payload
     * Can be transformed to contexts (via Repeated) later only remain ue-compatible
     */
-  def transformJson[F[_]: Monad: RegistryLookup: Clock](igluClient: Resolver[F], lookup: LookupProperties[F], schemaKey: SchemaKey, shreddedType: ShreddedType)(
+  def transformJson[F[_]: Monad: RegistryLookup: Clock](
+    igluClient: Resolver[F], lookup: LookupProperties[F], schemaKey: SchemaKey, shreddedType: ShreddedType)(
     data: Json
-  ): F[Validated[NonEmptyList[FailureDetails.LoaderIgluError], (ColumnName, Row)]] = {
-    EitherT.liftF(lookup.get(schemaKey)).flatMap {
-        case Some(field) => EitherT.pure[F, FailureDetails.LoaderIgluError](field).leftMap(NonEmptyList.one)
-        case None => {
-          tempLogger.info(s"We got schemakey ${schemaKey}. We are making it a field and adding to the cache.")
-          val columnName = Schema.getColumnName(shreddedType)
-          EitherT(getSchemaAsField(igluClient, schemaKey, columnName)).semiflatTap(field => lookup.put(schemaKey, field))
-        }
-      }.value.map(_.flatMap(field => Row.cast(field._2)(data).map(row => (field._1, row)).leftMap(e => e.map(castError(schemaKey))).toEither).toValidated)
+  ): F[Validated[NonEmptyList[LoaderIgluError], (ColumnName, Row)]] =
+    getSchemaAsField(igluClient, schemaKey, lookup, shreddedType)
+      .value
+      .map(_.flatMap(field => Row.cast(field.field)(data).map(row => (field.columnName, row)).leftMap(e => e.map(castError(schemaKey))).toEither).toValidated)
+
+
+  private def lookupInFieldCache[F[_]: Monad](
+    lookup: LookupProperties[F],
+    resolvedSchema: ResolverResult.Cached[SchemaKey, Json],
+    shreddedType: ShreddedType
+  ): EitherT[F, NonEmptyList[LoaderIgluError], FieldValue] = {
+    val fieldKey: (SchemaKey, TTL) = (resolvedSchema.key, resolvedSchema.timestamp)
+
+    EitherT.liftF(lookup.get(fieldKey)).flatMap {
+      case Some(field) => EitherT.pure[F, NonEmptyList[LoaderIgluError]](field)
+      case None => {
+        tempLogger.info(s"We got schemakey ${resolvedSchema.key}. We are making it a field and adding to the cache.")
+        val columnName = Schema.getColumnName(shreddedType)
+        val field = DdlSchema
+          .parse(resolvedSchema.value)
+          .toRight(invalidSchema(resolvedSchema.key))
+          .map(schema => FieldValue(columnName, Field.build("", schema, false)))
+
+        field.toEitherT[F].semiflatTap((field: FieldValue) => lookup.put(fieldKey, field))
+      }
+    }
   }
 
+  private def getSchemaAsField[F[_]: Monad: RegistryLookup: Clock](
+    igluClient: Resolver[F], schemaKey: SchemaKey, lookup: LookupProperties[F], shreddedType: ShreddedType
+  ): EitherT[F, NonEmptyList[LoaderIgluError], FieldValue] =
+    EitherT(igluClient.lookupSchemaResult(schemaKey))
+      .leftMap(err => FailureDetails.LoaderIgluError.InvalidSchema(schemaKey = schemaKey, message = err.getMessage)).leftMap(NonEmptyList.one)
+      .flatMap {
+        case cached: ResolverResult.Cached[SchemaKey, Json] =>
+          lookupInFieldCache(lookup, cached, shreddedType)
+        case ResolverResult.NotCached(_) =>
+          getSchemaAsField(igluClient, schemaKey, Schema.getColumnName(shreddedType))
+      }
 
-
-  private def getSchemaAsField[F[_]: Monad: RegistryLookup: Clock]
-  (igluClient: Resolver[F], schemaKey: SchemaKey, columnName: ColumnName): F[Either[NonEmptyList[FailureDetails.LoaderIgluError], (ColumnName, Field)]] =
-    igluClient
+  def getSchemaAsField[F[_]: Monad: RegistryLookup: Clock](
+    igluClient: Resolver[F], schemaKey: SchemaKey, columnName: ColumnName
+  ): EitherT[F, NonEmptyList[LoaderIgluError], FieldValue] =
+    EitherT(igluClient
       .lookupSchema(schemaKey)
       .map(
         _.leftMap { e =>
           NonEmptyList.one(FailureDetails.LoaderIgluError.IgluError(schemaKey, e))
         }.flatMap(schema => DdlSchema.parse(schema).toRight(invalidSchema(schemaKey)))
-          .map(schema => (columnName, Field.build("", schema, false)))
+          .map(schema => FieldValue(columnName, Field.build("", schema, false)))
       )
+    )
 
   def castError(schemaKey: SchemaKey)(error: CastError): FailureDetails.LoaderIgluError =
     error match {

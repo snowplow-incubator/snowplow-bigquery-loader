@@ -1,3 +1,7 @@
+Version 1.5.2 (2022-11-01)
+--------------------------
+Ensure docker images have latest libexpat version (#314)
+
 Version 1.5.1 (2022-10-04)
 --------------------------
 Bump scala version to 2.13.9 (#311)

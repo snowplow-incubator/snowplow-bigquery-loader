@@ -13,24 +13,28 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import com.snowplowanalytics.iglu.client.resolver.Resolver
-import com.snowplowanalytics.iglu.core.SchemaKey
+import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaMap}
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Row.{Primitive, Record, Repeated}
 import com.snowplowanalytics.snowplow.badrows.Processor
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Adapter._
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.{transformJson, LoadTstampField}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow.{LoadTstampField, transformJson}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.SpecHelpers.clocks.idClock
 import cats.Id
 import com.google.api.services.bigquery.model.TableRow
+import com.snowplowanalytics.iglu.client.resolver.registries.Registry
 import com.snowplowanalytics.iglu.core.SchemaVer.Full
+import io.circe.Json
 import io.circe.literal._
 import io.circe.parser.parse
 import org.joda.time.Instant
 import org.specs2.mutable.Specification
 
 class LoaderRowSpec extends Specification {
-  val processor: Processor   = SpecHelpers.meta.processor
-  val resolver: Resolver[Id] = SpecHelpers.iglu.resolver
-  val fieldCache: FieldCache[Id] = SpecHelpers.cache.fieldCache
+  val processor: Processor          = SpecHelpers.meta.processor
+  val schemas: Map[SchemaMap, Json] = SpecHelpers.iglu.schemas
+  val registry: Registry            = SpecHelpers.iglu.staticRegistry(schemas)
+  val resolver: Resolver[Id]        = SpecHelpers.iglu.resolver(registry)
+  val fieldCache: FieldCache[Id]    = SpecHelpers.cache.fieldCache
 
   "groupContexts" should {
     "group contexts with same version" in {

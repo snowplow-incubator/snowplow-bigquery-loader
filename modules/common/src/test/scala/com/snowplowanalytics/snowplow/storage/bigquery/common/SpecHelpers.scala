@@ -13,7 +13,7 @@
 package com.snowplowanalytics.snowplow.storage.bigquery.common
 
 import cats.effect.Clock
-import cats.{Id, Applicative}
+import cats.{Applicative, Id}
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.Registry
 import com.snowplowanalytics.iglu.core._
@@ -22,13 +22,26 @@ import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits._
 import com.snowplowanalytics.lrumap.CreateLruMap
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
-import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{UnstructEvent, Contexts}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
 import com.snowplowanalytics.snowplow.badrows.Processor
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.{RepeaterEnvironment, MutatorEnvironment, LoaderEnvironment}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Config.{LoaderOutputs, RepeaterOutputs, MutatorOutput}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.{
+  LoaderEnvironment,
+  MutatorEnvironment,
+  RepeaterEnvironment
+}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Config.{
+  LoaderOutputs,
+  MutatorOutput,
+  RepeaterOutputs
+}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.LoadMode.StreamingInserts
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.{Dropwizard, Statsd, Stdout, Sentry => SentryConfig}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.{
+  Dropwizard,
+  Statsd,
+  Stdout,
+  Sentry => SentryConfig
+}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model._
 import io.circe.Json
 import io.circe.literal._
@@ -37,7 +50,7 @@ import io.circe.parser.parse
 import java.net.URI
 import java.time.Instant
 import java.util.UUID
-import scala.concurrent.duration.{FiniteDuration, NANOSECONDS, MILLISECONDS, SECONDS, HOURS}
+import scala.concurrent.duration.{DurationInt, FiniteDuration, HOURS, MILLISECONDS, NANOSECONDS, SECONDS}
 import scala.io.Source
 
 object SpecHelpers {
@@ -223,7 +236,7 @@ object SpecHelpers {
                 }
               }"""
 
-    private val schemas = Map(
+    private[bigquery] val schemas = Map(
       SchemaMap("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))             -> adClick,
       SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 0, 0))  -> geolocation100,
       SchemaMap("com.snowplowanalytics.snowplow", "geolocation_context", "jsonschema", SchemaVer.Full(1, 1, 0))  -> geolocation110,
@@ -233,14 +246,59 @@ object SpecHelpers {
       SchemaMap("com.snowplowanalytics.snowplow", "nullable_array_event", "jsonschema", SchemaVer.Full(1, 0, 0)) -> nullableArrayEvent
     )
 
-    private val staticRegistry = Registry.InMemory(Registry.Config("InMemory", 1, List.empty), schemas.toList.map {
-      case (k, v) => SelfDescribingSchema(k, v)
-    })
+    private[bigquery] def cachedSchemas(schema: Json): Map[SchemaMap, Json] =
+      Map(SchemaMap("com.snowplowanalytics.snowplow", "test_schema", "jsonschema", SchemaVer.Full(1, 0, 0)) -> schema)
 
-    private[bigquery] val resolver: Resolver[Id] = Resolver[Id](List(staticRegistry), None)
+    private[bigquery] def staticRegistry(schemas: Map[SchemaMap, Json]) =
+      Registry.InMemory(Registry.Config("InMemory", 0, List.empty), schemas.toList.map {
+        case (k, v) => SelfDescribingSchema(k, v)
+      })
+
+    private[bigquery] def resolver(registry: Registry): Resolver[Id] = Resolver.init[Id](10, Some(10.seconds), registry)
 
     private[bigquery] val adClickSchemaKey =
       SchemaKey("com.snowplowanalytics.snowplow", "ad_click", "jsonschema", SchemaVer.Full(1, 0, 0))
+
+    //single 'field1' field
+    private[bigquery] val `original schema - 1 field`: Json =
+      json"""
+         {
+             "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+             "description": "Test schema 1",
+             "self": {
+                 "vendor": "com.snowplowanalytics.snowplow",
+                 "name": "test_schema",
+                 "format": "jsonschema",
+                 "version": "1-0-0"
+             },
+
+             "type": "object",
+             "properties": {
+               "field1": { "type": "string"}
+              }
+         }
+        """
+
+    //same key as schema1, but with additional `field2` field.
+    private[bigquery] val `patched schema - 2 fields`: Json =
+      json"""
+         {
+             "$$schema": "http://iglucentral.com/schemas/com.snowplowanalytics.self-desc/schema/jsonschema/1-0-0#",
+             "description": "Test schema 1",
+             "self": {
+                 "vendor": "com.snowplowanalytics.snowplow",
+                 "name": "test_schema",
+                 "format": "jsonschema",
+                 "version": "1-0-0"
+             },
+
+             "type": "object",
+             "properties": {
+               "field1": { "type": "string" },
+               "field2": { "type": "integer" }
+              }
+         }
+        """
   }
 
   object events {

@@ -1,3 +1,7 @@
+Version 1.6.0 (2022-11-28)
+--------------------------
+Cache Field (#316)
+
 Version 1.5.2 (2022-11-01)
 --------------------------
 Ensure docker images have latest libexpat version (#314)

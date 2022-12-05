@@ -15,10 +15,10 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.RegistryLookup
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
-import com.snowplowanalytics.snowplow.storage.bigquery.common.{LoaderRow, FieldCache}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{FieldCache, LoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
 
-import cats.Monad
+import cats.{Monad, Parallel}
 import cats.effect._
 import cats.implicits._
 
@@ -43,7 +43,7 @@ object StreamLoader {
 
   type Parsed[F[_]] = Either[StreamBadRow[F], StreamLoaderRow[F]]
 
-  def run[F[_]: Async: Logger](e: LoaderEnvironment): F[ExitCode] =
+  def run[F[_]: Async: Logger: Parallel](e: LoaderEnvironment): F[ExitCode] =
     Resources.acquire(e).use { resources =>
       implicit val rl: RegistryLookup[F] = resources.registryLookup
       val eventStream                    = resources.source.evalMap(parse(resources.resolver, resources.fieldCache))
@@ -73,7 +73,9 @@ object StreamLoader {
     }
 
   /** Parse a PubSub message into a `LoaderRow` (or `BadRow`) and attach `ack` action to be used after sink. */
-  def parse[F[_]: Clock: Monad: RegistryLookup](resolver: Resolver[F], fieldCache: FieldCache[F])(payload: Payload[F]): F[Parsed[F]] =
+  def parse[F[_]: Clock: Monad: RegistryLookup](resolver: Resolver[F], fieldCache: FieldCache[F])(
+    payload: Payload[F]
+  ): F[Parsed[F]] =
     LoaderRow.parse[F](resolver, processor, fieldCache)(payload.value).map {
       case Right(row) => StreamLoaderRow[F](row, payload.ack).asRight[StreamBadRow[F]]
       case Left(row)  => StreamBadRow[F](row, payload.ack).asLeft[StreamLoaderRow[F]]

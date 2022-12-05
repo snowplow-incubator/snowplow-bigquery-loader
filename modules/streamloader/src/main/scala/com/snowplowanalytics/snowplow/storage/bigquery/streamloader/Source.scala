@@ -42,20 +42,22 @@ object Source {
 
     val pubSubConfig =
       PubsubGoogleConsumerConfig(
-        maxQueueSize = cs.maxQueueSize,
-        parallelPullCount = cs.parallelPullCount,
+        maxQueueSize          = cs.maxQueueSize,
+        parallelPullCount     = cs.parallelPullCount,
         maxAckExtensionPeriod = cs.maxAckExtensionPeriod,
-        awaitTerminatePeriod = cs.awaitTerminatePeriod,
-        onFailedTerminate = onFailedTerminate,
-        customizeSubscriber = Some(builder => builder.setFlowControlSettings(flowControlSettings))
+        awaitTerminatePeriod  = cs.awaitTerminatePeriod,
+        onFailedTerminate     = onFailedTerminate,
+        customizeSubscriber   = Some(builder => builder.setFlowControlSettings(flowControlSettings))
       )
 
     val errorHandler: (PubsubMessage, Throwable, F[Unit], F[Unit]) => F[Unit] =
-      (message, error, _, _) =>
-        Logger[F].error(error)(s"Failed to decode message: $message")
+      (message, error, _, _) => Logger[F].error(error)(s"Failed to decode message: $message")
 
     PubsubGoogleConsumer.subscribe[F, String](
-      Model.ProjectId(projectId), Model.Subscription(subscription), errorHandler, pubSubConfig
+      Model.ProjectId(projectId),
+      Model.Subscription(subscription),
+      errorHandler,
+      pubSubConfig
     )
   }
 }

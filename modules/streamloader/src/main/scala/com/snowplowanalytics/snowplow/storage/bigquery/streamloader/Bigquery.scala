@@ -16,6 +16,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{BigQueryRetrySettings, Output}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 
+import cats.Parallel
 import cats.effect.Sync
 import cats.implicits._
 import com.google.api.client.json.gson.GsonFactory
@@ -24,12 +25,16 @@ import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, I
 import com.google.cloud.bigquery.InsertAllRequest.RowToInsert
 import com.permutive.pubsub.producer.PubsubProducer
 import org.threeten.bp.Duration
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
-import scala.jdk.CollectionConverters.IterableHasAsJava
+import scala.jdk.CollectionConverters._
 
 object Bigquery {
 
   final case class FailedInsert(tableRow: String) extends AnyVal
+
+  implicit private def logger[F[_]: Sync] = Slf4jLogger.getLogger[F]
 
   /**
     * Insert rows into BigQuery or into "failed inserts" PubSub topic if BQ client returns
@@ -37,21 +42,46 @@ object Bigquery {
     *
     * Exceptions from the underlying `insertAll` call are propagated.
     */
-  def insert[F[_]: Sync](
+  def insert[F[_]: Parallel: Sync](
     failedInsertProducer: PubsubProducer[F, FailedInsert],
     metrics: Metrics[F],
-    loaderRows: List[LoaderRow]
+    toLoad: List[LoaderRow]
   )(
     mkInsert: List[LoaderRow] => F[InsertAllResponse]
-  ): F[Unit] =
-    mkInsert(loaderRows).flatMap {
-      case response if response.hasErrors =>
-        val (failed, successful) = extractFailedAndSuccessfulRows(loaderRows, response)
-        handleFailedRows(metrics, failedInsertProducer, failed) *>
-          handleSuccessfulRows(metrics, successful)
-      case _ =>
-        handleSuccessfulRows(metrics, loaderRows)
-    }
+  ): F[Unit] = {
+
+    def go(toLoad: List[LoaderRow], prevFailures: List[LoaderRow], prevSuccesses: List[LoaderRow]): F[Unit] =
+      mkInsert(toLoad).flatMap { response =>
+        val partitioned = partitionRowResults(toLoad, response)
+        val logF = partitioned.reasonsAndLocations.toSeq.traverse {
+          case (reason, location) =>
+            // We cannot log the `message` because it contains customer data.  But `reason` and `location` are safe.
+            Logger[F].warn(s"Bigquery inserts failed. Reason: [$reason]. Location: [$location]")
+        }
+        if (partitioned.stopped.nonEmpty && partitioned.failed.nonEmpty) {
+          // The request contained valid rows, but they were stopped because the request also contained invalid rows.
+          // Iterate again without the invalid rows.
+          logF *> go(partitioned.stopped, partitioned.failed ::: prevFailures, partitioned.successful ::: prevSuccesses)
+        } else {
+          // Either:
+          // - All rows in this iteration were successful
+          // - All rows in this iteration were invalid
+          // - Some rows were stopped but there were no failures.
+          // The 3rd case is unexpected and unlikely. Here we treat stopped rows as failures, to avoid any potential deadlock.
+          logF *>
+            (
+              handleFailedRows(
+                metrics,
+                failedInsertProducer,
+                partitioned.failed ::: partitioned.stopped ::: prevFailures
+              ),
+              handleSuccessfulRows(metrics, partitioned.successful ::: prevSuccesses)
+            ).parTupled.void
+        }
+      }
+
+    go(toLoad, Nil, Nil)
+  }
 
   def mkInsert[F[_]: Sync](
     good: Output.BigQuery,
@@ -76,16 +106,35 @@ object Bigquery {
     )
   }
 
-  private def extractFailedAndSuccessfulRows(
+  private case class PartitionedResult(
+    failed: List[LoaderRow],
+    successful: List[LoaderRow],
+    stopped: List[LoaderRow],
+    reasonsAndLocations: Set[(String, String)]
+  )
+
+  private def partitionRowResults(
     loaderRows: List[LoaderRow],
     response: InsertAllResponse
-  ): (List[LoaderRow], List[LoaderRow]) = {
-    val errorIndex = response.getInsertErrors.keySet()
-    loaderRows.zipWithIndex.partitionMap {
-      case (failedRow, index) if errorIndex.contains(index.toLong) =>
-        Left(failedRow)
-      case (successfulRow, _) =>
-        Right(successfulRow)
+  ): PartitionedResult = {
+    val errors = response.getInsertErrors.asScala
+    loaderRows.zipWithIndex.foldRight(PartitionedResult(Nil, Nil, Nil, Set.empty)) {
+      case ((row, index), acc) =>
+        errors.get(index) match {
+          case Some(rowErrors) if rowErrors.asScala.forall(_.getReason === "stopped") =>
+            // This _valid_ row did not get inserted because of an _invalid_ row elsewhere in the batch.
+            acc.copy(stopped = row :: acc.stopped)
+          case Some(rowErrors) =>
+            val reasonsAndLocations = rowErrors.asScala.foldLeft(acc.reasonsAndLocations) {
+              case (acc, e) => acc + ((e.getReason, e.getLocation))
+            }
+            acc.copy(
+              failed              = row :: acc.failed,
+              reasonsAndLocations = reasonsAndLocations
+            )
+          case None =>
+            acc.copy(successful = row :: acc.successful)
+        }
     }
   }
 

@@ -23,9 +23,10 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Moni
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.{StreamBadRow, StreamLoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp
-import com.snowplowanalytics.snowplow.storage.bigquery.common.{FieldCache, Sentry, FieldKey}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{FieldCache, FieldKey, Sentry}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.FailedInsert
 
+import cats.Parallel
 import cats.effect.{Async, Resource, Sync}
 import cats.implicits._
 import com.google.cloud.bigquery.BigQuery
@@ -35,7 +36,7 @@ import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerC
 import com.snowplowanalytics.iglu.client.resolver.Resolver
 import com.snowplowanalytics.iglu.client.resolver.Resolver.ResolverConfig
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
-import fs2.{Stream, Pipe}
+import fs2.{Pipe, Stream}
 import io.circe.Json
 
 import org.typelevel.log4cats.Logger
@@ -59,12 +60,18 @@ object Resources {
   private def mkResolverConfig[F[_]: Sync](igluConfig: Json): Resource[F, ResolverConfig] = Resource.eval {
     Resolver.parseConfig(igluConfig) match {
       case Right(resolverConfig) => Sync[F].pure(resolverConfig)
-      case Left(error) => Sync[F].raiseError[ResolverConfig](new RuntimeException(s"Error while parsing Iglu resolver config: ${error.getMessage()}"))
+      case Left(error) =>
+        Sync[F].raiseError[ResolverConfig](
+          new RuntimeException(s"Error while parsing Iglu resolver config: ${error.getMessage()}")
+        )
     }
   }
 
-  private def mkResolver[F[_]: Sync: InitSchemaCache: InitListCache](resolverConfig: ResolverConfig): Resource[F, Resolver[F]] = Resource.eval {
-    Resolver.fromConfig[F](resolverConfig)
+  private def mkResolver[F[_]: Sync: InitSchemaCache: InitListCache](
+    resolverConfig: ResolverConfig
+  ): Resource[F, Resolver[F]] = Resource.eval {
+    Resolver
+      .fromConfig[F](resolverConfig)
       .leftMap(e => new RuntimeException(s"Error while parsing Iglu resolver config: ${e.getMessage()}"))
       .value
       .flatMap {
@@ -72,15 +79,16 @@ object Resources {
         case Left(error) => Sync[F].raiseError[Resolver[F]](error)
       }
   }
+
   /**
     * Initialise and allocate resources, and clients containing cache and mutable state.
     * @param env parsed environment config
     * @tparam F effect type that can allocate Iglu cache
     * @return allocated `Resources`
     */
-  def acquire[F[_]: Async: InitSchemaCache: InitListCache: Logger](
+  def acquire[F[_]: Async: Parallel: InitSchemaCache: InitListCache: Logger](
     env: LoaderEnvironment
-  ): Resource[F, Resources[F]] = {
+  ): Resource[F, Resources[F]] =
     // format: off
     for {
       resolverConfig  <- mkResolverConfig(env.resolverJson)
@@ -103,7 +111,6 @@ object Resources {
       registryLookup = Http4sRegistryLookup(http)
     } yield new Resources[F](source, resolver, badSink, goodSink, metrics, sentry, registryLookup, lookup)
     // format: on
-  }
 
   /** Construct a PubSub producer. */
   private def mkProducer[F[_]: Async: Logger, A: MessageEncoder](
@@ -173,7 +180,7 @@ object Resources {
     * @param bufferOverflowQueue A Queue in which put events that are left over from a batch after taking as many as
     *                            possible without breaching the streaming inserts request size limit
     */
-  private def mkGoodSink[F[_]: Async](
+  private def mkGoodSink[F[_]: Async: Parallel](
     good: Output.BigQuery,
     bigQuery: BigQuery,
     producer: PubsubProducer[F, FailedInsert],

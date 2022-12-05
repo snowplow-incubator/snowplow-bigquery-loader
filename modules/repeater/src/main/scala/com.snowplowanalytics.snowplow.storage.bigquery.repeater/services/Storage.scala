@@ -17,7 +17,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 
 import cats.effect.Sync
 import cats.implicits._
-import com.google.cloud.storage.{BlobInfo, StorageOptions}
+import com.google.cloud.storage.{BlobInfo, StorageOptions, StorageRetryStrategy}
 import fs2.{Chunk, Stream, text}
 import org.typelevel.log4cats.Logger
 import org.joda.time.{DateTime, DateTimeZone}
@@ -25,7 +25,12 @@ import org.joda.time.format.DateTimeFormat
 
 object Storage {
   // TODO: this is certainly non-RT
-  private val storage = StorageOptions.getDefaultInstance.getService
+  private val storage = {
+    StorageOptions.newBuilder
+      .setStorageRetryStrategy(StorageRetryStrategy.getUniformStorageRetryStrategy)
+      .build
+      .getService
+  }
 
   private val TimestampFormat = DateTimeFormat.forPattern("YYYY-MM-dd-HHmmssSSS")
 

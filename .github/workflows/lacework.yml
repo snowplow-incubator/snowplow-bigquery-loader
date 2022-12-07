@@ -27,6 +27,8 @@ jobs:
           chmod +x lw-scanner
 
       - name: Build docker images
+        env:
+          DOCKER_BUILDKIT: 1
         run: sbt docker:publishLocal
 
       - name: Scan snowplow-bigquery-loader

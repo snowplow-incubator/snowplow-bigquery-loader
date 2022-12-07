@@ -13,9 +13,6 @@
 import com.typesafe.sbt.SbtNativePackager.autoImport._
 
 import com.typesafe.sbt.packager.archetypes.jar.LauncherJarPlugin.autoImport.packageJavaLauncherJar
-import com.typesafe.sbt.packager.docker.DockerPermissionStrategy
-import com.typesafe.sbt.packager.docker.ExecCmd
-import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
 import com.typesafe.sbt.packager.linux.LinuxPlugin.autoImport._
 
 import sbt._
@@ -133,30 +130,6 @@ object BuildSettings {
     libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value
   )
 
-  lazy val dockerSettingsFocal = Seq(
-    Docker / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
-    Docker / daemonUser := "daemon",
-    Docker / daemonUserUid := None,
-    Docker / defaultLinuxInstallLocation := "/opt/snowplow",
-    dockerBaseImage := "eclipse-temurin:11-jre-focal",
-    dockerUsername := Some("snowplow"),
-    dockerUpdateLatest := true,
-    dockerCmd := Seq("--help")
-  )
-
-  lazy val dockerSettingsDistroless = Seq(
-    Docker / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
-    dockerBaseImage := "gcr.io/distroless/java11-debian11:nonroot",
-    Docker / daemonUser := "nonroot",
-    Docker / daemonGroup := "nonroot",
-    dockerRepository := Some("snowplow"),
-    Docker / daemonUserUid := None,
-    Docker / defaultLinuxInstallLocation := "/home/snowplow",
-    dockerEntrypoint := Seq("java", "-jar",s"/home/snowplow/lib/${(packageJavaLauncherJar / artifactPath).value.getName}"),
-    dockerPermissionStrategy := DockerPermissionStrategy.CopyChown,
-    dockerAlias := dockerAlias.value.copy(tag = dockerAlias.value.tag.map(t => s"$t-distroless")),
-  )
-
   lazy val assemblySettings = Seq(
     assembly / assemblyJarName := { s"${moduleName.value}-${version.value}.jar" },
     assembly / assemblyMergeStrategy := {
@@ -185,16 +158,11 @@ object BuildSettings {
     addCompilerPlugin(("org.typelevel" %% "kind-projector" % Dependencies.V.kindProjector).cross(CrossVersion.full))
   ) ++ compilerSettings ++ resolverSettings
 
-  val appSettings = buildSettings ++ assemblySettings ++ dockerSettingsFocal
+  val appSettings = buildSettings ++ assemblySettings
 
   lazy val commonBuildSettings       = commonProjectSettings ++ buildSettings
   lazy val loaderBuildSettings       = loaderProjectSettings ++ appSettings ++ scalifiedSettings ++ macroSettings
   lazy val streamloaderBuildSettings = streamloaderProjectSettings ++ appSettings ++ scalifiedSettings ++ macroSettings
   lazy val mutatorBuildSettings      = mutatorProjectSettings ++ appSettings
   lazy val repeaterBuildSettings     = repeaterProjectSettings ++ appSettings ++ scalifiedSettings ++ macroSettings
-
-  lazy val loaderDistrolessBuildSettings       = loaderBuildSettings.diff(dockerSettingsFocal) ++ dockerSettingsDistroless
-  lazy val streamloaderDistrolessBuildSettings = streamloaderBuildSettings.diff(dockerSettingsFocal) ++ dockerSettingsDistroless
-  lazy val mutatorDistrolessBuildSettings      = mutatorBuildSettings.diff(dockerSettingsFocal) ++ dockerSettingsDistroless
-  lazy val repeaterDistrolessBuildSettings     = repeaterBuildSettings.diff(dockerSettingsFocal) ++ dockerSettingsDistroless
 }

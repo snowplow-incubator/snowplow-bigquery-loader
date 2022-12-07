@@ -27,55 +27,55 @@ lazy val common = project
 
 lazy val loader = project
   .in(file("modules/loader"))
-  .enablePlugins(BuildInfoPlugin, JavaAppPackaging)
+  .enablePlugins(BuildInfoPlugin, JavaAppPackaging, SnowplowDockerPlugin)
   .settings(BuildSettings.loaderBuildSettings)
   .dependsOn(common % "compile->compile;test->test")
 
 lazy val loaderDistroless = project
   .in(file("modules/distroless/loader"))
-  .enablePlugins(BuildInfoPlugin, DockerPlugin, LauncherJarPlugin)
+  .enablePlugins(BuildInfoPlugin, SnowplowDistrolessDockerPlugin, LauncherJarPlugin)
   .settings(sourceDirectory := (loader / sourceDirectory).value)
-  .settings(BuildSettings.loaderDistrolessBuildSettings)
+  .settings(BuildSettings.loaderBuildSettings)
   .dependsOn(common % "compile->compile;test->test")
 
 lazy val streamloader = project
   .in(file("modules/streamloader"))
-  .enablePlugins(BuildInfoPlugin, JavaAppPackaging)
+  .enablePlugins(BuildInfoPlugin, JavaAppPackaging, SnowplowDockerPlugin)
   .settings(BuildSettings.streamloaderBuildSettings)
   .dependsOn(common % "compile->compile;test->test")
 
 lazy val streamloaderDistroless = project
   .in(file("modules/distroless/streamloader"))
-  .enablePlugins(BuildInfoPlugin, DockerPlugin, LauncherJarPlugin)
+  .enablePlugins(BuildInfoPlugin, SnowplowDistrolessDockerPlugin)
   .settings(sourceDirectory := (streamloader / sourceDirectory).value)
-  .settings(BuildSettings.streamloaderDistrolessBuildSettings)
+  .settings(BuildSettings.streamloaderBuildSettings)
   .dependsOn(common % "compile->compile;test->test")
 
 lazy val mutator = project
   .in(file("modules/mutator"))
-  .enablePlugins(BuildInfoPlugin, JavaAppPackaging)
+  .enablePlugins(BuildInfoPlugin, JavaAppPackaging, SnowplowDockerPlugin)
   .settings(BuildSettings.mutatorBuildSettings)
   .dependsOn(common % "compile->compile;test->test")
 
 lazy val mutatorDistroless = project
   .in(file("modules/distroless/mutator"))
-  .enablePlugins(BuildInfoPlugin, DockerPlugin, LauncherJarPlugin)
+  .enablePlugins(BuildInfoPlugin, SnowplowDistrolessDockerPlugin)
   .settings(sourceDirectory := (mutator / sourceDirectory).value)
-  .settings(BuildSettings.mutatorDistrolessBuildSettings)
+  .settings(BuildSettings.mutatorBuildSettings)
   .dependsOn(common % "compile->compile;test->test")
 
 lazy val repeater = project
   .in(file("modules/repeater"))
   .enablePlugins(BuildInfoPlugin)
-  .enablePlugins(JavaAppPackaging)
+  .enablePlugins(JavaAppPackaging, SnowplowDockerPlugin)
   .settings(BuildSettings.repeaterBuildSettings)
   .dependsOn(common % "compile->compile;test->test")
 
 lazy val repeaterDistroless = project
   .in(file("modules/distroless/repeater"))
-  .enablePlugins(BuildInfoPlugin, DockerPlugin, LauncherJarPlugin)
+  .enablePlugins(BuildInfoPlugin, SnowplowDistrolessDockerPlugin)
   .settings(sourceDirectory := (repeater / sourceDirectory).value)
-  .settings(BuildSettings.repeaterDistrolessBuildSettings)
+  .settings(BuildSettings.repeaterBuildSettings)
   .dependsOn(common % "compile->compile;test->test")
 
 // format: off

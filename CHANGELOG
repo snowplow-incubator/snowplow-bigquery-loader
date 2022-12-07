@@ -1,3 +1,9 @@
+Version 1.6.1 (2022-12-07)
+--------------------------
+Use sbt-snowplow-release plugin to build docker images (#322)
+Repeater: Retry on errors writing to storage (#301)
+Streamloader: Retry stopped valid inserts from a failed batch (#320)
+
 Version 1.6.0 (2022-11-28)
 --------------------------
 Cache Field (#316)

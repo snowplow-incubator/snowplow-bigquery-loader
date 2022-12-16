@@ -14,6 +14,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common.config
 
 import java.util.Base64
 import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets
 
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits._
@@ -85,7 +86,7 @@ object EncodedOrPath {
   def tryEncoded[A: ParseOps](str: String): Either[String, FromBase64[A]] = {
     val result = for {
       bytes  <- Either.catchOnly[IllegalArgumentException](base64.decode(str)).leftMap(_.getMessage)
-      config <- ParseOps[A].parseString(new String(bytes))
+      config <- ParseOps[A].parseString(new String(bytes, StandardCharsets.UTF_8))
     } yield FromBase64(config)
 
     result.leftMap(e => s"${ParseOps[A].errorMessage}: $e")

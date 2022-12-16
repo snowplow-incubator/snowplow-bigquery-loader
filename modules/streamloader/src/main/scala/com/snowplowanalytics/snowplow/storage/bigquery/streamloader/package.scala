@@ -12,6 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery
 
+import java.nio.charset.StandardCharsets
+
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
@@ -26,18 +28,18 @@ package object streamloader {
   type Payload[F[_]] = ConsumerRecord[F, String]
 
   implicit val messageDecoder: MessageDecoder[String] = (bytes: Array[Byte]) => {
-    Right(new String(bytes))
+    Right(new String(bytes, StandardCharsets.UTF_8))
   }
 
   implicit val badRowEncoder: MessageEncoder[BadRow] = { br =>
-    Right(br.compact.getBytes())
+    Right(br.compact.getBytes(StandardCharsets.UTF_8))
   }
 
   implicit val shreddedTypesEncoder: MessageEncoder[Set[ShreddedType]] = { t =>
-    Right(toPayload(t).noSpaces.getBytes())
+    Right(toPayload(t).noSpaces.getBytes(StandardCharsets.UTF_8))
   }
 
   implicit val messageEncoder: MessageEncoder[FailedInsert] = { tr =>
-    Right(tr.tableRow.getBytes())
+    Right(tr.tableRow.getBytes(StandardCharsets.UTF_8))
   }
 }

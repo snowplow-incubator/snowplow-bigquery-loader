@@ -22,6 +22,7 @@ import io.circe.syntax._
 import java.time.Instant
 import java.util
 import java.util.{UUID, List => JList, Map => JMap}
+import java.nio.charset.StandardCharsets
 import scala.jdk.CollectionConverters._
 
 /**
@@ -53,7 +54,7 @@ object EventContainer {
 
   implicit val pubsubEventDecoder: MessageDecoder[EventContainer] = { bytes: Array[Byte] =>
     for {
-      string  <- Either.catchNonFatal(new String(bytes))
+      string  <- Either.catchNonFatal(new String(bytes, StandardCharsets.UTF_8))
       json    <- parse(string)
       payload <- json.as[EventContainer]
     } yield payload

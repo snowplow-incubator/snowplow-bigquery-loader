@@ -15,8 +15,8 @@
 lazy val root = project
   .in(file("."))
   .settings(name := "bigquery-loader")
-  .aggregate(common, loader, streamloader, mutator, repeater)
-  .aggregate(loaderDistroless, streamloaderDistroless, mutatorDistroless, repeaterDistroless)
+  .aggregate(common, streamloader, mutator, repeater)
+  .aggregate(streamloaderDistroless, mutatorDistroless, repeaterDistroless)
   .settings(assembly / aggregate := false)
 // format: on
 
@@ -24,19 +24,6 @@ lazy val common = project
   .in(file("modules/common"))
   .enablePlugins(BuildInfoPlugin)
   .settings(BuildSettings.commonBuildSettings)
-
-lazy val loader = project
-  .in(file("modules/loader"))
-  .enablePlugins(BuildInfoPlugin, JavaAppPackaging, SnowplowDockerPlugin)
-  .settings(BuildSettings.loaderBuildSettings)
-  .dependsOn(common % "compile->compile;test->test")
-
-lazy val loaderDistroless = project
-  .in(file("modules/distroless/loader"))
-  .enablePlugins(BuildInfoPlugin, SnowplowDistrolessDockerPlugin, LauncherJarPlugin)
-  .settings(sourceDirectory := (loader / sourceDirectory).value)
-  .settings(BuildSettings.loaderBuildSettings)
-  .dependsOn(common % "compile->compile;test->test")
 
 lazy val streamloader = project
   .in(file("modules/streamloader"))
@@ -82,5 +69,5 @@ lazy val repeaterDistroless = project
 lazy val benchmark = project
   .in(file("modules/benchmark"))
   .enablePlugins(JmhPlugin)
-  .dependsOn(loader % "test->test")
+  .dependsOn(common % "test->test")
 // format: on

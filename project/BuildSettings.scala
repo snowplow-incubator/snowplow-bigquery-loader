@@ -43,16 +43,6 @@ object BuildSettings {
     libraryDependencies ++= Dependencies.commonDependencies
   )
 
-  lazy val loaderProjectSettings = projectSettings ++ Seq(
-    name := "snowplow-bigquery-loader",
-    description := "Snowplow BigQuery Loader Dataflow Job",
-    buildInfoPackage := "com.snowplowanalytics.snowplow.storage.bigquery.loader.generated",
-    libraryDependencies ++= Dependencies.loaderDependencies,
-    // Guava version is downgraded since existing Guava version leads to 'NoSuchMethodError' exception
-    dependencyOverrides += Dependencies.guava,
-    resolvers += "Confluent Repository" at "https://packages.confluent.io/maven/"
-  )
-
   lazy val streamloaderProjectSettings = projectSettings ++ Seq(
     name := "snowplow-bigquery-streamloader",
     description := "Snowplow BigQuery Loader Standalone App",
@@ -161,7 +151,6 @@ object BuildSettings {
   val appSettings = buildSettings ++ assemblySettings
 
   lazy val commonBuildSettings       = commonProjectSettings ++ buildSettings
-  lazy val loaderBuildSettings       = loaderProjectSettings ++ appSettings ++ scalifiedSettings ++ macroSettings
   lazy val streamloaderBuildSettings = streamloaderProjectSettings ++ appSettings ++ scalifiedSettings ++ macroSettings
   lazy val mutatorBuildSettings      = mutatorProjectSettings ++ appSettings
   lazy val repeaterBuildSettings     = repeaterProjectSettings ++ appSettings ++ scalifiedSettings ++ macroSettings

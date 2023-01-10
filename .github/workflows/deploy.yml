@@ -44,7 +44,6 @@ jobs:
     strategy:
       matrix:
         app:
-          - loader
           - streamloader
           - mutator
           - repeater

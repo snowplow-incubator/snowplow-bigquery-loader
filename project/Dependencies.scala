@@ -26,6 +26,7 @@ object Dependencies {
     val nettyCodec   = "4.1.86.Final"
     val googleOauth  = "1.33.3"
     val jackson      = "2.14.1"
+    val protobuf     = "3.21.12"
 
     // Scala third-party
     val cats        = "2.6.1"
@@ -67,6 +68,7 @@ object Dependencies {
   val googleOauth     = "com.google.oauth-client"    % "google-oauth-client"                     % V.googleOauth
   val sentry          = "io.sentry"                  % "sentry"                                  % V.sentry
   val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
+  val protobuf        = "com.google.protobuf"        % "protobuf-java"                           % V.protobuf
 
   // Scala third-party
   val cats          = "org.typelevel" %% "cats-core"                  % V.cats
@@ -113,6 +115,7 @@ object Dependencies {
       igluClient,
       igluCoreCirce,
       jacksonDatabind,
+      protobuf,
       schemaDdl,
       specs2,
       nettyCodec,

@@ -1,3 +1,13 @@
+Version 1.6.3 (2023-01-13)
+--------------------------
+Update copyright notice to 2023 (#333)
+Bump sbt-snowplow-release to 0.2.1 (#332)
+Bump protobuf-java to 3.21.12 (#331)
+Bump netty to 4.1.86.Final (#330)
+Remove support for dataflow variant of BigQuery loader (#329)
+Bump jackson to 2.14.1 (#328)
+Bump http4s to 0.23.17 (#327)
+
 Version 1.6.2 (2022-12-23)
 --------------------------
 Bump sbt-snowplow-release to 0.2.0 (#325)

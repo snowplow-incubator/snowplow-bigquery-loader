@@ -29,11 +29,6 @@
         "topic": "failed-inserts-topic"
       }
     }
-
-    "loadMode": {
-      "type": "StreamingInserts"
-      "retry": false
-      }
   }
 
   "mutator": {

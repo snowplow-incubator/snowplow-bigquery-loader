@@ -1,3 +1,10 @@
+Version 1.6.4 (2023-01-27)
+--------------------------
+Bump http4s to 0.23.18 (#337)
+Remove dropwizard from the config (#341)
+Remove loadMode from the config (#339)
+Fix benchmarks (#336)
+
 Version 1.6.3 (2023-01-13)
 --------------------------
 Update copyright notice to 2023 (#333)

@@ -14,7 +14,6 @@ package com.snowplowanalytics.snowplow.storage.bigquery.common.config
 
 import java.net.URI
 
-import cats.implicits.toFunctorOps
 import cats.syntax.either._
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
@@ -29,7 +28,6 @@ object model {
     final case class Loader(
       input: Input.PubSub,
       output: LoaderOutputs,
-      loadMode: LoadMode,
       consumerSettings: ConsumerSettings,
       sinkSettings: SinkSettings,
       retrySettings: BigQueryRetrySettings,
@@ -88,22 +86,6 @@ object model {
 
     implicit val outputGcsEncoder: Encoder[Output.Gcs] = deriveEncoder[Output.Gcs]
     implicit val outputGcsDecoder: Decoder[Output.Gcs] = deriveDecoder[Output.Gcs]
-  }
-
-  sealed trait LoadMode extends Product with Serializable
-  object LoadMode {
-    final case class StreamingInserts private (retry: Boolean) extends LoadMode
-    final case class FileLoads private (frequency: Int) extends LoadMode
-
-    implicit val loadModeEncoder: Encoder[LoadMode] = Encoder.instance {
-      case s: StreamingInserts => deriveEncoder[StreamingInserts].apply(s)
-      case f: FileLoads        => deriveEncoder[FileLoads].apply(f)
-    }
-
-    implicit val loadModeDecoder: Decoder[LoadMode] = List[Decoder[LoadMode]](
-      deriveDecoder[StreamingInserts].widen,
-      deriveDecoder[FileLoads].widen
-    ).reduceLeft(_.or(_))
   }
 
   final case class ConsumerSettings(

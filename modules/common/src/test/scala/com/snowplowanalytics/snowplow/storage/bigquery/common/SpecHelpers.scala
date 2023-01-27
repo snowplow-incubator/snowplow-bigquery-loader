@@ -35,7 +35,6 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Confi
   MutatorOutput,
   RepeaterOutputs
 }
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.LoadMode.StreamingInserts
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.{
   Dropwizard,
   Statsd,
@@ -607,7 +606,6 @@ object SpecHelpers {
     private val failedInsertsTopic: String   = "failed-inserts-topic"
     private val failedInserts: Output.PubSub = Output.PubSub(failedInsertsTopic)
     private val lOutput: LoaderOutputs       = LoaderOutputs(good, bad, types, failedInserts)
-    private val loadMode: LoadMode           = StreamingInserts(false)
 
     private val maxQueueSize: Int      = 3000
     private val maxRequestBytes: Int   = 50000000
@@ -662,7 +660,7 @@ object SpecHelpers {
     private val terminationTimeout = FiniteDuration(60, SECONDS)
 
     private val loader: Config.Loader =
-      Config.Loader(lInput, lOutput, loadMode, consumerSettings, sinkSettings, retrySettings, terminationTimeout)
+      Config.Loader(lInput, lOutput, consumerSettings, sinkSettings, retrySettings, terminationTimeout)
 
     private val mSubscription: String   = "mutator-sub"
     private val mInput: Input.PubSub    = Input.PubSub(mSubscription)

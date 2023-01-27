@@ -151,11 +151,4 @@
     "sentry": {
       "dsn": "http://sentry.acme.com"
     }
-
-    # For Loader deployments
-    # "dropwizard": {
-    #   # Reporting period with time unit
-    #   "period": "1000 ms"
-    # }
-    }
 }

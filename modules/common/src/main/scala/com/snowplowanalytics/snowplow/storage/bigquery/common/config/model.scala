@@ -153,8 +153,7 @@ object model {
   final case class Monitoring(
     statsd: Option[Monitoring.Statsd],
     stdout: Option[Monitoring.Stdout],
-    sentry: Option[Monitoring.Sentry],
-    dropwizard: Option[Monitoring.Dropwizard]
+    sentry: Option[Monitoring.Sentry]
   )
   object Monitoring {
     final case class Statsd(
@@ -166,7 +165,6 @@ object model {
     )
     final case class Stdout(period: FiniteDuration, prefix: Option[String])
     final case class Sentry(dsn: URI)
-    final case class Dropwizard(period: FiniteDuration)
 
     implicit val monitoringEncoder: Encoder[Monitoring] = deriveEncoder[Monitoring]
     implicit val monitoringDecoder: Decoder[Monitoring] = deriveDecoder[Monitoring]
@@ -179,9 +177,6 @@ object model {
 
     implicit val monitoringSentryEncoder: Encoder[Sentry] = deriveEncoder[Sentry]
     implicit val monitoringSentryDecoder: Decoder[Sentry] = deriveDecoder[Sentry]
-
-    implicit val monitoringDropwizardEncoder: Encoder[Dropwizard] = deriveEncoder[Dropwizard]
-    implicit val monitoringDropwizardDecoder: Decoder[Dropwizard] = deriveDecoder[Dropwizard]
 
     implicit val uriDecoder: Decoder[URI] =
       Decoder[String].emap(s => Either.catchOnly[IllegalArgumentException](URI.create(s)).leftMap(_.toString))

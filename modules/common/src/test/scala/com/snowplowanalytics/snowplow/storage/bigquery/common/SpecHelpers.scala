@@ -36,7 +36,6 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Confi
   RepeaterOutputs
 }
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monitoring.{
-  Dropwizard,
   Statsd,
   Stdout,
   Sentry => SentryConfig
@@ -683,8 +682,7 @@ object SpecHelpers {
     private val statsd: Statsd            = Statsd(hostname, port, tags, period, prefix)
     private val stdout: Stdout            = Stdout(period, prefix)
     private val sentry: SentryConfig      = SentryConfig(URI.create("http://sentry.acme.com"))
-    private val dropwizard: Dropwizard    = Dropwizard(period)
-    private val monitoring: Monitoring    = Monitoring(Some(statsd), Some(stdout), Some(sentry), Some(dropwizard))
+    private val monitoring: Monitoring    = Monitoring(Some(statsd), Some(stdout), Some(sentry))
 
     private[bigquery] val loaderEnv: LoaderEnvironment = Environment(loader, validResolverJson, projectId, monitoring)
     private[bigquery] val mutatorEnv: MutatorEnvironment =

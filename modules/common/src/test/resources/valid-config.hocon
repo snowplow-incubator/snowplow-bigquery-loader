@@ -72,9 +72,6 @@
     },
     "sentry": {
       "dsn": "http://sentry.acme.com"
-    },
-    "dropwizard": {
-      "period": "1 sec"
     }
   }
 }

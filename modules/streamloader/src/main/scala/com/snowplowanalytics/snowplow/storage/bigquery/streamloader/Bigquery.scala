@@ -17,8 +17,9 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{BigQ
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 
 import cats.Parallel
-import cats.effect.Sync
+import cats.effect.{Async, Sync}
 import cats.implicits._
+import retry.{RetryDetails, RetryPolicy, retryingOnAllErrors}
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.gax.retrying.RetrySettings
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, InsertAllResponse, TableId}
@@ -83,12 +84,20 @@ object Bigquery {
     go(toLoad, Nil, Nil)
   }
 
-  def mkInsert[F[_]: Sync](
+  def logRetry[F[_]: Sync](e: Throwable, details: RetryDetails): F[Unit] = {
+    val detailsMsg = if (details.givingUp) "Giving up on this insert." else s"This insert will get retried again."
+    Logger[F].warn(e)(s"Exception inserting rows to Bigquery. $detailsMsg")
+  }
+
+  def mkInsert[F[_]: Async](
     good: Output.BigQuery,
-    bigQuery: BigQuery
+    bigQuery: BigQuery,
+    retryPolicy: RetryPolicy[F]
   ): List[LoaderRow] => F[InsertAllResponse] = { lrs =>
     val request = buildRequest(good.datasetId, good.tableId, lrs)
-    Sync[F].blocking(bigQuery.insertAll(request))
+    retryingOnAllErrors(retryPolicy, logRetry[F]) {
+      Sync[F].blocking(bigQuery.insertAll(request))
+    }
   }
 
   def getClient[F[_]: Sync](rs: BigQueryRetrySettings, projectId: String): F[BigQuery] = {

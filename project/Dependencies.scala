@@ -31,6 +31,7 @@ object Dependencies {
     // Scala third-party
     val cats        = "2.6.1"
     val catsEffect  = "3.3.12"
+    val catsRetry   = "3.1.0"
     val circe       = "0.14.1"
     val decline     = "1.4.0"
     val fs2         = "3.2.8"
@@ -71,18 +72,19 @@ object Dependencies {
   val protobuf        = "com.google.protobuf"        % "protobuf-java"                           % V.protobuf
 
   // Scala third-party
-  val cats          = "org.typelevel" %% "cats-core"                  % V.cats
-  val catsEffect    = "org.typelevel" %% "cats-effect"                % V.catsEffect
-  val circe         = "io.circe"      %% "circe-core"                 % V.circe
-  val circeJawn     = "io.circe"      %% "circe-jawn"                 % V.circe
-  val circeLiteral  = "io.circe"      %% "circe-literal"              % V.circe
-  val circeParser   = "io.circe"      %% "circe-parser"               % V.circe
-  val decline       = "com.monovore"  %% "decline"                    % V.decline
-  val fs2           = "co.fs2"        %% "fs2-core"                   % V.fs2
-  val httpClient    = "org.http4s"    %% "http4s-ember-client"        % V.httpClient
-  val logging       = "org.typelevel" %% "log4cats-slf4j"             % V.logging
-  val pubsubFs2Grpc = "com.permutive" %% "fs2-google-pubsub-grpc"     % V.pubsubFs2
-  val circeConfig   = "io.circe"      %% "circe-config"               % V.circeConfig
+  val cats          = "org.typelevel"    %% "cats-core"                  % V.cats
+  val catsEffect    = "org.typelevel"    %% "cats-effect"                % V.catsEffect
+  val catsRetry     = "com.github.cb372" %% "cats-retry"                 % V.catsRetry
+  val circe         = "io.circe"         %% "circe-core"                 % V.circe
+  val circeJawn     = "io.circe"         %% "circe-jawn"                 % V.circe
+  val circeLiteral  = "io.circe"         %% "circe-literal"              % V.circe
+  val circeParser   = "io.circe"         %% "circe-parser"               % V.circe
+  val decline       = "com.monovore"     %% "decline"                    % V.decline
+  val fs2           = "co.fs2"           %% "fs2-core"                   % V.fs2
+  val httpClient    = "org.http4s"       %% "http4s-ember-client"        % V.httpClient
+  val logging       = "org.typelevel"    %% "log4cats-slf4j"             % V.logging
+  val pubsubFs2Grpc = "com.permutive"    %% "fs2-google-pubsub-grpc"     % V.pubsubFs2
+  val circeConfig   = "io.circe"         %% "circe-config"               % V.circeConfig
 
   // Scala Snowplow
   val analyticsSdk  = "com.snowplowanalytics" %% "snowplow-scala-analytics-sdk" % V.analyticsSdk
@@ -100,6 +102,7 @@ object Dependencies {
       bigQuery,
       cats,
       catsEffect,
+      catsRetry,
       circe,
       circeConfig,
       circeJawn,
@@ -128,7 +131,7 @@ object Dependencies {
       bigQuery,
       httpClient,
       igluHttp4s,
-      pubsubFs2Grpc
+      pubsubFs2Grpc,
     )
 
   val mutatorDependencies = Seq(

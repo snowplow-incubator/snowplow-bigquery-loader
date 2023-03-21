@@ -19,7 +19,12 @@ import com.snowplowanalytics.lrumap.CreateLruMap
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Monitoring, Output, SinkSettings}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{
+  BigQueryRetrySettings,
+  Monitoring,
+  Output,
+  SinkSettings
+}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.{StreamBadRow, StreamLoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp
@@ -29,6 +34,7 @@ import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.Fai
 import cats.Parallel
 import cats.effect.{Async, Resource, Sync}
 import cats.implicits._
+import retry.RetryPolicies
 import com.google.cloud.bigquery.BigQuery
 import com.permutive.pubsub.producer.{Model, PubsubProducer}
 import com.permutive.pubsub.producer.encoder.MessageEncoder
@@ -106,7 +112,7 @@ object Resources {
       sentry         <- Sentry.init(env.monitoring.sentry)
       http           <- EmberClientBuilder.default[F].build
       lookup         <- Resource.eval(CreateLruMap[F, FieldKey, Field].create(resolverConfig.cacheSize))
-      goodSink       = mkGoodSink[F](env.config.output.good, bigquery, failedInserts, metrics, types, env.config.sinkSettings.good, env.config.sinkSettings.types)
+      goodSink       = mkGoodSink[F](env.config.output.good, bigquery, failedInserts, metrics, types, env.config.sinkSettings.good, env.config.sinkSettings.types, env.config.retrySettings)
       source         = Source.getStream[F](env.projectId, env.config.input.subscription, env.config.consumerSettings)
       registryLookup = Http4sRegistryLookup(http)
     } yield new Resources[F](source, resolver, badSink, goodSink, metrics, sentry, registryLookup, lookup)
@@ -187,13 +193,18 @@ object Resources {
     metrics: Metrics[F],
     typeSink: Pipe[F, Set[ShreddedType], Nothing],
     sinkSettingsGood: SinkSettings.Good,
-    sinkSettingsTypes: SinkSettings.Types
+    sinkSettingsTypes: SinkSettings.Types,
+    retrySettings: BigQueryRetrySettings
   ): Pipe[F, StreamLoaderRow[F], Nothing] = {
+    val retryPolicy = RetryPolicies.limitRetriesByCumulativeDelay[F](
+      retrySettings.maxDelay.minutes,
+      RetryPolicies.fullJitter[F](retrySettings.initialDelay.seconds)
+    )
     val goodPipe: Pipe[F, StreamLoaderRow[F], Nothing] = {
       _.through(batchWithin(sinkSettingsGood.bqWriteRequestThreshold, sinkSettingsGood.bqWriteRequestTimeout))
         .through(batchBySize(getSize[F], sinkSettingsGood.bqWriteRequestSizeLimit))
         .parEvalMapUnordered(sinkSettingsGood.sinkConcurrency) { slrows =>
-          Bigquery.insert(producer, metrics, slrows.map(_.row))(Bigquery.mkInsert(good, bigQuery)) *>
+          Bigquery.insert(producer, metrics, slrows.map(_.row))(Bigquery.mkInsert(good, bigQuery, retryPolicy)) *>
             slrows.traverse_(_.ack)
         }
         .drain

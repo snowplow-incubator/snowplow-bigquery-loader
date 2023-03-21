@@ -615,7 +615,7 @@ object SpecHelpers {
       ConsumerSettings(maxQueueSize, maxRequestBytes, parallelPullCount, maxAckExtensionPeriod, awaitTerminatePeriod)
 
     private val bqWriteRequestThreshold: Int          = 500
-    private val bqWriteRequestTimeout: FiniteDuration = FiniteDuration(1L, SECONDS)
+    private val bqWriteRequestTimeout: FiniteDuration = FiniteDuration(100L, MILLISECONDS)
     private val bqWriteRequestSizeLimit: Int          = 10000000
     private val goodSinkConcurrency: Int              = 1024
     private val sinkSettingsGood = SinkSettings.Good(

@@ -204,8 +204,11 @@ object Resources {
       _.through(batchWithin(sinkSettingsGood.bqWriteRequestThreshold, sinkSettingsGood.bqWriteRequestTimeout))
         .through(batchBySize(getSize[F], sinkSettingsGood.bqWriteRequestSizeLimit))
         .parEvalMapUnordered(sinkSettingsGood.sinkConcurrency) { slrows =>
-          Bigquery.insert(producer, metrics, slrows.map(_.row))(Bigquery.mkInsert(good, bigQuery, retryPolicy)) *>
-            slrows.traverse_(_.ack)
+          Bigquery.insert(producer, metrics, slrows.map(_.row))(Bigquery.mkInsert(good, bigQuery, retryPolicy))
+            .as(slrows.map(_.ack))
+        }
+        .parEvalMapUnordered(sinkSettingsGood.sinkConcurrency) { acks =>
+          acks.parSequence_
         }
         .drain
     }

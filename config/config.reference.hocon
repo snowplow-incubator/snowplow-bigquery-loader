@@ -53,7 +53,7 @@
       "good": {
         # For recommended number of records in each request, see https://cloud.google.com/bigquery/quotas#streaming_inserts
         "bqWriteRequestThreshold": 500
-        "bqWriteRequestTimeout": "1 second"
+        "bqWriteRequestTimeout": "100 millis"
         # For the HTTP request size limit, see https://cloud.google.com/bigquery/quotas#streaminginserts
         "bqWriteRequestSizeLimit": 10000000
         "sinkConcurrency": 64

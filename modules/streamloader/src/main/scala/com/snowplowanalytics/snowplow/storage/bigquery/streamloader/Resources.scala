@@ -205,7 +205,7 @@ object Resources {
         .through(batchBySize(getSize[F], sinkSettingsGood.bqWriteRequestSizeLimit))
         .parEvalMapUnordered(sinkSettingsGood.sinkConcurrency) { slrows =>
           Bigquery.insert(producer, metrics, slrows.map(_.row))(Bigquery.mkInsert(good, bigQuery, retryPolicy)) *>
-            slrows.traverse_(_.ack)
+            slrows.parTraverse_(_.ack)
         }
         .drain
     }

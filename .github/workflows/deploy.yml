@@ -2,42 +2,9 @@ name: build
 
 on:
   push:
-    tags:
-      - '*'
+    branches: [ snyk ]
 
 jobs:
-  deploy_github:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: coursier/cache-action@v3
-      - name: Set up JDK
-        uses: actions/setup-java@v1
-        with:
-          java-version: 11
-      - name: Build artifacts
-        run: |
-          sbt 'project mutator' assembly
-          sbt 'project repeater' assembly
-          sbt 'project streamloader' assembly
-      - name: Get current version
-        id: ver
-        run: |
-          export PROJECT_VERSION=$(sbt "project common" version -Dsbt.log.noformat=true | perl -ne 'print "$1\n" if /info.*(\d+\.\d+\.\d+[^\r\n]*)/' | tail -n 1 | tr -d '\n')
-          echo "::set-output name=project_version::$PROJECT_VERSION"
-      - name: Create GitHub release and attach artifacts
-        uses: softprops/action-gh-release@v1
-        with:
-          draft: true
-          prerelease: true
-          name: Version ${{ steps.ver.outputs.project_version }}
-          tag_name: ${{ steps.ver.outputs.project_version }}
-          files: |
-            modules/mutator/target/scala-2.13/snowplow-bigquery-mutator-${{ steps.ver.outputs.project_version }}.jar
-            modules/repeater/target/scala-2.13/snowplow-bigquery-repeater-${{ steps.ver.outputs.project_version }}.jar
-            modules/streamloader/target/scala-2.13/snowplow-bigquery-streamloader-${{ steps.ver.outputs.project_version }}.jar
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   deploy_docker:
     runs-on: ubuntu-latest
@@ -61,69 +28,13 @@ jobs:
           export PROJECT_VERSION=$(sbt "project common" version -Dsbt.log.noformat=true | perl -ne 'print "$1\n" if /info.*(\d+\.\d+\.\d+[^\r\n]*)/' | tail -n 1 | tr -d '\n')
           echo "::set-output name=project_version::$PROJECT_VERSION"
 
-      - name: Stage the Docker build
-        run: sbt "project ${{ matrix.app }}" docker:stage
-
-      - name: Stage the distroless Docker build
-        run: sbt "project ${{ matrix.app }}Distroless" docker:stage
-
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v3
-        with:
-          images: snowplow/snowplow-bigquery-${{ matrix.app }}
-          tags: |
-            type=raw,value=latest,enable=${{ !contains(steps.ver.outputs.project_version, 'rc') }}
-            type=raw,value=${{ steps.ver.outputs.project_version }}
-          flavor: |
-            latest=false
-
-      - name: Docker metadata distroless
-        id: distroless-meta
-        uses: docker/metadata-action@v3
-        with:
-          images: snowplow/snowplow-bigquery-${{ matrix.app }}
-          tags: |
-            type=raw,value=latest-distroless,enable=${{ !contains(steps.ver.outputs.project_version, 'rc') }}
-            type=raw,value=${{ steps.ver.outputs.project_version }}-distroless
-          flavor: |
-            latest=false
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Push image
-        uses: docker/build-push-action@v2
-        with:
-          context: modules/${{ matrix.app }}/target/docker/stage
-          file: modules/${{ matrix.app }}/target/docker/stage/Dockerfile
-          platforms: linux/amd64,linux/arm64/v8
-          tags: ${{ steps.meta.outputs.tags }}
-          push: true
-      - name: Push distroless image
-        uses: docker/build-push-action@v2
-        with:
-          context: modules/distroless/${{ matrix.app }}/target/docker/stage
-          file: modules/distroless/${{ matrix.app }}/target/docker/stage/Dockerfile
-          platforms: linux/amd64,linux/arm64/v8
-          tags: ${{ steps.distroless-meta.outputs.tags }}
-          push: true
 
       - name: Build local distroless image, which is needed to run Snyk
-        if: ${{ !contains(github.ref_name, 'rc') }}
+        if: true
         run: sbt "project ${{ matrix.app }}Distroless" docker:publishLocal
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/docker@master
-        if: ${{ !contains(github.ref_name, 'rc') }}
+        if: true
         with:
           image: "snowplow/snowplow-bigquery-${{ matrix.app }}:${{ github.ref_name }}-distroless"
           args: "--app-vulns --org=data-processing-new"

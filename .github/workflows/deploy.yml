@@ -2,11 +2,12 @@ name: build
 
 on:
   push:
-    tags:
-      - '*'
+    branches:
+      - 'trigger-deploy'
 
 jobs:
   deploy_github:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -58,7 +59,7 @@ jobs:
       - name: Get current version
         id: ver
         run: |
-          export PROJECT_VERSION=$(sbt "project common" version -Dsbt.log.noformat=true | perl -ne 'print "$1\n" if /info.*(\d+\.\d+\.\d+[^\r\n]*)/' | tail -n 1 | tr -d '\n')
+          export PROJECT_VERSION=dev
           echo "::set-output name=project_version::$PROJECT_VERSION"
 
       - name: Stage the Docker build
@@ -73,7 +74,7 @@ jobs:
         with:
           images: snowplow/snowplow-bigquery-${{ matrix.app }}
           tags: |
-            type=raw,value=latest,enable=${{ !contains(steps.ver.outputs.project_version, 'rc') }}
+            type=raw,value=latest,enable=false
             type=raw,value=${{ steps.ver.outputs.project_version }}
           flavor: |
             latest=false
@@ -84,7 +85,7 @@ jobs:
         with:
           images: snowplow/snowplow-bigquery-${{ matrix.app }}
           tags: |
-            type=raw,value=latest-distroless,enable=${{ !contains(steps.ver.outputs.project_version, 'rc') }}
+            type=raw,value=latest-distroless,enable=false
             type=raw,value=${{ steps.ver.outputs.project_version }}-distroless
           flavor: |
             latest=false
@@ -117,16 +118,3 @@ jobs:
           platforms: linux/amd64,linux/arm64/v8
           tags: ${{ steps.distroless-meta.outputs.tags }}
           push: true
-
-      - name: Build local distroless image, which is needed to run Snyk
-        if: ${{ !contains(github.ref_name, 'rc') }}
-        run: sbt "project ${{ matrix.app }}Distroless" docker:publishLocal
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/docker@master
-        if: ${{ !contains(github.ref_name, 'rc') }}
-        with:
-          image: "snowplow/snowplow-bigquery-${{ matrix.app }}:${{ github.ref_name }}-distroless"
-          args: "--app-vulns --org=data-processing-new"
-          command: monitor
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}

@@ -1,3 +1,9 @@
+Version 1.6.5 (2023-04-03)
+--------------------------
+Scan Docker images with Snyk in github action (#346)
+Streamloader: Ack pubsub messages in parallel (#344)
+Stream loader: retry failed insert jobs (#343)
+
 Version 1.6.4 (2023-01-27)
 --------------------------
 Bump http4s to 0.23.18 (#337)

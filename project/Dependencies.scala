@@ -38,7 +38,7 @@ object Dependencies {
     val httpClient  = "0.23.18"
     val logging     = "2.3.1"
     val pubsubFs2   = "0.20.0"
-    val circeConfig = "0.8.0"
+    val circeConfig = "0.10.0"
 
     // Scala Snowplow
     val analyticsSdk = "2.1.0"

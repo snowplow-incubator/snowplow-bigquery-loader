@@ -16,7 +16,7 @@ object Dependencies {
 
   object V {
     // Java
-    val googleCloudBigQuery = "2.13.0" // compatible with google-cloud-bom:0.175.0
+    val googleCloudBigQuery = "2.31.1" // compatible with google-cloud-bom:0.175.0
     val googleCloudPubSub   = "1.119.0" // compatible with google-cloud-bom:0.175.0
     val googleCloudStorage  = "2.7.2" // compatible with google-cloud-bom:0.175.0
     val slf4j   = "1.7.32"

@@ -25,21 +25,23 @@ import com.permutive.pubsub.producer.encoder.MessageEncoder
 
 package object streamloader {
 
+  val MaxPayloadLength = 9000000 // Stay under Pubsub Maximum of 10MB
+
   type Payload[F[_]] = ConsumerRecord[F, String]
 
   implicit val messageDecoder: MessageDecoder[String] = (bytes: Array[Byte]) => {
-    Right(new String(bytes, StandardCharsets.UTF_8))
+    Right(new String(bytes, StandardCharsets.UTF_8).take(MaxPayloadLength))
   }
 
   implicit val badRowEncoder: MessageEncoder[BadRow] = { br =>
-    Right(br.compact.getBytes(StandardCharsets.UTF_8))
+    Right(br.compact.getBytes(StandardCharsets.UTF_8).take(MaxPayloadLength))
   }
 
   implicit val shreddedTypesEncoder: MessageEncoder[Set[ShreddedType]] = { t =>
-    Right(toPayload(t).noSpaces.getBytes(StandardCharsets.UTF_8))
+    Right(toPayload(t).noSpaces.getBytes(StandardCharsets.UTF_8).take(MaxPayloadLength))
   }
 
   implicit val messageEncoder: MessageEncoder[FailedInsert] = { tr =>
-    Right(tr.tableRow.getBytes(StandardCharsets.UTF_8))
+    Right(tr.tableRow.getBytes(StandardCharsets.UTF_8).take(MaxPayloadLength))
   }
 }

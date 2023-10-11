@@ -43,6 +43,8 @@ object LoaderRow {
 
   val LoadTstampField = Field("load_tstamp", Type.Timestamp, Mode.Nullable)
 
+  val MaxBadRowPayloadLength = 5000000
+
   /**
     * Parse the enriched TSV line into a loader row, that can be loaded into BigQuery.
     * If Loader is able to figure out that row cannot be loaded into BQ,
@@ -60,7 +62,7 @@ object LoaderRow {
       case Validated.Valid(event) =>
         fromEvent[F](resolver, processor, fieldCache)(event)
       case Validated.Invalid(error) =>
-        val badRowError = BadRow.LoaderParsingError(processor, error, Payload.RawPayload(record))
+        val badRowError = BadRow.LoaderParsingError(processor, error, Payload.RawPayload(record.take(MaxBadRowPayloadLength)))
         Monad[F].pure(badRowError.asLeft)
     }
 

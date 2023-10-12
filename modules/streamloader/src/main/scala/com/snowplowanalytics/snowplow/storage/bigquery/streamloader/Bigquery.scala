@@ -24,7 +24,6 @@ import com.google.api.client.json.gson.GsonFactory
 import com.google.api.gax.retrying.RetrySettings
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, InsertAllResponse, TableId}
 import com.google.cloud.bigquery.InsertAllRequest.RowToInsert
-import com.permutive.pubsub.producer.PubsubProducer
 import org.threeten.bp.Duration
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -44,7 +43,7 @@ object Bigquery {
     * Exceptions from the underlying `insertAll` call are propagated.
     */
   def insert[F[_]: Parallel: Sync](
-    failedInsertProducer: PubsubProducer[F, FailedInsert],
+    failedInsertProducer: Producer[F, FailedInsert],
     metrics: Metrics[F],
     toLoad: List[LoaderRow]
   )(
@@ -149,7 +148,7 @@ object Bigquery {
 
   private def handleFailedRows[F[_]: Sync](
     metrics: Metrics[F],
-    failedInsertProducer: PubsubProducer[F, FailedInsert],
+    failedInsertProducer: Producer[F, FailedInsert],
     rows: List[LoaderRow]
   ): F[Unit] = {
     val tableRows = rows.map { lr =>

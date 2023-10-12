@@ -14,7 +14,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.client.resolver.registries.RegistryLookup
-import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
+import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{FieldCache, LoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
 
@@ -27,7 +27,6 @@ import fs2.Pipe
 import org.typelevel.log4cats.Logger
 
 object StreamLoader {
-  private val processor: Processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
   /**
     * PubSub message with successfully parsed row, ready to be inserted into BQ.

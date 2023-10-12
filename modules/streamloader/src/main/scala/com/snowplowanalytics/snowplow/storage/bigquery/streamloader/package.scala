@@ -15,7 +15,7 @@ package com.snowplowanalytics.snowplow.storage.bigquery
 import java.nio.charset.StandardCharsets
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
-import com.snowplowanalytics.snowplow.badrows.BadRow
+import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.Codecs.toPayload
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.FailedInsert
 
@@ -26,6 +26,8 @@ import com.permutive.pubsub.producer.encoder.MessageEncoder
 package object streamloader {
 
   type Payload[F[_]] = ConsumerRecord[F, String]
+
+  val processor: Processor = Processor(generated.BuildInfo.name, generated.BuildInfo.version)
 
   implicit val messageDecoder: MessageDecoder[String] = (bytes: Array[Byte]) => {
     Right(new String(bytes, StandardCharsets.UTF_8))

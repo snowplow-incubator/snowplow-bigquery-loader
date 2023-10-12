@@ -36,9 +36,6 @@ import cats.effect.{Async, Resource, Sync}
 import cats.implicits._
 import retry.RetryPolicies
 import com.google.cloud.bigquery.BigQuery
-import com.permutive.pubsub.producer.{Model, PubsubProducer}
-import com.permutive.pubsub.producer.encoder.MessageEncoder
-import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerConfig}
 import com.snowplowanalytics.iglu.client.resolver.Resolver
 import com.snowplowanalytics.iglu.client.resolver.Resolver.ResolverConfig
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
@@ -100,15 +97,32 @@ object Resources {
       resolverConfig  <- mkResolverConfig(env.resolverJson)
       resolver        <- mkResolver(resolverConfig)
       metrics        <- Resource.eval(mkMetricsReporter[F](env.monitoring))
-      types          <- mkTypeSink[F](env.projectId, env.config.output.types.topic, env.config.sinkSettings.types, metrics)
       bigquery       <- Resource.eval[F, BigQuery](Bigquery.getClient(env.config.retrySettings, env.projectId))
-      failedInserts  <- mkProducer[F, Bigquery.FailedInsert](
+      (badRowProducer, oversizeBadRowProducer) <- Producer.mkBadRowProducers[F](
+        env.projectId,
+        env.config.output.bad.topic,
+        env.config.sinkSettings.bad.producerBatchSize,
+        env.config.sinkSettings.bad.producerDelayThreshold
+      )
+      types <- mkTypeSink[F](
+        env.projectId,
+        env.config.output.types.topic,
+        env.config.sinkSettings.types,
+        metrics,
+        oversizeBadRowProducer
+      )
+      failedInserts <- Producer.mkProducer[F, Bigquery.FailedInsert](
         env.projectId,
         env.config.output.failedInserts.topic,
         env.config.sinkSettings.failedInserts.producerBatchSize,
-        env.config.sinkSettings.failedInserts.producerDelayThreshold
+        env.config.sinkSettings.failedInserts.producerDelayThreshold,
+        oversizeBadRowProducer
       )
-      badSink        <- mkBadSink[F](env.projectId, env.config.output.bad.topic, env.config.sinkSettings.bad.sinkConcurrency, metrics, env.config.sinkSettings.bad)
+      badSink = mkBadSink[F](
+        env.config.sinkSettings.bad.sinkConcurrency,
+        metrics,
+        badRowProducer
+      )
       sentry         <- Sentry.init(env.monitoring.sentry)
       http           <- EmberClientBuilder.default[F].build
       lookup         <- Resource.eval(CreateLruMap[F, FieldKey, Field].create(resolverConfig.cacheSize))
@@ -118,56 +132,32 @@ object Resources {
     } yield new Resources[F](source, resolver, badSink, goodSink, metrics, sentry, registryLookup, lookup)
     // format: on
 
-  /** Construct a PubSub producer. */
-  private def mkProducer[F[_]: Async: Logger, A: MessageEncoder](
-    projectId: String,
-    topic: String,
-    batchSize: Long,
-    delay: FiniteDuration
-  ): Resource[F, PubsubProducer[F, A]] =
-    GooglePubsubProducer.of[F, A](
-      Model.ProjectId(projectId),
-      Model.Topic(topic),
-      config = PubsubProducerConfig[F](
-        batchSize         = batchSize,
-        delayThreshold    = delay,
-        onFailedTerminate = e => Logger[F].error(e)(s"Error in PubSub producer")
-      )
-    )
-
   // TODO: Can failed inserts be given their own sink like bad rows and types?
 
   // Acks the event after processing it as a `BadRow`
-  private def mkBadSink[F[_]: Async: Logger](
-    projectId: String,
-    topic: String,
+  private def mkBadSink[F[_]: Async](
     maxConcurrency: Int,
     metrics: Metrics[F],
-    sinkSettingsBad: SinkSettings.Bad
-  ): Resource[F, Pipe[F, StreamBadRow[F], Nothing]] =
-    mkProducer[F, BadRow](
-      projectId,
-      topic,
-      sinkSettingsBad.producerBatchSize,
-      sinkSettingsBad.producerDelayThreshold
-    ).map { p =>
-      _.parEvalMapUnordered(maxConcurrency) { badRow =>
-        p.produce(badRow.row) *> badRow.ack *> metrics.badCount
-      }.drain
-    }
+    badRowProducer: Producer[F, BadRow]
+  ): Pipe[F, StreamBadRow[F], Nothing] =
+    _.parEvalMapUnordered(maxConcurrency) { badRow =>
+      badRowProducer.produce(badRow.row) *> badRow.ack *> metrics.badCount
+    }.drain
 
   // Does not ack the event -- it still needs to end up in one of the other targets
   private def mkTypeSink[F[_]: Async: Logger](
     projectId: String,
     topic: String,
     sinkSettingsTypes: SinkSettings.Types,
-    metrics: Metrics[F]
+    metrics: Metrics[F],
+    oversizeBadRowProducer: Producer[F, BadRow.SizeViolation]
   ): Resource[F, Pipe[F, Set[ShreddedType], Nothing]] =
-    mkProducer[F, Set[ShreddedType]](
+    Producer.mkProducer[F, Set[ShreddedType]](
       projectId,
       topic,
       sinkSettingsTypes.producerBatchSize,
-      sinkSettingsTypes.producerDelayThreshold
+      sinkSettingsTypes.producerDelayThreshold,
+      oversizeBadRowProducer
     ).map { p =>
       _.parEvalMapUnordered(sinkSettingsTypes.sinkConcurrency) { types =>
         p.produce(types).void *> metrics.typesCount(types.size)
@@ -189,7 +179,7 @@ object Resources {
   private def mkGoodSink[F[_]: Async: Parallel](
     good: Output.BigQuery,
     bigQuery: BigQuery,
-    producer: PubsubProducer[F, FailedInsert],
+    producer: Producer[F, FailedInsert],
     metrics: Metrics[F],
     typeSink: Pipe[F, Set[ShreddedType], Nothing],
     sinkSettingsGood: SinkSettings.Good,

@@ -23,7 +23,7 @@ object Dependencies {
     val sentry  = "1.7.30"
 
     // Override provided versions to fix security vulnerabilities
-    val nettyCodec   = "4.1.86.Final"
+    val nettyCodec   = "4.1.100.Final"
     val googleOauth  = "1.33.3"
     val jackson      = "2.14.1"
     val protobuf     = "3.21.12"

@@ -27,6 +27,7 @@ object Dependencies {
     val googleOauth  = "1.33.3"
     val jackson      = "2.14.1"
     val protobuf     = "3.21.12"
+    val orgJson      = "20231013"
 
     // Scala third-party
     val cats        = "2.6.1"
@@ -70,6 +71,7 @@ object Dependencies {
   val sentry          = "io.sentry"                  % "sentry"                                  % V.sentry
   val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind"                        % V.jackson
   val protobuf        = "com.google.protobuf"        % "protobuf-java"                           % V.protobuf
+  val orgJson         = "org.json"                   % "json"                                    % V.orgJson
 
   // Scala third-party
   val cats          = "org.typelevel"    %% "cats-core"                  % V.cats
@@ -124,7 +126,8 @@ object Dependencies {
       nettyCodec,
       nettyCodecHttp,
       nettyCodecHttp2,
-      sentry
+      sentry,
+      orgJson
     )
 
   val streamloaderDependencies = Seq(

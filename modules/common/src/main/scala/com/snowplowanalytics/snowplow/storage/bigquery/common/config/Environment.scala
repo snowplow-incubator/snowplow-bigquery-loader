@@ -12,11 +12,17 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common.config
 
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
 import io.circe.Json
-
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{Config, Monitoring}
 
-final case class Environment[A](config: A, resolverJson: Json, projectId: String, monitoring: Monitoring) {
+final case class Environment[A](
+  config: A,
+  resolverJson: Json,
+  projectId: String,
+  monitoring: Monitoring,
+  gcpUserAgent: GcpUserAgent
+) {
   def getFullSubName(sub: String): String     = s"projects/$projectId/subscriptions/$sub"
   def getFullTopicName(topic: String): String = s"projects/$projectId/topics/$topic"
 }

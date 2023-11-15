@@ -23,9 +23,9 @@ import cats.effect.std.Queue
 import cats.effect.unsafe.IORuntime
 import cats.syntax.either._
 import cats.syntax.show._
-import com.google.api.gax.rpc.FixedHeaderProvider
 import com.google.cloud.pubsub.v1.{AckReplyConsumer, MessageReceiver, Subscriber}
 import com.google.pubsub.v1.{ProjectSubscriptionName, PubsubMessage}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.createGcpUserAgentHeader
 import io.circe.{Decoder, DecodingFailure, Error, Json}
 import io.circe.jawn.parse
 
@@ -83,8 +83,6 @@ class TypeReceiver(queue: Queue[IO, List[ShreddedType]], verbose: Boolean)(impli
 }
 
 object TypeReceiver {
-  private val UserAgent =
-    FixedHeaderProvider.create("User-Agent", generated.BuildInfo.userAgent)
 
   /** Decode inventory items either in legacy (non-self-describing) format or as `shredded_types` schema'ed */
   def decodeItems(json: Json): Decoder.Result[List[ShreddedType]] =
@@ -113,7 +111,10 @@ object TypeReceiver {
   def startSubscription(env: MutatorEnvironment, listener: TypeReceiver): IO[Unit] =
     IO {
       val subscription = ProjectSubscriptionName.of(env.projectId, env.config.input.subscription)
-      val subscriber   = Subscriber.newBuilder(subscription, listener).setHeaderProvider(UserAgent).build()
+      val subscriber = Subscriber
+        .newBuilder(subscription, listener)
+        .setHeaderProvider(createGcpUserAgentHeader(env.gcpUserAgent))
+        .build()
       subscriber.startAsync().awaitRunning(10L, TimeUnit.SECONDS)
     }
 }

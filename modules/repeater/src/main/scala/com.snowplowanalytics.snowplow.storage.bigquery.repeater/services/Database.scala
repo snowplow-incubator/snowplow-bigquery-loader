@@ -14,10 +14,11 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer, Repeater}
-
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.cloud.bigquery.{Option => _, _}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
+import com.snowplowanalytics.snowplow.storage.bigquery.common.createGcpUserAgentHeader
 import org.typelevel.log4cats.Logger
 import io.circe.syntax._
 
@@ -75,9 +76,14 @@ object Database {
       }
   }
 
-  def getClient[F[_]: Sync](projectId: String): F[BigQuery] =
+  def getClient[F[_]: Sync](projectId: String, gcpUserAgent: GcpUserAgent): F[BigQuery] =
     Sync[F].delay(
-      BigQueryOptions.newBuilder.setProjectId(projectId).build.getService
+      BigQueryOptions
+        .newBuilder
+        .setProjectId(projectId)
+        .setHeaderProvider(createGcpUserAgentHeader(gcpUserAgent))
+        .build
+        .getService
     )
 
   /** The first argument passed to addRow is an ID used to deduplicate inserts.

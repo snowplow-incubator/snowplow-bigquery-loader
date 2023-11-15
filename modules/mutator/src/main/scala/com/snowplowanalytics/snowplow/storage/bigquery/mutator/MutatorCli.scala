@@ -30,7 +30,7 @@ object MutatorCli {
   private val options: Opts[MutatorEnvironment] =
     CliConfig.options.map {
       case CliConfig.Parsed(config, resolver) =>
-        Environment(config.mutator, resolver, config.projectId, config.monitoring)
+        Environment(config.mutator, resolver, config.projectId, config.monitoring, config.gcpUserAgent)
     }
 
   private val schema: Opts[SchemaKey] = Opts.option[String]("schema", "Iglu URI to add to the table").mapValidated {

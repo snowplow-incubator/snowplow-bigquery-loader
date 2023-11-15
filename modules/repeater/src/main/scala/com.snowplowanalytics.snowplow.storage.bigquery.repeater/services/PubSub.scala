@@ -14,13 +14,14 @@ package com.snowplowanalytics.snowplow.storage.bigquery.repeater.services
 
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, FailureDetails, Payload}
 import com.snowplowanalytics.snowplow.storage.bigquery.repeater.{EventContainer, Repeater}
-
 import cats.effect._
 import cats.effect.std.Queue
 import cats.syntax.all._
 import com.google.pubsub.v1.PubsubMessage
 import com.permutive.pubsub.consumer.{ConsumerRecord, Model}
 import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
+import com.snowplowanalytics.snowplow.storage.bigquery.common.createGcpUserAgentHeader
 import fs2.Stream
 import org.typelevel.log4cats.Logger
 
@@ -31,13 +32,17 @@ object PubSub {
   def getEvents[F[_]: Sync: Logger](
     projectId: String,
     subscription: String,
-    uninsertable: Queue[F, BadRow]
+    uninsertable: Queue[F, BadRow],
+    gcpUserAgent: GcpUserAgent
   ): Stream[F, ConsumerRecord[F, EventContainer]] =
     PubsubGoogleConsumer.subscribe[F, EventContainer](
       Model.ProjectId(projectId),
       Model.Subscription(subscription),
       (msg, err, ack, _) => callback[F](msg, err, ack, uninsertable),
-      PubsubGoogleConsumerConfig[F](onFailedTerminate = t => Logger[F].error(s"Terminating consumer due to $t"))
+      PubsubGoogleConsumerConfig[F](
+        onFailedTerminate   = t => Logger[F].error(s"Terminating consumer due to $t"),
+        customizeSubscriber = Some(_.setHeaderProvider(createGcpUserAgentHeader(gcpUserAgent)))
+      )
     )
 
   private def callback[F[_]: Sync](msg: PubsubMessage, err: Throwable, ack: F[Unit], uninsertable: Queue[F, BadRow]) = {

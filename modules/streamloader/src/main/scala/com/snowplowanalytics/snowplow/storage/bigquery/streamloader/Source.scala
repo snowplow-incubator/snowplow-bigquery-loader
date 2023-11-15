@@ -20,13 +20,16 @@ import com.google.api.gax.batching.FlowControlSettings
 import com.google.pubsub.v1.PubsubMessage
 import com.permutive.pubsub.consumer.grpc.{PubsubGoogleConsumer, PubsubGoogleConsumerConfig}
 import com.permutive.pubsub.consumer.Model
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
+import com.snowplowanalytics.snowplow.storage.bigquery.common.createGcpUserAgentHeader
 import fs2.Stream
 
 object Source {
   def getStream[F[_]: Sync: Logger](
     projectId: String,
     subscription: String,
-    cs: ConsumerSettings
+    cs: ConsumerSettings,
+    gcpUserAgent: GcpUserAgent
   ): Stream[F, Payload[F]] = {
 
     val onFailedTerminate: Throwable => F[Unit] =
@@ -47,7 +50,9 @@ object Source {
         maxAckExtensionPeriod = cs.maxAckExtensionPeriod,
         awaitTerminatePeriod  = cs.awaitTerminatePeriod,
         onFailedTerminate     = onFailedTerminate,
-        customizeSubscriber   = Some(builder => builder.setFlowControlSettings(flowControlSettings))
+        customizeSubscriber = Some { builder =>
+          builder.setFlowControlSettings(flowControlSettings).setHeaderProvider(createGcpUserAgentHeader(gcpUserAgent))
+        }
       )
 
     val errorHandler: (PubsubMessage, Throwable, F[Unit], F[Unit]) => F[Unit] =

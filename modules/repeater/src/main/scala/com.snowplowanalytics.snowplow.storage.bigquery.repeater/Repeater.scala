@@ -33,7 +33,8 @@ object Repeater extends IOApp {
             .getEvents(
               resources.env.projectId,
               resources.env.config.input.subscription,
-              resources.uninsertable
+              resources.uninsertable,
+              resources.env.gcpUserAgent
             )
             .interruptWhen(resources.stop)
             .through[IO, Unit](Flow.sink(resources))

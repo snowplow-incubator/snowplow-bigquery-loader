@@ -12,10 +12,9 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.LoaderRow
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{LoaderRow, createGcpUserAgentHeader}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{BigQueryRetrySettings, Output}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
-
 import cats.Parallel
 import cats.effect.{Async, Sync}
 import cats.implicits._
@@ -24,6 +23,7 @@ import com.google.api.client.json.gson.GsonFactory
 import com.google.api.gax.retrying.RetrySettings
 import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, InsertAllResponse, TableId}
 import com.google.cloud.bigquery.InsertAllRequest.RowToInsert
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
 import org.threeten.bp.Duration
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -99,7 +99,7 @@ object Bigquery {
     }
   }
 
-  def getClient[F[_]: Sync](rs: BigQueryRetrySettings, projectId: String): F[BigQuery] = {
+  def getClient[F[_]: Sync](rs: BigQueryRetrySettings, projectId: String, gcpUserAgent: GcpUserAgent): F[BigQuery] = {
     val retrySettings =
       RetrySettings
         .newBuilder()
@@ -110,7 +110,13 @@ object Bigquery {
         .build
 
     Sync[F].delay(
-      BigQueryOptions.newBuilder.setRetrySettings(retrySettings).setProjectId(projectId).build.getService
+      BigQueryOptions
+        .newBuilder
+        .setRetrySettings(retrySettings)
+        .setProjectId(projectId)
+        .setHeaderProvider(createGcpUserAgentHeader(gcpUserAgent))
+        .build
+        .getService
     )
   }
 

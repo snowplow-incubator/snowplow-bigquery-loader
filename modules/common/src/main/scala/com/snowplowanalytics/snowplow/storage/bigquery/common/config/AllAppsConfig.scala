@@ -12,8 +12,8 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common.config
 
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model._
-
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 
@@ -22,10 +22,16 @@ final case class AllAppsConfig(
   loader: Config.Loader,
   mutator: Config.Mutator,
   repeater: Config.Repeater,
-  monitoring: Monitoring
+  monitoring: Monitoring,
+  gcpUserAgent: GcpUserAgent
 )
 
 object AllAppsConfig {
+
+  final case class GcpUserAgent(productName: String)
+
+  implicit val gcpUserAgentEncoder: Encoder[GcpUserAgent] = deriveEncoder[GcpUserAgent]
+  implicit val gcpUserAgentDecoder: Decoder[GcpUserAgent] = deriveDecoder[GcpUserAgent]
 
   implicit val allAppsConfigDecoder: Decoder[AllAppsConfig] = deriveDecoder[AllAppsConfig]
   implicit val allAppsConfigEncoder: Encoder[AllAppsConfig] = deriveEncoder[AllAppsConfig]

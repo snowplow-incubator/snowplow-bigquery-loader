@@ -24,6 +24,7 @@ import com.snowplowanalytics.lrumap.CreateLruMap
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent}
 import com.snowplowanalytics.snowplow.badrows.Processor
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.{
   LoaderEnvironment,
@@ -658,6 +659,7 @@ object SpecHelpers {
 
     private val terminationTimeout = FiniteDuration(60, SECONDS)
 
+    private val gcpUserAgent: GcpUserAgent = GcpUserAgent("Snowplow OSS")
     private val loader: Config.Loader =
       Config.Loader(lInput, lOutput, consumerSettings, sinkSettings, retrySettings, terminationTimeout)
 
@@ -684,11 +686,12 @@ object SpecHelpers {
     private val sentry: SentryConfig      = SentryConfig(URI.create("http://sentry.acme.com"))
     private val monitoring: Monitoring    = Monitoring(Some(statsd), Some(stdout), Some(sentry))
 
-    private[bigquery] val loaderEnv: LoaderEnvironment = Environment(loader, validResolverJson, projectId, monitoring)
+    private[bigquery] val loaderEnv: LoaderEnvironment =
+      Environment(loader, validResolverJson, projectId, monitoring, gcpUserAgent)
     private[bigquery] val mutatorEnv: MutatorEnvironment =
-      Environment(mutator, validResolverJson, projectId, monitoring)
+      Environment(mutator, validResolverJson, projectId, monitoring, gcpUserAgent)
     private[bigquery] val repeaterEnv: RepeaterEnvironment =
-      Environment(repeater, validResolverJson, projectId, monitoring)
+      Environment(repeater, validResolverJson, projectId, monitoring, gcpUserAgent)
   }
 
   object cache {

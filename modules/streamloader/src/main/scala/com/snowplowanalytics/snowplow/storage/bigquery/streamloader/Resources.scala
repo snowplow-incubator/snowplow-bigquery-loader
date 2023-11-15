@@ -19,18 +19,12 @@ import com.snowplowanalytics.lrumap.CreateLruMap
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Data.ShreddedType
 import com.snowplowanalytics.snowplow.badrows.BadRow
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.Environment.LoaderEnvironment
-import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{
-  BigQueryRetrySettings,
-  Monitoring,
-  Output,
-  SinkSettings
-}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{BigQueryRetrySettings, Monitoring, Output, SinkSettings}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.StreamLoader.{StreamBadRow, StreamLoaderRow}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics.ReportingApp
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{FieldCache, FieldKey, Sentry}
 import com.snowplowanalytics.snowplow.storage.bigquery.streamloader.Bigquery.FailedInsert
-
 import cats.Parallel
 import cats.effect.{Async, Resource, Sync}
 import cats.implicits._
@@ -39,9 +33,9 @@ import com.google.cloud.bigquery.BigQuery
 import com.snowplowanalytics.iglu.client.resolver.Resolver
 import com.snowplowanalytics.iglu.client.resolver.Resolver.ResolverConfig
 import com.snowplowanalytics.iglu.schemaddl.bigquery.Field
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
 import fs2.{Pipe, Stream}
 import io.circe.Json
-
 import org.typelevel.log4cats.Logger
 import org.http4s.ember.client.EmberClientBuilder
 
@@ -97,26 +91,29 @@ object Resources {
       resolverConfig  <- mkResolverConfig(env.resolverJson)
       resolver        <- mkResolver(resolverConfig)
       metrics        <- Resource.eval(mkMetricsReporter[F](env.monitoring))
-      bigquery       <- Resource.eval[F, BigQuery](Bigquery.getClient(env.config.retrySettings, env.projectId))
+      bigquery       <- Resource.eval[F, BigQuery](Bigquery.getClient(env.config.retrySettings, env.projectId, env.gcpUserAgent))
       (badRowProducer, oversizeBadRowProducer) <- Producer.mkBadRowProducers[F](
         env.projectId,
         env.config.output.bad.topic,
         env.config.sinkSettings.bad.producerBatchSize,
-        env.config.sinkSettings.bad.producerDelayThreshold
+        env.config.sinkSettings.bad.producerDelayThreshold,
+        env.gcpUserAgent
       )
       types <- mkTypeSink[F](
         env.projectId,
         env.config.output.types.topic,
         env.config.sinkSettings.types,
         metrics,
-        oversizeBadRowProducer
+        oversizeBadRowProducer,
+        env.gcpUserAgent
       )
       failedInserts <- Producer.mkProducer[F, Bigquery.FailedInsert](
         env.projectId,
         env.config.output.failedInserts.topic,
         env.config.sinkSettings.failedInserts.producerBatchSize,
         env.config.sinkSettings.failedInserts.producerDelayThreshold,
-        oversizeBadRowProducer
+        oversizeBadRowProducer,
+        env.gcpUserAgent
       )
       badSink = mkBadSink[F](
         env.config.sinkSettings.bad.sinkConcurrency,
@@ -127,7 +124,7 @@ object Resources {
       http           <- EmberClientBuilder.default[F].build
       lookup         <- Resource.eval(CreateLruMap[F, FieldKey, Field].create(resolverConfig.cacheSize))
       goodSink       = mkGoodSink[F](env.config.output.good, bigquery, failedInserts, metrics, types, env.config.sinkSettings.good, env.config.sinkSettings.types, env.config.retrySettings)
-      source         = Source.getStream[F](env.projectId, env.config.input.subscription, env.config.consumerSettings)
+      source         = Source.getStream[F](env.projectId, env.config.input.subscription, env.config.consumerSettings, env.gcpUserAgent)
       registryLookup = Http4sRegistryLookup(http)
     } yield new Resources[F](source, resolver, badSink, goodSink, metrics, sentry, registryLookup, lookup)
     // format: on
@@ -150,14 +147,16 @@ object Resources {
     topic: String,
     sinkSettingsTypes: SinkSettings.Types,
     metrics: Metrics[F],
-    oversizeBadRowProducer: Producer[F, BadRow.SizeViolation]
+    oversizeBadRowProducer: Producer[F, BadRow.SizeViolation],
+    gcpUserAgent: GcpUserAgent
   ): Resource[F, Pipe[F, Set[ShreddedType], Nothing]] =
     Producer.mkProducer[F, Set[ShreddedType]](
       projectId,
       topic,
       sinkSettingsTypes.producerBatchSize,
       sinkSettingsTypes.producerDelayThreshold,
-      oversizeBadRowProducer
+      oversizeBadRowProducer,
+      gcpUserAgent
     ).map { p =>
       _.parEvalMapUnordered(sinkSettingsTypes.sinkConcurrency) { types =>
         p.produce(types).void *> metrics.typesCount(types.size)

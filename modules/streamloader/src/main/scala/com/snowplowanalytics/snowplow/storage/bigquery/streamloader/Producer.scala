@@ -14,17 +14,14 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 
 import java.time.Instant
 import java.nio.charset.StandardCharsets
-
 import cats.implicits._
-
 import cats.effect.{Async, Resource}
-
 import com.permutive.pubsub.producer.{Model, PubsubProducer}
 import com.permutive.pubsub.producer.encoder.MessageEncoder
 import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerConfig}
-
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Failure, Payload => BadRowPayload}
-
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
+import com.snowplowanalytics.snowplow.storage.bigquery.common.createGcpUserAgentHeader
 import org.typelevel.log4cats.Logger
 
 import scala.concurrent.duration._
@@ -42,9 +39,10 @@ object Producer {
     topic: String,
     batchSize: Long,
     delay: FiniteDuration,
-    oversizeBadRowProducer: Producer[F, BadRow.SizeViolation]
+    oversizeBadRowProducer: Producer[F, BadRow.SizeViolation],
+    gcpUserAgent: GcpUserAgent
   ): Resource[F, Producer[F, A]] =
-    mkPubsubProducer[F, A](projectId, topic, batchSize, delay).map { p =>
+    mkPubsubProducer[F, A](projectId, topic, batchSize, delay, gcpUserAgent).map { p =>
       (data: A) => produceWrtToSize[F, A](data, p.produce(_).void, oversizeBadRowProducer)
     }
 
@@ -52,9 +50,10 @@ object Producer {
     projectId: String,
     topic: String,
     batchSize: Long,
-    delay: FiniteDuration
+    delay: FiniteDuration,
+    gcpUserAgent: GcpUserAgent
   ): Resource[F, (Producer[F, BadRow], Producer[F, BadRow.SizeViolation])] =
-    mkPubsubProducer[F, BadRow](projectId, topic, batchSize, delay).map { p =>
+    mkPubsubProducer[F, BadRow](projectId, topic, batchSize, delay, gcpUserAgent).map { p =>
       val badRowProducer = new Producer[F, BadRow] {
         override def produce(badRow: BadRow): F[Unit] = {
           produceWrtToSize[F, BadRow](badRow, p.produce(_).void, p.produce(_).void)
@@ -72,7 +71,8 @@ object Producer {
     projectId: String,
     topic: String,
     batchSize: Long,
-    delay: FiniteDuration
+    delay: FiniteDuration,
+    gcpUserAgent: GcpUserAgent
   ): Resource[F, PubsubProducer[F, A]] =
     GooglePubsubProducer.of[F, A](
       Model.ProjectId(projectId),
@@ -80,7 +80,8 @@ object Producer {
       config = PubsubProducerConfig[F](
         batchSize = batchSize,
         delayThreshold = delay,
-        onFailedTerminate = e => Logger[F].error(e)(s"Error in PubSub producer")
+        onFailedTerminate = e => Logger[F].error(e)(s"Error in PubSub producer"),
+        customizePublisher = Some(_.setHeaderProvider(createGcpUserAgentHeader(gcpUserAgent)))
       )
     )
 

@@ -31,7 +31,7 @@ object RepeaterCli {
   private val options: Opts[RepeaterEnvironment] =
     CliConfig.options.map {
       case CliConfig.Parsed(config, resolver) =>
-        Environment(config.repeater, resolver, config.projectId, config.monitoring)
+        Environment(config.repeater, resolver, config.projectId, config.monitoring, config.gcpUserAgent)
     }
 
   private val bufferSize = Opts

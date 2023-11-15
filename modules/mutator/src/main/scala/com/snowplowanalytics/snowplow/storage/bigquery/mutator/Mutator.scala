@@ -69,7 +69,7 @@ object Mutator {
     verbose: Boolean
   )(implicit c: Concurrent[IO], logger: Logger[IO]): EitherT[IO, String, Pipe[IO, List[ShreddedType], Unit]] =
     for {
-      bqClient <- EitherT.liftF(TableReference.BigQueryTable.getClient(env.projectId))
+      bqClient <- EitherT.liftF(TableReference.BigQueryTable.getClient(env.projectId, env.gcpUserAgent))
       table = new TableReference.BigQueryTable(
         bqClient,
         env.config.output.good.datasetId,

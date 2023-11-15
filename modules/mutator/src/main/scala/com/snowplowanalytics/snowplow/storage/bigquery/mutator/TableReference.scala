@@ -12,11 +12,11 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.mutator
 
-import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, LoaderRow}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.{Adapter, LoaderRow, createGcpUserAgentHeader}
 import com.snowplowanalytics.snowplow.storage.bigquery.mutator.MutatorCli.MutatorCommand
-
 import cats.effect.IO
 import com.google.cloud.bigquery.{Schema => BqSchema, _}
+import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
 
 import scala.jdk.CollectionConverters._
 
@@ -56,9 +56,14 @@ object TableReference {
   }
 
   object BigQueryTable {
-    def getClient(projectId: String): IO[BigQuery] =
+    def getClient(projectId: String, gcpUserAgent: GcpUserAgent): IO[BigQuery] =
       IO(
-        BigQueryOptions.newBuilder.setProjectId(projectId).build.getService
+        BigQueryOptions
+          .newBuilder
+          .setProjectId(projectId)
+          .setHeaderProvider(createGcpUserAgentHeader(gcpUserAgent))
+          .build
+          .getService
       )
 
     def create(args: MutatorCommand.Create, client: BigQuery): IO[Table] = IO {

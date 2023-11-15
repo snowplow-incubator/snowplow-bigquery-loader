@@ -52,7 +52,7 @@ object Main extends IOApp {
 
       case Right(c: MutatorCommand.Create) =>
         for {
-          client <- TableReference.BigQueryTable.getClient(c.env.projectId)
+          client <- TableReference.BigQueryTable.getClient(c.env.projectId, c.env.gcpUserAgent)
           _      <- TableReference.BigQueryTable.create(c, client)
         } yield ExitCode.Success
 

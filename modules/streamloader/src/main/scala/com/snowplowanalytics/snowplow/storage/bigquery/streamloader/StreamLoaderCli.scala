@@ -26,5 +26,11 @@ object StreamLoaderCli {
   def parse(args: Seq[String]): Either[String, LoaderEnvironment] =
     for {
       parsed <- command.parse(args).leftMap(_.show)
-    } yield Environment(parsed.config.loader, parsed.resolver, parsed.config.projectId, parsed.config.monitoring)
+    } yield Environment(
+      parsed.config.loader,
+      parsed.resolver,
+      parsed.config.projectId,
+      parsed.config.monitoring,
+      parsed.config.gcpUserAgent
+    )
 }

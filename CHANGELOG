@@ -1,3 +1,7 @@
+Version 1.7.0 (2023-11-20)
+--------------------------
+Set GCP user agent header for BQ and Pubsub (#363)
+
 Version 1.6.8 (2023-10-13)
 --------------------------
 Create SizeViolation bad row for oversized messages sent to Pubsub (#361)

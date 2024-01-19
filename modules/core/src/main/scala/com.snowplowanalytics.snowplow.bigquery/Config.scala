@@ -36,7 +36,11 @@ object Config {
 
   case class WithIglu[+Source, +Sink](main: Config[Source, Sink], iglu: ResolverConfig)
 
-  case class Output[+Sink](good: BigQuery, bad: Sink)
+  case class Output[+Sink](good: BigQuery, bad: SinkWithMaxSize[Sink])
+
+  case class SinkWithMaxSize[+Sink](sink: Sink, maxRecordSize: Int)
+
+  case class MaxRecordSize(maxRecordSize: Int)
 
   case class BigQuery(
     project: String,
@@ -84,10 +88,14 @@ object Config {
 
   implicit def decoder[Source: Decoder, Sink: Decoder]: Decoder[Config[Source, Sink]] = {
     implicit val configuration = Configuration.default.withDiscriminator("type")
-    implicit val userAgent     = deriveConfiguredDecoder[GcpUserAgent]
-    implicit val bigquery      = deriveConfiguredDecoder[BigQuery]
-    implicit val output        = deriveConfiguredDecoder[Output[Sink]]
-    implicit val batching      = deriveConfiguredDecoder[Batching]
+    implicit val sinkWithMaxSize = for {
+      sink <- Decoder[Sink]
+      maxSize <- deriveConfiguredDecoder[MaxRecordSize]
+    } yield SinkWithMaxSize(sink, maxSize.maxRecordSize)
+    implicit val userAgent = deriveConfiguredDecoder[GcpUserAgent]
+    implicit val bigquery  = deriveConfiguredDecoder[BigQuery]
+    implicit val output    = deriveConfiguredDecoder[Output[Sink]]
+    implicit val batching  = deriveConfiguredDecoder[Batching]
     implicit val sentryDecoder = deriveConfiguredDecoder[SentryM[Option]]
       .map[Option[Sentry]] {
         case SentryM(Some(dsn), tags) =>

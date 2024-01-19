@@ -101,7 +101,7 @@ object BigQuerySchemaUtils {
       case Type.Double    => simpleField(ddlField, StandardSQLTypeName.FLOAT64)
       case Type.Date      => simpleField(ddlField, StandardSQLTypeName.DATE)
       case Type.Timestamp => simpleField(ddlField, StandardSQLTypeName.TIMESTAMP)
-      case Type.Json      => simpleField(ddlField, StandardSQLTypeName.STRING)
+      case Type.Json      => simpleField(ddlField, StandardSQLTypeName.JSON)
     }
 
   private def simpleField(ddlField: Field, bqType: StandardSQLTypeName): BQField =

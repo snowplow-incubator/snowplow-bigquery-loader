@@ -30,7 +30,8 @@ case class Environment[F[_]](
   tableManager: TableManager[F],
   writerProvider: Resource[F, WriterProvider[F]],
   metrics: Metrics[F],
-  batching: Config.Batching
+  batching: Config.Batching,
+  badRowMaxSize: Int
 )
 
 object Environment {
@@ -52,7 +53,7 @@ object Environment {
       resolver <- mkResolver[F](config.iglu)
       httpClient <- BlazeClientBuilder[F].withExecutionContext(global.compute).resource
       monitoring <- Monitoring.create[F](config.main.monitoring.webhook, appInfo, httpClient)
-      badSink <- toSink(config.main.output.bad)
+      badSink <- toSink(config.main.output.bad.sink)
       metrics <- Resource.eval(Metrics.build(config.main.monitoring.metrics))
       creds <- Resource.eval(BigQueryUtils.credentials(config.main.output.good))
       tableManager <- Resource.eval(TableManager.make(config.main.output.good, config.main.retries, creds, bigqueryHealth, monitoring))
@@ -66,7 +67,8 @@ object Environment {
       tableManager   = tableManager,
       writerProvider = writerProvider,
       metrics        = metrics,
-      batching       = config.main.batching
+      batching       = config.main.batching,
+      badRowMaxSize  = config.main.output.bad.maxRecordSize
     )
 
   private def enableSentry[F[_]: Sync](appInfo: AppInfo, config: Option[Config.Sentry]): Resource[F, Unit] =

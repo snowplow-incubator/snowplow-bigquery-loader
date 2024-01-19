@@ -26,8 +26,8 @@ import com.snowplowanalytics.snowplow.badrows.Payload.{RawPayload => BadRowRawPa
 import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, TokenedEvents}
 import com.snowplowanalytics.snowplow.sinks.ListOfList
 import com.snowplowanalytics.snowplow.runtime.syntax.foldable._
-import com.snowplowanalytics.snowplow.runtime.processing.BatchUp
-import com.snowplowanalytics.snowplow.loaders.transform.{NonAtomicFields, SchemaSubVersion, TabledEntity, Transform}
+import com.snowplowanalytics.snowplow.runtime.processing.{BatchUp, Coldswap}
+import com.snowplowanalytics.snowplow.loaders.transform.{BadRowsSerializer, NonAtomicFields, SchemaSubVersion, TabledEntity, Transform}
 import com.snowplowanalytics.snowplow.bigquery.{Environment, Metrics}
 
 object Processing {
@@ -99,7 +99,7 @@ object Processing {
       .through(transform(env, badProcessor))
       .through(handleSchemaEvolution(env, coldswap))
       .through(writeToBigQuery(env, coldswap, badProcessor))
-      .through(sendFailedEvents(env))
+      .through(sendFailedEvents(env, badProcessor))
       .through(sendMetrics(env))
       .through(emitTokens)
   }
@@ -242,10 +242,15 @@ object Processing {
       }
     }
 
-  private def sendFailedEvents[F[_]: Applicative, A](env: Environment[F]): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
+  private def sendFailedEvents[F[_]: Applicative, A](
+    env: Environment[F],
+    badProcessor: BadRowProcessor
+  ): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
     _.evalTap { batch =>
       if (batch.badAccumulated.nonEmpty) {
-        val serialized = batch.badAccumulated.mapUnordered(_.compactByteArray)
+        val serialized = batch.badAccumulated.mapUnordered { badRow =>
+          BadRowsSerializer.withMaxSize(badRow, badProcessor, env.badRowMaxSize)
+        }
         env.badSink.sinkSimple(serialized)
       } else Applicative[F].unit
     }

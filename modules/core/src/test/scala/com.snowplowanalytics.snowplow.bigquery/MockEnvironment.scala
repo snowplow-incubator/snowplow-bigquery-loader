@@ -71,7 +71,8 @@ object MockEnvironment {
           maxBytes              = 16000000,
           maxDelay              = 10.seconds,
           writeBatchConcurrency = 1
-        )
+        ),
+        badRowMaxSize = 1000000
       )
       MockEnvironment(state, env)
     }

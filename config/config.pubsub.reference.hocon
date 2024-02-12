@@ -66,18 +66,23 @@
     "writeBatchConcurrency":  1
   }
 
+  # Retry configuration for BigQuery operation failures
   "retries": {
-    # -- Base delay for exponential backoff on retriable runtime errors, e.g. server errors and network errors.
-    "backoff": "1 second"
 
-    # -- Max number of attempts on retriable runtime errors. After exceeding this number, the loader will crash and exit.
-    "attempts": 5
-
-    # -- Base delay for exponential backoff on errors that can only be fixed by manual intervention.
+    # -- Configures exponential backoff on errors related to how BigQuery is set up for this loader.
     # -- Examples include authentication errors and permissions errors.
     # -- This class of errors are reported periodically to the monitoring webhook.
-    "fixableBackoff": "30 seconds"
-  }
+    "setupErrors": {
+      "delay": "30 seconds"
+    }
+
+    # -- Configures exponential backoff  errors that are likely to be transient.
+    # -- Examples include server errors and network errors
+    "transientErrors": {
+      "delay": "1 second"
+      "attempts": 5
+    }
+  } 
 
   "monitoring": {
     "metrics": {

@@ -26,9 +26,9 @@ import com.snowplowanalytics.snowplow.badrows.Payload.{RawPayload => BadRowRawPa
 import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, TokenedEvents}
 import com.snowplowanalytics.snowplow.sinks.ListOfList
 import com.snowplowanalytics.snowplow.runtime.syntax.foldable._
-import com.snowplowanalytics.snowplow.runtime.processing.{BatchUp, Coldswap}
+import com.snowplowanalytics.snowplow.runtime.processing.BatchUp
 import com.snowplowanalytics.snowplow.loaders.transform.{BadRowsSerializer, NonAtomicFields, SchemaSubVersion, TabledEntity, Transform}
-import com.snowplowanalytics.snowplow.bigquery.{Environment, Metrics}
+import com.snowplowanalytics.snowplow.bigquery.{AppHealth, Environment, Metrics}
 
 object Processing {
 
@@ -38,9 +38,8 @@ object Processing {
     implicit val lookup: RegistryLookup[F] = Http4sRegistryLookup(env.httpClient)
     val eventProcessingConfig              = EventProcessingConfig(EventProcessingConfig.NoWindowing)
     Stream.eval(env.tableManager.createTable) *>
-      Stream.resource(Coldswap.make(env.writerProvider)).flatMap { coldswap =>
-        env.source.stream(eventProcessingConfig, eventProcessor(env, coldswap))
-      }
+      Stream.eval(env.writer.opened.use_) *>
+      env.source.stream(eventProcessingConfig, eventProcessor(env))
   }
 
   /** Model used between stages of the processing pipeline */
@@ -88,8 +87,7 @@ object Processing {
   )
 
   private def eventProcessor[F[_]: Async: RegistryLookup](
-    env: Environment[F],
-    coldswap: Coldswap[F, WriterProvider[F]]
+    env: Environment[F]
   ): EventProcessor[F] = { in =>
     val badProcessor = BadRowProcessor(env.appInfo.name, env.appInfo.version)
 
@@ -97,8 +95,8 @@ object Processing {
       .through(parseBytes(badProcessor))
       .through(BatchUp.withTimeout(env.batching.maxBytes, env.batching.maxDelay))
       .through(transform(env, badProcessor))
-      .through(handleSchemaEvolution(env, coldswap))
-      .through(writeToBigQuery(env, coldswap, badProcessor))
+      .through(handleSchemaEvolution(env))
+      .through(writeToBigQuery(env, badProcessor))
       .through(sendFailedEvents(env, badProcessor))
       .through(sendMetrics(env))
       .through(emitTokens)
@@ -181,29 +179,28 @@ object Processing {
 
   private def writeToBigQuery[F[_]: Async](
     env: Environment[F],
-    coldswap: Coldswap[F, WriterProvider[F]],
     badProcessor: BadRowProcessor
   ): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
     _.parEvalMap(env.batching.writeBatchConcurrency) { batch =>
-      writeUntilSuccessful(coldswap, badProcessor, batch)
+      writeUntilSuccessful(env, badProcessor, batch)
     }
 
   private def writeUntilSuccessful[F[_]: Sync](
-    coldswap: Coldswap[F, WriterProvider[F]],
+    env: Environment[F],
     badProcessor: BadRowProcessor,
     batch: BatchAfterTransform
   ): F[BatchAfterTransform] =
     if (batch.toBeInserted.isEmpty)
       batch.pure[F]
-    else
-      coldswap.opened
+    else {
+      val attempt = env.writer.opened
         .use(_.write(batch.toBeInserted.map(_._2)))
         .flatMap {
-          case WriterProvider.WriteResult.WriterIsClosed =>
-            coldswap.closed.use_ *> writeUntilSuccessful(coldswap, badProcessor, batch)
-          case WriterProvider.WriteResult.Success =>
+          case Writer.WriteResult.WriterIsClosed =>
+            env.writer.closed.use_ *> writeUntilSuccessful(env, badProcessor, batch)
+          case Writer.WriteResult.Success =>
             Sync[F].pure(batch.copy(toBeInserted = List.empty))
-          case WriterProvider.WriteResult.SerializationFailures(failures) =>
+          case Writer.WriteResult.SerializationFailures(failures) =>
             val (badRows, tryAgains) = batch.toBeInserted.zipWithIndex.foldLeft((List.empty[BadRow], List.empty[EventWithTransform])) {
               case ((badRows, tryAgains), (eventWithTransform, index)) =>
                 failures.get(index) match {
@@ -215,43 +212,50 @@ object Processing {
                 }
             }
             writeUntilSuccessful(
-              coldswap,
+              env,
               badProcessor,
               batch.copy(toBeInserted = tryAgains, badAccumulated = batch.badAccumulated.prepend(badRows))
             )
         }
+      attempt
+        .onError { _ =>
+          env.appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = false)
+        }
+    }
 
   /**
    * Alters the table to add any columns that were present in the Events but not currently in the
    * table
    */
   private def handleSchemaEvolution[F[_]: Sync](
-    env: Environment[F],
-    coldswap: Coldswap[F, WriterProvider[F]]
+    env: Environment[F]
   ): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
     _.evalTap { batch =>
-      coldswap.opened.use(_.descriptor).flatMap { descriptor =>
+      env.writer.opened.use(_.descriptor).flatMap { descriptor =>
         val fields = batch.entities.fields.flatMap { tte =>
           tte.mergedField :: tte.recoveries.map(_._2)
         }
         if (BigQuerySchemaUtils.alterTableRequired(descriptor, fields)) {
-          env.tableManager.addColumns(fields) *> coldswap.closed.use_
+          env.tableManager.addColumns(fields) *> env.writer.closed.use_
         } else {
           Sync[F].unit
         }
       }
     }
 
-  private def sendFailedEvents[F[_]: Applicative, A](
+  private def sendFailedEvents[F[_]: Sync](
     env: Environment[F],
-    badProcessor: BadRowProcessor
+    badRowProcessor: BadRowProcessor
   ): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
     _.evalTap { batch =>
       if (batch.badAccumulated.nonEmpty) {
-        val serialized = batch.badAccumulated.mapUnordered { badRow =>
-          BadRowsSerializer.withMaxSize(badRow, badProcessor, env.badRowMaxSize)
-        }
-        env.badSink.sinkSimple(serialized)
+        val serialized =
+          batch.badAccumulated.mapUnordered(badRow => BadRowsSerializer.withMaxSize(badRow, badRowProcessor, env.badRowMaxSize))
+        env.badSink
+          .sinkSimple(serialized)
+          .onError { _ =>
+            env.appHealth.setServiceHealth(AppHealth.Service.BadSink, isHealthy = false)
+          }
       } else Applicative[F].unit
     }
 

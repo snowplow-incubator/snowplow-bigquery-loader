@@ -80,10 +80,12 @@ object Config {
 
   final case class Webhook(endpoint: Uri, tags: Map[String, String])
 
+  case class SetupErrorRetries(delay: FiniteDuration)
+  case class TransientErrorRetries(delay: FiniteDuration, attempts: Int)
+
   case class Retries(
-    backoff: FiniteDuration,
-    attempts: Int,
-    fixableBackoff: FiniteDuration
+    setupErrors: SetupErrorRetries,
+    transientErrors: TransientErrorRetries
   )
 
   implicit def decoder[Source: Decoder, Sink: Decoder]: Decoder[Config[Source, Sink]] = {
@@ -109,6 +111,8 @@ object Config {
     implicit val healthProbeDecoder = deriveConfiguredDecoder[HealthProbe]
     implicit val webhookDecoder     = deriveConfiguredDecoder[Webhook]
     implicit val monitoringDecoder  = deriveConfiguredDecoder[Monitoring]
+    implicit val setupRetries       = deriveConfiguredDecoder[SetupErrorRetries]
+    implicit val transientRetries   = deriveConfiguredDecoder[TransientErrorRetries]
     implicit val retriesDecoder     = deriveConfiguredDecoder[Retries]
     deriveConfiguredDecoder[Config[Source, Sink]]
   }

@@ -23,7 +23,8 @@ import scala.concurrent.duration.DurationLong
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{UnstructEvent, unstructEventDecoder}
 import com.snowplowanalytics.snowplow.bigquery.MockEnvironment
-import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.Action
+import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.{Action, Mocks}
+import com.snowplowanalytics.snowplow.runtime.HealthProbe
 import com.snowplowanalytics.snowplow.sources.TokenedEvents
 
 class ProcessingSpec extends Specification with CatsEffect {
@@ -37,66 +38,68 @@ class ProcessingSpec extends Specification with CatsEffect {
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns $e4
     Emit BadRows when the WriterProvider reports a problem with the data $e5
     Set the latency metric based off the message timestamp $e6
+    Mark app as unhealthy when sinking badrows fails $e7
+    Mark app as unhealthy when writing to the Writer fails with runtime exception $e8
   """
 
   def e1 =
-    for {
-      inputs <- generateEvents().take(2).compile.toList
-      control <- MockEnvironment.build(inputs)
-      _ <- Processing.stream(control.environment).compile.drain
-      state <- control.state.get
-    } yield state should beEqualTo(
-      Vector(
-        Action.CreatedTable,
-        Action.OpenedWriter,
-        Action.WroteRowsToBigQuery(4),
-        Action.AddedGoodCountMetric(4),
-        Action.AddedBadCountMetric(0),
-        Action.Checkpointed(List(inputs(0).ack, inputs(1).ack)),
-        Action.ClosedWriter
+    runTest(inputEvents(count = 2, good())) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(4),
+          Action.AddedGoodCountMetric(4),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs(0).ack, inputs(1).ack))
+        )
       )
-    )
+    }
 
   def e2 =
-    for {
-      inputs <- generateBadlyFormatted.take(3).compile.toList
-      control <- MockEnvironment.build(inputs)
-      _ <- Processing.stream(control.environment).compile.drain
-      state <- control.state.get
-    } yield state should beEqualTo(
-      Vector(
-        Action.CreatedTable,
-        Action.OpenedWriter,
-        Action.SentToBad(6),
-        Action.AddedGoodCountMetric(0),
-        Action.AddedBadCountMetric(6),
-        Action.Checkpointed(List(inputs(0).ack, inputs(1).ack, inputs(2).ack)),
-        Action.ClosedWriter
+    runTest(inputEvents(count = 3, badlyFormatted)) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.SentToBad(6),
+          Action.AddedGoodCountMetric(0),
+          Action.AddedBadCountMetric(6),
+          Action.Checkpointed(List(inputs(0).ack, inputs(1).ack, inputs(2).ack))
+        )
       )
-    )
+    }
 
-  def e3 =
-    for {
-      bads <- generateBadlyFormatted.take(3).compile.toList
-      goods <- generateEvents().take(3).compile.toList
-      inputs = bads.zip(goods).map { case (bad, good) =>
-                 TokenedEvents(bad.events ++ good.events, good.ack, None)
-               }
-      control <- MockEnvironment.build(inputs)
-      _ <- Processing.stream(control.environment).compile.drain
-      state <- control.state.get
-    } yield state should beEqualTo(
-      Vector(
-        Action.CreatedTable,
-        Action.OpenedWriter,
-        Action.WroteRowsToBigQuery(6),
-        Action.SentToBad(6),
-        Action.AddedGoodCountMetric(6),
-        Action.AddedBadCountMetric(6),
-        Action.Checkpointed(List(inputs(0).ack, inputs(1).ack, inputs(2).ack)),
-        Action.ClosedWriter
+  def e3 = {
+    val toInputs = for {
+      bads <- inputEvents(count = 3, badlyFormatted)
+      goods <- inputEvents(count = 3, good())
+    } yield bads.zip(goods).map { case (bad, good) =>
+      TokenedEvents(bad.events ++ good.events, good.ack, None)
+    }
+    runTest(toInputs) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(6),
+          Action.SentToBad(6),
+          Action.AddedGoodCountMetric(6),
+          Action.AddedBadCountMetric(6),
+          Action.Checkpointed(List(inputs(0).ack, inputs(1).ack, inputs(2).ack))
+        )
       )
-    )
+    }
+  }
 
   def e4 = {
     val unstructEvent: UnstructEvent = json"""
@@ -110,112 +113,152 @@ class ProcessingSpec extends Specification with CatsEffect {
       }
     }
     """.as[UnstructEvent].fold(throw _, identity)
-
-    for {
-      inputs <- generateEvents(unstructEvent).take(1).compile.toList
-      control <- MockEnvironment.build(inputs)
-      _ <- Processing.stream(control.environment).compile.drain
-      state <- control.state.get
-    } yield state should beEqualTo(
-      Vector(
-        Action.CreatedTable,
-        Action.OpenedWriter,
-        Action.AlterTableAddedColumns(List("unstruct_event_com_snowplowanalytics_snowplow_web_page_1")),
-        Action.ClosedWriter,
-        Action.OpenedWriter,
-        Action.WroteRowsToBigQuery(2),
-        Action.AddedGoodCountMetric(2),
-        Action.AddedBadCountMetric(0),
-        Action.Checkpointed(List(inputs(0).ack)),
-        Action.ClosedWriter
+    runTest(inputEvents(count = 1, good(unstructEvent))) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.AlterTableAddedColumns(List("unstruct_event_com_snowplowanalytics_snowplow_web_page_1")),
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(2),
+          Action.AddedGoodCountMetric(2),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs(0).ack))
+        )
       )
-    )
+    }
   }
 
   def e5 = {
-    val mockedChannelResponses = List(
-      WriterProvider.WriteResult.SerializationFailures(Map(0 -> "boom!")),
-      WriterProvider.WriteResult.Success
-    )
-
-    for {
-      inputs <- generateEvents().take(1).compile.toList
-      control <- MockEnvironment.build(inputs, mockedChannelResponses)
-      _ <- Processing.stream(control.environment).compile.drain
-      state <- control.state.get
-    } yield state should beEqualTo(
-      Vector(
-        Action.CreatedTable,
-        Action.OpenedWriter,
-        Action.WroteRowsToBigQuery(1),
-        Action.SentToBad(1),
-        Action.AddedGoodCountMetric(1),
-        Action.AddedBadCountMetric(1),
-        Action.Checkpointed(List(inputs(0).ack)),
-        Action.ClosedWriter
+    val mocks = Mocks.default.copy(
+      writerResponses = List(
+        MockEnvironment.Response.Success(Writer.WriteResult.SerializationFailures(Map(0 -> "boom!"))),
+        MockEnvironment.Response.Success(Writer.WriteResult.Success)
       )
     )
+    runTest(inputEvents(count = 1, good()), mocks) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(1),
+          Action.SentToBad(1),
+          Action.AddedGoodCountMetric(1),
+          Action.AddedBadCountMetric(1),
+          Action.Checkpointed(List(inputs(0).ack))
+        )
+      )
+    }
   }
 
   def e6 = {
     val messageTime = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime = Instant.parse("2023-10-24T10:00:42.123Z")
 
-    val io = for {
-      inputs <- generateEvents().take(2).compile.toList.map {
-                  _.map {
-                    _.copy(earliestSourceTstamp = Some(messageTime))
-                  }
-                }
-      control <- MockEnvironment.build(inputs)
-      _ <- IO.sleep(processTime.toEpochMilli.millis)
-      _ <- Processing.stream(control.environment).compile.drain
-      state <- control.state.get
-    } yield state should beEqualTo(
-      Vector(
-        Action.CreatedTable,
-        Action.SetLatencyMetric(42123),
-        Action.SetLatencyMetric(42123),
-        Action.OpenedWriter,
-        Action.WroteRowsToBigQuery(4),
-        Action.AddedGoodCountMetric(4),
-        Action.AddedBadCountMetric(0),
-        Action.Checkpointed(List(inputs(0).ack, inputs(1).ack)),
-        Action.ClosedWriter
+    val toInputs = inputEvents(count = 2, good()).map {
+      _.map {
+        _.copy(earliestSourceTstamp = Some(messageTime))
+      }
+    }
+
+    val io = runTest(toInputs) { case (inputs, control) =>
+      for {
+        _ <- IO.sleep(processTime.toEpochMilli.millis)
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.SetLatencyMetric(42123),
+          Action.SetLatencyMetric(42123),
+          Action.WroteRowsToBigQuery(4),
+          Action.AddedGoodCountMetric(4),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs(0).ack, inputs(1).ack))
+        )
       )
-    )
+    }
 
     TestControl.executeEmbed(io)
 
+  }
+
+  def e7 = {
+    val mocks = Mocks.default.copy(
+      badSinkResponse = MockEnvironment.Response.ExceptionThrown(new RuntimeException("Some error when sinking bad data"))
+    )
+
+    runTest(inputEvents(count = 1, badlyFormatted), mocks) { case (_, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain.voidError
+        healthStatus <- control.environment.appHealth.status
+      } yield healthStatus should beEqualTo(HealthProbe.Unhealthy("Bad sink is not healthy"))
+    }
+  }
+
+  def e8 = {
+    val mocks = Mocks.default.copy(
+      writerResponses = List(MockEnvironment.Response.ExceptionThrown(new RuntimeException("Some error when writing to the Writer")))
+    )
+
+    runTest(inputEvents(count = 1, good()), mocks) { case (_, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain.voidError
+        healthStatus <- control.environment.appHealth.status
+      } yield healthStatus should beEqualTo(HealthProbe.Unhealthy("BigQuery client is not healthy"))
+    }
   }
 
 }
 
 object ProcessingSpec {
 
-  def generateEvents(ue: UnstructEvent = UnstructEvent(None)): Stream[IO, TokenedEvents] =
-    Stream.eval {
-      for {
-        ack <- IO.unique
-        eventId1 <- IO.randomUUID
-        eventId2 <- IO.randomUUID
-        collectorTstamp <- IO.realTimeInstant
-      } yield {
-        val event1 = Event.minimal(eventId1, collectorTstamp, "0.0.0", "0.0.0").copy(unstruct_event = ue)
-        val event2 = Event.minimal(eventId2, collectorTstamp, "0.0.0", "0.0.0")
-        val serialized = Chunk(event1, event2).map { e =>
-          ByteBuffer.wrap(e.toTsv.getBytes(StandardCharsets.UTF_8))
-        }
-        TokenedEvents(serialized, ack, None)
+  def runTest[A](
+    toInputs: IO[List[TokenedEvents]],
+    mocks: Mocks = Mocks.default
+  )(
+    f: (List[TokenedEvents], MockEnvironment) => IO[A]
+  ): IO[A] =
+    toInputs.flatMap { inputs =>
+      MockEnvironment.build(inputs, mocks).use { control =>
+        f(inputs, control)
       }
-    }.repeat
+    }
 
-  def generateBadlyFormatted: Stream[IO, TokenedEvents] =
-    Stream.eval {
-      IO.unique.map { token =>
-        val serialized = Chunk("nonsense1", "nonsense2").map(s => ByteBuffer.wrap(s.getBytes(StandardCharsets.UTF_8)))
-        TokenedEvents(serialized, token, None)
+  def inputEvents(count: Long, source: IO[TokenedEvents]): IO[List[TokenedEvents]] =
+    Stream
+      .eval(source)
+      .repeat
+      .take(count)
+      .compile
+      .toList
+
+  def good(ue: UnstructEvent = UnstructEvent(None)): IO[TokenedEvents] =
+    for {
+      ack <- IO.unique
+      eventId1 <- IO.randomUUID
+      eventId2 <- IO.randomUUID
+      collectorTstamp <- IO.realTimeInstant
+    } yield {
+      val event1 = Event.minimal(eventId1, collectorTstamp, "0.0.0", "0.0.0").copy(unstruct_event = ue)
+      val event2 = Event.minimal(eventId2, collectorTstamp, "0.0.0", "0.0.0")
+      val serialized = Chunk(event1, event2).map { e =>
+        ByteBuffer.wrap(e.toTsv.getBytes(StandardCharsets.UTF_8))
       }
-    }.repeat
+      TokenedEvents(serialized, ack, None)
+    }
 
+  def badlyFormatted: IO[TokenedEvents] =
+    IO.unique.map { token =>
+      val serialized = Chunk("nonsense1", "nonsense2").map(s => ByteBuffer.wrap(s.getBytes(StandardCharsets.UTF_8)))
+      TokenedEvents(serialized, token, None)
+    }
 }

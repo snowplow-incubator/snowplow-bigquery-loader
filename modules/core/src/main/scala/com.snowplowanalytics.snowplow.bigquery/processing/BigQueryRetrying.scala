@@ -17,44 +17,43 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 import retry._
 import retry.implicits.retrySyntaxError
 
-import com.snowplowanalytics.snowplow.bigquery.{Alert, Config, Monitoring}
+import com.snowplowanalytics.snowplow.bigquery.{Alert, AppHealth, Config, Monitoring}
 
 object BigQueryRetrying {
 
   private implicit def logger[F[_]: Sync] = Slf4jLogger.getLogger[F]
 
   def withRetries[F[_]: Sync: Sleep, A](
-    bigqueryHealth: BigQueryHealth[F],
+    appHealth: AppHealth[F],
     config: Config.Retries,
     monitoring: Monitoring[F],
     toAlert: Throwable => Alert
   )(
     action: F[A]
   ): F[A] =
-    retryUntilSuccessful(bigqueryHealth, config, monitoring, toAlert, action) <*
-      bigqueryHealth.setHealthy()
+    retryUntilSuccessful(appHealth, config, monitoring, toAlert, action) <*
+      appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = true)
 
   private def retryUntilSuccessful[F[_]: Sync: Sleep, A](
-    bigqueryHealth: BigQueryHealth[F],
+    appHealth: AppHealth[F],
     config: Config.Retries,
     monitoring: Monitoring[F],
     toAlert: Throwable => Alert,
     action: F[A]
   ): F[A] =
     action
-      .onError(_ => bigqueryHealth.setUnhealthy())
+      .onError(_ => appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = false))
       .retryingOnSomeErrors(
-        isWorthRetrying = requiresConfigChange[F](_),
-        policy          = fixablePolicy[F](config),
+        isWorthRetrying = isSetupError[F](_),
+        policy          = policyForSetupErrors[F](config),
         onError         = logErrorAndSendAlert[F](monitoring, toAlert, _, _)
       )
-      .retryingOnSomeErrors(
-        isWorthRetrying = requiresConfigChange[F](_).map(!_),
-        policy          = policy[F](config),
-        onError         = logError[F](_, _)
+      .retryingOnAllErrors(
+        policy  = policyForTransientErrors[F](config),
+        onError = logError[F](_, _)
       )
 
-  private def requiresConfigChange[F[_]: Sync](t: Throwable): F[Boolean] = t match {
+  private def isSetupError[F[_]: Sync](t: Throwable): F[Boolean] = t match {
     case BigQueryUtils.BQExceptionWithLowerCaseReason("notfound" | "accessdenied") =>
       true.pure[F]
     case _: PermissionDeniedException =>
@@ -63,11 +62,11 @@ object BigQueryRetrying {
       false.pure[F]
   }
 
-  private def fixablePolicy[F[_]: Applicative](config: Config.Retries): RetryPolicy[F] =
-    RetryPolicies.exponentialBackoff[F](config.fixableBackoff)
+  private def policyForSetupErrors[F[_]: Applicative](config: Config.Retries): RetryPolicy[F] =
+    RetryPolicies.exponentialBackoff[F](config.setupErrors.delay)
 
-  private def policy[F[_]: Applicative](config: Config.Retries): RetryPolicy[F] =
-    RetryPolicies.fullJitter[F](config.backoff).join(RetryPolicies.limitRetries(config.attempts - 1))
+  private def policyForTransientErrors[F[_]: Applicative](config: Config.Retries): RetryPolicy[F] =
+    RetryPolicies.fullJitter[F](config.transientErrors.delay).join(RetryPolicies.limitRetries(config.transientErrors.attempts - 1))
 
   private def logErrorAndSendAlert[F[_]: Sync](
     monitoring: Monitoring[F],

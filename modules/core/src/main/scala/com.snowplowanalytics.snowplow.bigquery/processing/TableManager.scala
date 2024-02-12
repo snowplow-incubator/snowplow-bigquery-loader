@@ -28,7 +28,7 @@ import com.google.auth.Credentials
 
 import com.snowplowanalytics.iglu.schemaddl.parquet.Field
 import com.snowplowanalytics.snowplow.loaders.transform.AtomicFields
-import com.snowplowanalytics.snowplow.bigquery.{Alert, Config, Monitoring}
+import com.snowplowanalytics.snowplow.bigquery.{Alert, AppHealth, Config, Monitoring}
 
 import scala.jdk.CollectionConverters._
 
@@ -48,29 +48,29 @@ object TableManager {
     config: Config.BigQuery,
     retries: Config.Retries,
     credentials: Credentials,
-    bigqueryHealth: BigQueryHealth[F],
+    appHealth: AppHealth[F],
     monitoring: Monitoring[F]
   ): F[TableManager[F]] =
     for {
       client <- Sync[F].delay(BigQueryOptions.newBuilder.setCredentials(credentials).build.getService)
-    } yield impl(config, retries, client, bigqueryHealth, monitoring)
+    } yield impl(config, retries, client, appHealth, monitoring)
 
   private def impl[F[_]: Async](
     config: Config.BigQuery,
     retries: Config.Retries,
     client: BigQuery,
-    bigqueryHealth: BigQueryHealth[F],
+    appHealth: AppHealth[F],
     monitoring: Monitoring[F]
   ): TableManager[F] = new TableManager[F] {
 
     def addColumns(columns: List[Field]): F[Unit] =
-      BigQueryRetrying.withRetries(bigqueryHealth, retries, monitoring, Alert.FailedToAddColumns(columns.map(_.name), _)) {
+      BigQueryRetrying.withRetries(appHealth, retries, monitoring, Alert.FailedToAddColumns(columns.map(_.name), _)) {
         Logger[F].info(s"Altering table to add columns [${showColumns(columns)}]") *>
           addColumnsImpl(config, client, columns)
       }
 
     def createTable: F[Unit] =
-      BigQueryRetrying.withRetries(bigqueryHealth, retries, monitoring, Alert.FailedToCreateEventsTable(_)) {
+      BigQueryRetrying.withRetries(appHealth, retries, monitoring, Alert.FailedToCreateEventsTable(_)) {
         val tableInfo = atomicTableInfo(config)
         Logger[F].info(show"Creating table $tableInfo") *>
           Sync[F]

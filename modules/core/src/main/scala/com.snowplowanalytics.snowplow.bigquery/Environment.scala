@@ -18,7 +18,7 @@ import io.sentry.Sentry
 import com.snowplowanalytics.iglu.client.resolver.Resolver
 import com.snowplowanalytics.snowplow.sources.SourceAndAck
 import com.snowplowanalytics.snowplow.sinks.Sink
-import com.snowplowanalytics.snowplow.bigquery.processing.{BigQueryHealth, BigQueryUtils, TableManager, WriterProvider}
+import com.snowplowanalytics.snowplow.bigquery.processing.{BigQueryUtils, TableManager, Writer}
 import com.snowplowanalytics.snowplow.runtime.{AppInfo, HealthProbe}
 
 case class Environment[F[_]](
@@ -28,13 +28,19 @@ case class Environment[F[_]](
   resolver: Resolver[F],
   httpClient: Client[F],
   tableManager: TableManager[F],
-  writerProvider: Resource[F, WriterProvider[F]],
+  writer: Writer.Provider[F],
   metrics: Metrics[F],
+  appHealth: AppHealth[F],
   batching: Config.Batching,
   badRowMaxSize: Int
 )
 
 object Environment {
+
+  private def initialAppHealth: Map[AppHealth.Service, Boolean] = Map(
+    AppHealth.Service.BigQueryClient -> false,
+    AppHealth.Service.BadSink -> true
+  )
 
   def fromConfig[F[_]: Async, SourceConfig, SinkConfig](
     config: Config.WithIglu[SourceConfig, SinkConfig],
@@ -44,31 +50,30 @@ object Environment {
   ): Resource[F, Environment[F]] =
     for {
       _ <- enableSentry[F](appInfo, config.main.monitoring.sentry)
-      bigqueryHealth <- Resource.eval(BigQueryHealth.initUnhealthy[F])
       sourceAndAck <- Resource.eval(toSource(config.main.input))
-      _ <- HealthProbe.resource(
-             config.main.monitoring.healthProbe.port,
-             AppHealth.isHealthy(config.main.monitoring.healthProbe, sourceAndAck, bigqueryHealth)
-           )
+      appHealth <- Resource.eval(AppHealth.init(config.main.monitoring.healthProbe.unhealthyLatency, sourceAndAck, initialAppHealth))
+      _ <- HealthProbe.resource(config.main.monitoring.healthProbe.port, appHealth.status)
       resolver <- mkResolver[F](config.iglu)
       httpClient <- BlazeClientBuilder[F].withExecutionContext(global.compute).resource
       monitoring <- Monitoring.create[F](config.main.monitoring.webhook, appInfo, httpClient)
       badSink <- toSink(config.main.output.bad.sink)
       metrics <- Resource.eval(Metrics.build(config.main.monitoring.metrics))
       creds <- Resource.eval(BigQueryUtils.credentials(config.main.output.good))
-      tableManager <- Resource.eval(TableManager.make(config.main.output.good, config.main.retries, creds, bigqueryHealth, monitoring))
-      writerProvider <- WriterProvider.make(config.main.output.good, config.main.retries, creds, bigqueryHealth, monitoring)
+      tableManager <- Resource.eval(TableManager.make(config.main.output.good, config.main.retries, creds, appHealth, monitoring))
+      writerBuilder <- Writer.builder(config.main.output.good, creds, appHealth)
+      writerProvider <- Writer.provider(writerBuilder, config.main.retries, appHealth, monitoring)
     } yield Environment(
-      appInfo        = appInfo,
-      source         = sourceAndAck,
-      badSink        = badSink,
-      resolver       = resolver,
-      httpClient     = httpClient,
-      tableManager   = tableManager,
-      writerProvider = writerProvider,
-      metrics        = metrics,
-      batching       = config.main.batching,
-      badRowMaxSize  = config.main.output.bad.maxRecordSize
+      appInfo       = appInfo,
+      source        = sourceAndAck,
+      badSink       = badSink,
+      resolver      = resolver,
+      httpClient    = httpClient,
+      tableManager  = tableManager,
+      writer        = writerProvider,
+      metrics       = metrics,
+      appHealth     = appHealth,
+      batching      = config.main.batching,
+      badRowMaxSize = config.main.output.bad.maxRecordSize
     )
 
   private def enableSentry[F[_]: Sync](appInfo: AppInfo, config: Option[Config.Sentry]): Resource[F, Unit] =

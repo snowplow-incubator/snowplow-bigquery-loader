@@ -17,16 +17,22 @@ import com.google.protobuf.Descriptors
 
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.parquet.Field
+import com.snowplowanalytics.snowplow.runtime.AppInfo
+import com.snowplowanalytics.snowplow.runtime.processing.Coldswap
 import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, SourceAndAck, TokenedEvents}
 import com.snowplowanalytics.snowplow.sinks.Sink
-import com.snowplowanalytics.snowplow.bigquery.processing.{TableManager, WriterProvider}
-import com.snowplowanalytics.snowplow.runtime.AppInfo
+import com.snowplowanalytics.snowplow.bigquery.processing.{TableManager, Writer}
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 case class MockEnvironment(state: Ref[IO, Vector[MockEnvironment.Action]], environment: Environment[IO])
 
 object MockEnvironment {
+
+  private val everythingHealthy: Map[AppHealth.Service, Boolean] = Map(
+    AppHealth.Service.BigQueryClient -> true,
+    AppHealth.Service.BadSink -> true
+  )
 
   sealed trait Action
   object Action {
@@ -48,25 +54,29 @@ object MockEnvironment {
    *
    * @param inputs
    *   Input events to send into the environment.
-   * @param writerResponses
-   *   Responses we want the `WriterProvider` to return when someone calls `write`
+   * @param mocks
+   *   Responses we want the `Writer` to return when someone calls uses the mocked services
    * @return
    *   An environment and a Ref that records the actions make by the environment
    */
-  def build(inputs: List[TokenedEvents], writerResponses: List[WriterProvider.WriteResult] = Nil): IO[MockEnvironment] =
+  def build(inputs: List[TokenedEvents], mocks: Mocks): Resource[IO, MockEnvironment] =
     for {
-      state <- Ref[IO].of(Vector.empty[Action])
-      writerProvider <- testWriterProvider(state, writerResponses)
+      state <- Resource.eval(Ref[IO].of(Vector.empty[Action]))
+      writerResource <- Resource.eval(testWriter(state, mocks.writerResponses))
+      writerColdswap <- Coldswap.make(writerResource)
+      source = testSourceAndAck(inputs, state)
+      appHealth <- Resource.eval(AppHealth.init(10.seconds, source, everythingHealthy))
     } yield {
       val env = Environment(
-        appInfo        = appInfo,
-        source         = testSourceAndAck(inputs, state),
-        badSink        = testSink(state),
-        resolver       = Resolver[IO](Nil, None),
-        httpClient     = testHttpClient,
-        tableManager   = testTableManager(state),
-        writerProvider = writerProvider,
-        metrics        = testMetrics(state),
+        appInfo      = appInfo,
+        source       = source,
+        badSink      = testBadSink(mocks.badSinkResponse, state),
+        resolver     = Resolver[IO](Nil, None),
+        httpClient   = testHttpClient,
+        tableManager = testTableManager(state),
+        writer       = writerColdswap,
+        metrics      = testMetrics(state),
+        appHealth    = appHealth,
         batching = Config.Batching(
           maxBytes              = 16000000,
           maxDelay              = 10.seconds,
@@ -76,6 +86,21 @@ object MockEnvironment {
       )
       MockEnvironment(state, env)
     }
+
+  final case class Mocks(
+    writerResponses: List[Response[Writer.WriteResult]],
+    badSinkResponse: Response[Unit]
+  )
+
+  object Mocks {
+    val default: Mocks = Mocks(writerResponses = List.empty, badSinkResponse = Response.Success(()))
+  }
+
+  sealed trait Response[+A]
+  object Response {
+    final case class Success[A](value: A) extends Response[A]
+    final case class ExceptionThrown(value: Throwable) extends Response[Nothing]
+  }
 
   val appInfo = new AppInfo {
     def name        = "snowflake-loader-test"
@@ -108,48 +133,66 @@ object MockEnvironment {
         IO.pure(SourceAndAck.Healthy)
     }
 
-  private def testSink(ref: Ref[IO, Vector[Action]]): Sink[IO] = Sink[IO] { batch =>
-    ref.update(_ :+ SentToBad(batch.size))
-  }
+  private def testBadSink(mockedResponse: Response[Unit], state: Ref[IO, Vector[Action]]): Sink[IO] =
+    Sink[IO] { batch =>
+      mockedResponse match {
+        case Response.Success(_) =>
+          state.update(_ :+ SentToBad(batch.size))
+        case Response.ExceptionThrown(value) =>
+          IO.raiseError(value)
+      }
+    }
 
   private def testHttpClient: Client[IO] = Client[IO] { _ =>
     Resource.raiseError[IO, Nothing, Throwable](new RuntimeException("http failure"))
   }
 
   /**
-   * Mocked implementation of a `WriterProvider`
+   * Mocked implementation of a `Writer`
    *
    * @param actionRef
    *   Global Ref used to accumulate actions that happened
    * @param responses
-   *   Responses that this mocked WriterProvider should return each time someone calls `write`. If
-   *   no responses given, then it will return with a successful response.
+   *   Responses that this mocked Writer should return each time someone calls `write`. If no
+   *   responses given, then it will return with a successful response.
    */
-  private def testWriterProvider(
+  private def testWriter(
     actionRef: Ref[IO, Vector[Action]],
-    responses: List[WriterProvider.WriteResult]
-  ): IO[Resource[IO, WriterProvider[IO]]] =
+    responses: List[Response[Writer.WriteResult]]
+  ): IO[Resource[IO, Writer[IO]]] =
     for {
       responseRef <- Ref[IO].of(responses)
     } yield {
       val make = actionRef.update(_ :+ OpenedWriter).as {
-        new WriterProvider[IO] {
+        new Writer[IO] {
           def descriptor: IO[Descriptors.Descriptor] =
             IO(AtomicDescriptor.get)
 
-          def write(rows: List[Map[String, AnyRef]]): IO[WriterProvider.WriteResult] =
+          def write(rows: List[Map[String, AnyRef]]): IO[Writer.WriteResult] =
             for {
               response <- responseRef.modify {
                             case head :: tail => (tail, head)
-                            case Nil          => (Nil, WriterProvider.WriteResult.Success)
+                            case Nil          => (Nil, Response.Success(Writer.WriteResult.Success))
                           }
-              _ <- response match {
-                     case WriterProvider.WriteResult.Success =>
-                       actionRef.update(_ :+ WroteRowsToBigQuery(rows.size))
-                     case _ =>
-                       IO.unit
-                   }
-            } yield response
+              writeResult <- response match {
+                               case success: Response.Success[Writer.WriteResult] =>
+                                 updateActions(actionRef, rows, success) *> IO(success.value)
+                               case Response.ExceptionThrown(ex) =>
+                                 IO.raiseError(ex)
+                             }
+            } yield writeResult
+
+          private def updateActions(
+            state: Ref[IO, Vector[Action]],
+            rows: Iterable[Map[String, AnyRef]],
+            success: Response.Success[Writer.WriteResult]
+          ): IO[Unit] =
+            success.value match {
+              case Writer.WriteResult.Success =>
+                state.update(_ :+ WroteRowsToBigQuery(rows.size))
+              case _ =>
+                IO.unit
+            }
         }
       }
 

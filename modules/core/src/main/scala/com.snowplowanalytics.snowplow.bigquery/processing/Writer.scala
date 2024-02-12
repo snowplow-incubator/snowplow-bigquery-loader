@@ -30,11 +30,12 @@ import com.google.auth.Credentials
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.api.gax.rpc.FixedHeaderProvider
 
-import com.snowplowanalytics.snowplow.bigquery.{Alert, Config, Monitoring}
+import com.snowplowanalytics.snowplow.bigquery.{Alert, AppHealth, Config, Monitoring}
+import com.snowplowanalytics.snowplow.runtime.processing.Coldswap
 
 import scala.jdk.CollectionConverters._
 
-trait WriterProvider[F[_]] {
+trait Writer[F[_]] {
 
   def descriptor: F[Descriptors.Descriptor]
 
@@ -46,12 +47,30 @@ trait WriterProvider[F[_]] {
    * @return
    *   List of the details of any insert failures. Empty list implies complete success.
    */
-  def write(rows: List[Map[String, AnyRef]]): F[WriterProvider.WriteResult]
+  def write(rows: List[Map[String, AnyRef]]): F[Writer.WriteResult]
 }
 
-object WriterProvider {
+object Writer {
 
   private implicit def logger[F[_]: Sync]: Logger[F] = Slf4jLogger.getLogger[F]
+
+  trait CloseableWriter[F[_]] extends Writer[F] {
+
+    /** Closes the BigQuery Writer */
+    def close: F[Unit]
+  }
+
+  /**
+   * Provider of open BigQuery Writers
+   *
+   * The Builder is not responsible for closing any opened writer. Writer lifecycle must be managed
+   * by the surrounding application code.
+   */
+  trait Builder[F[_]] {
+    def build: F[CloseableWriter[F]]
+  }
+
+  type Provider[F[_]] = Coldswap[F, Writer[F]]
 
   sealed trait WriteResult
 
@@ -78,22 +97,45 @@ object WriterProvider {
     case class SerializationFailures(failuresByIndex: Map[Int, String]) extends WriteResult
   }
 
-  def make[F[_]: Async](
+  def builder[F[_]: Async](
     config: Config.BigQuery,
-    retries: Config.Retries,
     credentials: Credentials,
-    bigqueryHealth: BigQueryHealth[F],
-    monitoring: Monitoring[F]
-  ): Resource[F, Resource[F, WriterProvider[F]]] =
+    appHealth: AppHealth[F]
+  ): Resource[F, Builder[F]] =
     for {
       client <- createWriteClient(config, credentials)
-    } yield createWriter(config, retries, client, bigqueryHealth, monitoring).map(impl[F](_, bigqueryHealth))
+    } yield new Builder[F] {
+      def build: F[CloseableWriter[F]] = buildWriter[F](config, client).map(impl(_, appHealth))
+    }
+
+  def provider[F[_]: Async](
+    builder: Builder[F],
+    retries: Config.Retries,
+    health: AppHealth[F],
+    monitoring: Monitoring[F]
+  ): Resource[F, Provider[F]] =
+    Coldswap.make(builderToResource(builder, retries, health, monitoring))
+
+  private def builderToResource[F[_]: Async](
+    builder: Builder[F],
+    retries: Config.Retries,
+    health: AppHealth[F],
+    monitoring: Monitoring[F]
+  ): Resource[F, Writer[F]] = {
+    def make(poll: Poll[F]) = poll {
+      BigQueryRetrying.withRetries(health, retries, monitoring, Alert.FailedToOpenBigQueryWriter(_)) {
+        builder.build
+      }
+    }
+
+    Resource.makeFull(make)(_.close)
+  }
 
   private def impl[F[_]: Async](
     writer: JsonStreamWriter,
-    bigqueryHealth: BigQueryHealth[F]
-  ): WriterProvider[F] =
-    new WriterProvider[F] {
+    appHealth: AppHealth[F]
+  ): CloseableWriter[F] =
+    new CloseableWriter[F] {
 
       def descriptor: F[Descriptors.Descriptor] =
         Sync[F].delay(writer.getDescriptor)
@@ -107,13 +149,12 @@ object WriterProvider {
               FutureInterop
                 .fromFuture(fut)
                 .as[WriteResult](WriteResult.Success)
-                .attemptTap {
-                  case Right(_) => bigqueryHealth.setHealthy()
-                  case Left(_)  => bigqueryHealth.setUnhealthy()
+                .attemptTap { either =>
+                  appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = either.isRight)
                 }
                 .recoverWith {
                   case (e: Throwable) if writer.isClosed =>
-                    Logger[F].warn(e)(s"Channel is closed, with an associated exception").as(WriteResult.WriterIsClosed)
+                    Logger[F].warn(e)(s"Writer is closed, with an associated exception").as(WriteResult.WriterIsClosed)
                 }
             case Left(appendSerializationError) =>
               Applicative[F].pure {
@@ -124,30 +165,23 @@ object WriterProvider {
                 }
               }
           }
+
+      def close: F[Unit] =
+        Logger[F].info("Closing BigQuery stream writer...") *>
+          Sync[F].blocking(writer.close())
     }
 
-  private def createWriter[F[_]: Async](
+  private def buildWriter[F[_]: Async](
     config: Config.BigQuery,
-    retries: Config.Retries,
-    client: BigQueryWriteClient,
-    bigqueryHealth: BigQueryHealth[F],
-    monitoring: Monitoring[F]
-  ): Resource[F, JsonStreamWriter] = {
+    client: BigQueryWriteClient
+  ): F[JsonStreamWriter] = {
     val streamId = BigQueryUtils.streamIdOf(config)
-    def make(poll: Poll[F]) = poll {
-      BigQueryRetrying.withRetries(bigqueryHealth, retries, monitoring, Alert.FailedToOpenBigQueryWriter(_)) {
-        for {
-          _ <- Logger[F].info(show"Opening BigQuery stream writer: $streamId")
-          // Set the table schema explicitly, to prevent the JsonStreamWriter from fetching it automatically when we're not in control.
-          schema <- getTableSchema[F](client, config)
-          w <- Sync[F].blocking(JsonStreamWriter.newBuilder(streamId, schema, client).build)
-        } yield w
-      }
-    }
-    Resource.makeFull(make) { w =>
-      Logger[F].info("Closing BigQuery stream writer...") *>
-        Sync[F].blocking(w.close())
-    }
+    for {
+      _ <- Logger[F].info(show"Opening BigQuery stream writer: $streamId")
+      // Set the table schema explicitly, to prevent the JsonStreamWriter from fetching it automatically when we're not in control.
+      schema <- getTableSchema[F](client, config)
+      w <- Sync[F].blocking(JsonStreamWriter.newBuilder(streamId, schema, client).build)
+    } yield w
   }
 
   private def createWriteClient[F[_]: Sync](

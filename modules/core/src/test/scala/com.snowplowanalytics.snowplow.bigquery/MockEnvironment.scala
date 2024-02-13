@@ -21,7 +21,7 @@ import com.snowplowanalytics.snowplow.runtime.AppInfo
 import com.snowplowanalytics.snowplow.runtime.processing.Coldswap
 import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, SourceAndAck, TokenedEvents}
 import com.snowplowanalytics.snowplow.sinks.Sink
-import com.snowplowanalytics.snowplow.bigquery.processing.{TableManager, Writer}
+import com.snowplowanalytics.snowplow.bigquery.processing.{BigQueryRetrying, TableManager, Writer}
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
@@ -62,21 +62,22 @@ object MockEnvironment {
   def build(inputs: List[TokenedEvents], mocks: Mocks): Resource[IO, MockEnvironment] =
     for {
       state <- Resource.eval(Ref[IO].of(Vector.empty[Action]))
-      writerResource <- Resource.eval(testWriter(state, mocks.writerResponses))
+      writerResource <- Resource.eval(testWriter(state, mocks.writerResponses, mocks.descriptorResponses))
       writerColdswap <- Coldswap.make(writerResource)
       source = testSourceAndAck(inputs, state)
       appHealth <- Resource.eval(AppHealth.init(10.seconds, source, everythingHealthy))
     } yield {
       val env = Environment(
-        appInfo      = appInfo,
-        source       = source,
-        badSink      = testBadSink(mocks.badSinkResponse, state),
-        resolver     = Resolver[IO](Nil, None),
-        httpClient   = testHttpClient,
-        tableManager = testTableManager(state),
-        writer       = writerColdswap,
-        metrics      = testMetrics(state),
-        appHealth    = appHealth,
+        appInfo              = appInfo,
+        source               = source,
+        badSink              = testBadSink(mocks.badSinkResponse, state),
+        resolver             = Resolver[IO](Nil, None),
+        httpClient           = testHttpClient,
+        tableManager         = testTableManager(state),
+        writer               = writerColdswap,
+        metrics              = testMetrics(state),
+        appHealth            = appHealth,
+        alterTableWaitPolicy = BigQueryRetrying.policyForAlterTableWait[IO](retriesConfig),
         batching = Config.Batching(
           maxBytes              = 16000000,
           maxDelay              = 10.seconds,
@@ -89,11 +90,16 @@ object MockEnvironment {
 
   final case class Mocks(
     writerResponses: List[Response[Writer.WriteResult]],
-    badSinkResponse: Response[Unit]
+    badSinkResponse: Response[Unit],
+    descriptorResponses: List[Descriptors.Descriptor]
   )
 
   object Mocks {
-    val default: Mocks = Mocks(writerResponses = List.empty, badSinkResponse = Response.Success(()))
+    val default: Mocks = Mocks(
+      writerResponses     = List.empty,
+      badSinkResponse     = Response.Success(()),
+      descriptorResponses = List.empty
+    )
   }
 
   sealed trait Response[+A]
@@ -158,15 +164,20 @@ object MockEnvironment {
    */
   private def testWriter(
     actionRef: Ref[IO, Vector[Action]],
-    responses: List[Response[Writer.WriteResult]]
+    responses: List[Response[Writer.WriteResult]],
+    descriptorResponses: List[Descriptors.Descriptor]
   ): IO[Resource[IO, Writer[IO]]] =
     for {
       responseRef <- Ref[IO].of(responses)
+      descriptorsRef <- Ref[IO].of(descriptorResponses)
     } yield {
       val make = actionRef.update(_ :+ OpenedWriter).as {
         new Writer[IO] {
           def descriptor: IO[Descriptors.Descriptor] =
-            IO(AtomicDescriptor.get)
+            descriptorsRef.modify {
+              case head :: tail => (tail, head)
+              case Nil          => (Nil, AtomicDescriptor.get)
+            }
 
           def write(rows: List[Map[String, AnyRef]]): IO[Writer.WriteResult] =
             for {
@@ -211,4 +222,10 @@ object MockEnvironment {
 
     def report: Stream[IO, Nothing] = Stream.never[IO]
   }
+
+  def retriesConfig = Config.Retries(
+    Config.SetupErrorRetries(30.seconds),
+    Config.TransientErrorRetries(1.second, 5),
+    Config.AlterTableWaitRetries(1.second)
+  )
 }

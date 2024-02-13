@@ -76,11 +76,17 @@
       "delay": "30 seconds"
     }
 
-    # -- Configures exponential backoff  errors that are likely to be transient.
+    # -- Configures exponential backoff errors that are likely to be transient.
     # -- Examples include server errors and network errors
     "transientErrors": {
       "delay": "1 second"
       "attempts": 5
+    }
+
+    # -- Configures backoff when waiting for the BigQuery Writer to detect that we have altered the
+    # -- table by adding new columns
+    "alterTableWait": {
+      "delay": 1 second"
     }
   } 
 

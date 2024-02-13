@@ -15,11 +15,14 @@ import cats.effect.kernel.Unique
 import fs2.{Chunk, Pipe, Stream}
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
+import retry.RetryDetails
+import retry.implicits._
 
 import java.nio.charset.StandardCharsets
 
 import com.snowplowanalytics.iglu.schemaddl.parquet.Caster
 import com.snowplowanalytics.iglu.client.resolver.registries.{Http4sRegistryLookup, RegistryLookup}
+import com.snowplowanalytics.iglu.schemaddl.parquet.Field
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Payload => BadPayload, Processor => BadRowProcessor}
 import com.snowplowanalytics.snowplow.badrows.Payload.{RawPayload => BadRowRawPayload}
@@ -196,8 +199,6 @@ object Processing {
       val attempt = env.writer.opened
         .use(_.write(batch.toBeInserted.map(_._2)))
         .flatMap {
-          case Writer.WriteResult.WriterIsClosed =>
-            env.writer.closed.use_ *> writeUntilSuccessful(env, badProcessor, batch)
           case Writer.WriteResult.Success =>
             Sync[F].pure(batch.copy(toBeInserted = List.empty))
           case Writer.WriteResult.SerializationFailures(failures) =>
@@ -227,21 +228,49 @@ object Processing {
    * Alters the table to add any columns that were present in the Events but not currently in the
    * table
    */
-  private def handleSchemaEvolution[F[_]: Sync](
+  private def handleSchemaEvolution[F[_]: Async](
     env: Environment[F]
   ): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
     _.evalTap { batch =>
-      env.writer.opened.use(_.descriptor).flatMap { descriptor =>
-        val fields = batch.entities.fields.flatMap { tte =>
-          tte.mergedField :: tte.recoveries.map(_._2)
-        }
-        if (BigQuerySchemaUtils.alterTableRequired(descriptor, fields)) {
-          env.tableManager.addColumns(fields) *> env.writer.closed.use_
-        } else {
-          Sync[F].unit
-        }
+      val fields = batch.entities.fields.flatMap { tte =>
+        tte.mergedField :: tte.recoveries.map(_._2)
       }
+      val attempt = alterTableRequired(env, fields).flatMap {
+        case true =>
+          env.tableManager.addColumns(fields) *>
+            waitForAlteredWriter(env, fields)
+        case false =>
+          Sync[F].unit
+      }
+
+      attempt
+        .onError { _ =>
+          env.appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = false)
+        }
     }
+
+  private def alterTableRequired[F[_]: Sync](env: Environment[F], fields: List[Field]): F[Boolean] =
+    env.writer.opened.use(_.descriptor).map { descriptor =>
+      BigQuerySchemaUtils.alterTableRequired(descriptor, fields)
+    }
+
+  /**
+   * Repeatedly close and open the Writer it picks up the new columns we just added to the table
+   */
+  private def waitForAlteredWriter[F[_]: Async](env: Environment[F], fields: List[Field]): F[Unit] = {
+    def logFailure(a: Boolean, details: RetryDetails): F[Unit] = {
+      val _               = a
+      val extractedDetail = BigQueryRetrying.extractRetryDetails(details)
+      Logger[F].warn(s"Newly added columns have not yet propagated to the BigQuery Writer. $extractedDetail")
+    }
+    (env.writer.closed.use_ *> alterTableRequired(env, fields))
+      .retryingOnFailures(
+        policy        = env.alterTableWaitPolicy,
+        wasSuccessful = { required => Sync[F].pure(!required) },
+        onFailure     = logFailure
+      )
+      .void
+  }
 
   private def sendFailedEvents[F[_]: Sync](
     env: Environment[F],

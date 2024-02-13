@@ -315,7 +315,11 @@ object WriterProviderSpec {
     monitoring: Monitoring[IO]
   )
 
-  val retriesConfig = Config.Retries(Config.SetupErrorRetries(30.seconds), Config.TransientErrorRetries(1.second, 5))
+  def retriesConfig = Config.Retries(
+    Config.SetupErrorRetries(30.seconds),
+    Config.TransientErrorRetries(1.second, 5),
+    Config.AlterTableWaitRetries(1.second)
+  )
 
   def control: IO[Control] =
     for {

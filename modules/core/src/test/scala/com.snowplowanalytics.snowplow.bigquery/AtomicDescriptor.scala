@@ -15,17 +15,23 @@ import com.google.protobuf.{DescriptorProtos, Descriptors}
  * table
  */
 object AtomicDescriptor {
-  val get: Descriptors.Descriptor = {
 
-    val eventId = DescriptorProtos.FieldDescriptorProto.newBuilder
-      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
-      .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING)
-      .setName("event_id")
-      .setNumber(1)
-
+  def get: Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
-      .setName("event")
-      .addField(0, eventId) // For laziness, only adding one atomic field
+      .addField(0, eventId.setNumber(1)) // For laziness, only adding one atomic field
+    fromDescriptorProtoBuilder(descriptorProto)
+  }
+
+  def withWebPage: Descriptors.Descriptor = {
+    val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, eventId.setNumber(1))
+      .addField(1, webPage.setNumber(2))
+      .addNestedType(webPageNestedType)
+    fromDescriptorProtoBuilder(descriptorProto)
+  }
+
+  private def fromDescriptorProtoBuilder(descriptorProto: DescriptorProtos.DescriptorProto.Builder): Descriptors.Descriptor = {
+    descriptorProto.setName("event")
 
     val fdp = DescriptorProtos.FileDescriptorProto.newBuilder
       .addMessageType(descriptorProto)
@@ -34,5 +40,27 @@ object AtomicDescriptor {
     val fd = Descriptors.FileDescriptor.buildFrom(fdp, Array())
     fd.findMessageTypeByName("event")
   }
+
+  private def eventId: DescriptorProtos.FieldDescriptorProto.Builder =
+    DescriptorProtos.FieldDescriptorProto.newBuilder
+      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+      .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING)
+      .setName("event_id")
+
+  private def webPage: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
+    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+    .setTypeName("web_page_1")
+    .setName("unstruct_event_com_snowplowanalytics_snowplow_web_page_1")
+
+  private def webPageId: DescriptorProtos.FieldDescriptorProto.Builder =
+    DescriptorProtos.FieldDescriptorProto.newBuilder
+      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+      .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING)
+      .setName("id")
+
+  private def webPageNestedType: DescriptorProtos.DescriptorProto.Builder =
+    DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, webPageId.setNumber(1))
+      .setName("web_page_1")
 
 }

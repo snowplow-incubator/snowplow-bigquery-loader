@@ -14,11 +14,12 @@ import cats.effect.unsafe.implicits.global
 import org.http4s.client.Client
 import org.http4s.blaze.client.BlazeClientBuilder
 import io.sentry.Sentry
+import retry.RetryPolicy
 
 import com.snowplowanalytics.iglu.client.resolver.Resolver
 import com.snowplowanalytics.snowplow.sources.SourceAndAck
 import com.snowplowanalytics.snowplow.sinks.Sink
-import com.snowplowanalytics.snowplow.bigquery.processing.{BigQueryUtils, TableManager, Writer}
+import com.snowplowanalytics.snowplow.bigquery.processing.{BigQueryRetrying, BigQueryUtils, TableManager, Writer}
 import com.snowplowanalytics.snowplow.runtime.{AppInfo, HealthProbe}
 
 case class Environment[F[_]](
@@ -31,6 +32,7 @@ case class Environment[F[_]](
   writer: Writer.Provider[F],
   metrics: Metrics[F],
   appHealth: AppHealth[F],
+  alterTableWaitPolicy: RetryPolicy[F],
   batching: Config.Batching,
   badRowMaxSize: Int
 )
@@ -60,20 +62,21 @@ object Environment {
       metrics <- Resource.eval(Metrics.build(config.main.monitoring.metrics))
       creds <- Resource.eval(BigQueryUtils.credentials(config.main.output.good))
       tableManager <- Resource.eval(TableManager.make(config.main.output.good, config.main.retries, creds, appHealth, monitoring))
-      writerBuilder <- Writer.builder(config.main.output.good, creds, appHealth)
+      writerBuilder <- Writer.builder(config.main.output.good, creds)
       writerProvider <- Writer.provider(writerBuilder, config.main.retries, appHealth, monitoring)
     } yield Environment(
-      appInfo       = appInfo,
-      source        = sourceAndAck,
-      badSink       = badSink,
-      resolver      = resolver,
-      httpClient    = httpClient,
-      tableManager  = tableManager,
-      writer        = writerProvider,
-      metrics       = metrics,
-      appHealth     = appHealth,
-      batching      = config.main.batching,
-      badRowMaxSize = config.main.output.bad.maxRecordSize
+      appInfo              = appInfo,
+      source               = sourceAndAck,
+      badSink              = badSink,
+      resolver             = resolver,
+      httpClient           = httpClient,
+      tableManager         = tableManager,
+      writer               = writerProvider,
+      metrics              = metrics,
+      appHealth            = appHealth,
+      alterTableWaitPolicy = BigQueryRetrying.policyForAlterTableWait(config.main.retries),
+      batching             = config.main.batching,
+      badRowMaxSize        = config.main.output.bad.maxRecordSize
     )
 
   private def enableSentry[F[_]: Sync](appInfo: AppInfo, config: Option[Config.Sentry]): Resource[F, Unit] =

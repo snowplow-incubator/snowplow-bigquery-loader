@@ -79,11 +79,6 @@ object Writer {
     case object Success extends WriteResult
 
     /**
-     * The result of `write` when it raises an exception which which closed the Writer
-     */
-    case object WriterIsClosed extends WriteResult
-
-    /**
      * The result of `write` when some events could not be serialized according to the underlying
      * protobuf descriptor
      *
@@ -99,13 +94,12 @@ object Writer {
 
   def builder[F[_]: Async](
     config: Config.BigQuery,
-    credentials: Credentials,
-    appHealth: AppHealth[F]
+    credentials: Credentials
   ): Resource[F, Builder[F]] =
     for {
       client <- createWriteClient(config, credentials)
     } yield new Builder[F] {
-      def build: F[CloseableWriter[F]] = buildWriter[F](config, client).map(impl(_, appHealth))
+      def build: F[CloseableWriter[F]] = buildWriter[F](config, client).map(impl[F])
     }
 
   def provider[F[_]: Async](
@@ -131,10 +125,7 @@ object Writer {
     Resource.makeFull(make)(_.close)
   }
 
-  private def impl[F[_]: Async](
-    writer: JsonStreamWriter,
-    appHealth: AppHealth[F]
-  ): CloseableWriter[F] =
+  private def impl[F[_]: Async](writer: JsonStreamWriter): CloseableWriter[F] =
     new CloseableWriter[F] {
 
       def descriptor: F[Descriptors.Descriptor] =
@@ -149,13 +140,6 @@ object Writer {
               FutureInterop
                 .fromFuture(fut)
                 .as[WriteResult](WriteResult.Success)
-                .attemptTap { either =>
-                  appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = either.isRight)
-                }
-                .recoverWith {
-                  case (e: Throwable) if writer.isClosed =>
-                    Logger[F].warn(e)(s"Writer is closed, with an associated exception").as(WriteResult.WriterIsClosed)
-                }
             case Left(appendSerializationError) =>
               Applicative[F].pure {
                 WriteResult.SerializationFailures {

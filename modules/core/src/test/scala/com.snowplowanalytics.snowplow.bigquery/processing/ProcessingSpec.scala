@@ -22,7 +22,7 @@ import scala.concurrent.duration.DurationLong
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{UnstructEvent, unstructEventDecoder}
-import com.snowplowanalytics.snowplow.bigquery.MockEnvironment
+import com.snowplowanalytics.snowplow.bigquery.{AtomicDescriptor, MockEnvironment}
 import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.{Action, Mocks}
 import com.snowplowanalytics.snowplow.runtime.HealthProbe
 import com.snowplowanalytics.snowplow.sources.TokenedEvents
@@ -113,7 +113,18 @@ class ProcessingSpec extends Specification with CatsEffect {
       }
     }
     """.as[UnstructEvent].fold(throw _, identity)
-    runTest(inputEvents(count = 1, good(unstructEvent))) { case (inputs, control) =>
+
+    // Take three attempts until the Writer discovers the new web page column:
+    val mocks = Mocks.default.copy(
+      descriptorResponses = List(
+        AtomicDescriptor.get,
+        AtomicDescriptor.get,
+        AtomicDescriptor.get,
+        AtomicDescriptor.withWebPage
+      )
+    )
+
+    val io = runTest(inputEvents(count = 1, good(unstructEvent)), mocks) { case (inputs, control) =>
       for {
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
@@ -123,7 +134,11 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.OpenedWriter,
           Action.AlterTableAddedColumns(List("unstruct_event_com_snowplowanalytics_snowplow_web_page_1")),
           Action.ClosedWriter,
-          Action.OpenedWriter,
+          Action.OpenedWriter, // attempt 1
+          Action.ClosedWriter,
+          Action.OpenedWriter, // attempt 2
+          Action.ClosedWriter,
+          Action.OpenedWriter, // attempt 3
           Action.WroteRowsToBigQuery(2),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
@@ -131,6 +146,8 @@ class ProcessingSpec extends Specification with CatsEffect {
         )
       )
     }
+
+    TestControl.executeEmbed(io)
   }
 
   def e5 = {

@@ -68,6 +68,9 @@ object BigQueryRetrying {
   private def policyForTransientErrors[F[_]: Applicative](config: Config.Retries): RetryPolicy[F] =
     RetryPolicies.fullJitter[F](config.transientErrors.delay).join(RetryPolicies.limitRetries(config.transientErrors.attempts - 1))
 
+  def policyForAlterTableWait[F[_]: Applicative](config: Config.Retries): RetryPolicy[F] =
+    RetryPolicies.fibonacciBackoff[F](config.alterTableWait.delay)
+
   private def logErrorAndSendAlert[F[_]: Sync](
     monitoring: Monitoring[F],
     toAlert: Throwable => Alert,
@@ -80,7 +83,7 @@ object BigQueryRetrying {
   private def logError[F[_]: Sync](error: Throwable, details: RetryDetails): F[Unit] =
     Logger[F].error(error)(s"Executing BigQuery command failed. ${extractRetryDetails(details)}")
 
-  private def extractRetryDetails(details: RetryDetails): String = details match {
+  def extractRetryDetails(details: RetryDetails): String = details match {
     case RetryDetails.GivingUp(totalRetries, totalDelay) =>
       s"Giving up on retrying, total retries: $totalRetries, total delay: ${totalDelay.toSeconds} seconds"
     case RetryDetails.WillDelayAndRetry(nextDelay, retriesSoFar, cumulativeDelay) =>

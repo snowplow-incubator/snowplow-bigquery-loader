@@ -347,7 +347,7 @@ object WriterProviderSpec {
 
   private def testCloseableWriter(state: Ref[IO, Vector[Action]]): Writer.CloseableWriter[IO] = new Writer.CloseableWriter[IO] {
     def descriptor: IO[Descriptors.Descriptor] =
-      IO(AtomicDescriptor.get)
+      IO(AtomicDescriptor.initial)
 
     def write(rows: List[Map[String, AnyRef]]): IO[Writer.WriteResult] = IO.pure(Writer.WriteResult.Success)
 

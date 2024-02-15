@@ -62,7 +62,7 @@ object MockEnvironment {
   def build(inputs: List[TokenedEvents], mocks: Mocks): Resource[IO, MockEnvironment] =
     for {
       state <- Resource.eval(Ref[IO].of(Vector.empty[Action]))
-      writerResource <- Resource.eval(testWriter(state, mocks.writerResponses, mocks.descriptorResponses))
+      writerResource <- Resource.eval(testWriter(state, mocks.writerResponses))
       writerColdswap <- Coldswap.make(writerResource)
       source = testSourceAndAck(inputs, state)
       appHealth <- Resource.eval(AppHealth.init(10.seconds, source, everythingHealthy))
@@ -90,16 +90,11 @@ object MockEnvironment {
 
   final case class Mocks(
     writerResponses: List[Response[Writer.WriteResult]],
-    badSinkResponse: Response[Unit],
-    descriptorResponses: List[Descriptors.Descriptor]
+    badSinkResponse: Response[Unit]
   )
 
   object Mocks {
-    val default: Mocks = Mocks(
-      writerResponses     = List.empty,
-      badSinkResponse     = Response.Success(()),
-      descriptorResponses = List.empty
-    )
+    val default: Mocks = Mocks(writerResponses = List.empty, badSinkResponse = Response.Success(()))
   }
 
   sealed trait Response[+A]
@@ -164,20 +159,15 @@ object MockEnvironment {
    */
   private def testWriter(
     actionRef: Ref[IO, Vector[Action]],
-    responses: List[Response[Writer.WriteResult]],
-    descriptorResponses: List[Descriptors.Descriptor]
+    responses: List[Response[Writer.WriteResult]]
   ): IO[Resource[IO, Writer[IO]]] =
     for {
       responseRef <- Ref[IO].of(responses)
-      descriptorsRef <- Ref[IO].of(descriptorResponses)
     } yield {
       val make = actionRef.update(_ :+ OpenedWriter).as {
         new Writer[IO] {
           def descriptor: IO[Descriptors.Descriptor] =
-            descriptorsRef.modify {
-              case head :: tail => (tail, head)
-              case Nil          => (Nil, AtomicDescriptor.get)
-            }
+            IO(AtomicDescriptor.withWebPage)
 
           def write(rows: List[Map[String, AnyRef]]): IO[Writer.WriteResult] =
             for {

@@ -22,7 +22,7 @@ import scala.concurrent.duration.DurationLong
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{UnstructEvent, unstructEventDecoder}
-import com.snowplowanalytics.snowplow.bigquery.{AtomicDescriptor, MockEnvironment}
+import com.snowplowanalytics.snowplow.bigquery.MockEnvironment
 import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.{Action, Mocks}
 import com.snowplowanalytics.snowplow.runtime.HealthProbe
 import com.snowplowanalytics.snowplow.sources.TokenedEvents
@@ -36,10 +36,13 @@ class ProcessingSpec extends Specification with CatsEffect {
     Emit BadRows when there are badly formatted events $e2
     Write good batches and bad events when input contains both $e3
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns $e4
-    Emit BadRows when the WriterProvider reports a problem with the data $e5
-    Set the latency metric based off the message timestamp $e6
-    Mark app as unhealthy when sinking badrows fails $e7
-    Mark app as unhealthy when writing to the Writer fails with runtime exception $e8
+    Skip altering the table when the writer's protobuf Descriptor has relevant self-describing entitiy columns $e5
+    Emit BadRows when the WriterProvider reports a problem with the data $e6
+    Recover when the WriterProvider reports a server-side schema mismatch $e7
+    Recover when the WriterProvider reports the write was closed by an earlier error  $e8
+    Set the latency metric based off the message timestamp $e9
+    Mark app as unhealthy when sinking badrows fails $e10
+    Mark app as unhealthy when writing to the Writer fails with runtime exception $e11
   """
 
   def e1 =
@@ -106,25 +109,12 @@ class ProcessingSpec extends Specification with CatsEffect {
     {
       "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
       "data": {
-        "schema": "iglu:com.snowplowanalytics.snowplow/web_page/jsonschema/1-0-0",
-        "data": {
-          "id": "07212d37-4257-4fdc-aed1-2ab55a3ff1d9"
-        }
+        "schema": "iglu:com.snowplowanalytics.snowplow.media/ad_start_event/jsonschema/1-0-0",
+        "data": {}
       }
     }
     """.as[UnstructEvent].fold(throw _, identity)
-
-    // Take three attempts until the Writer discovers the new web page column:
-    val mocks = Mocks.default.copy(
-      descriptorResponses = List(
-        AtomicDescriptor.get,
-        AtomicDescriptor.get,
-        AtomicDescriptor.get,
-        AtomicDescriptor.withWebPage
-      )
-    )
-
-    val io = runTest(inputEvents(count = 1, good(unstructEvent)), mocks) { case (inputs, control) =>
+    runTest(inputEvents(count = 1, good(unstructEvent))) { case (inputs, control) =>
       for {
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
@@ -132,13 +122,9 @@ class ProcessingSpec extends Specification with CatsEffect {
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.AlterTableAddedColumns(List("unstruct_event_com_snowplowanalytics_snowplow_web_page_1")),
+          Action.AlterTableAddedColumns(List("unstruct_event_com_snowplowanalytics_snowplow_media_ad_start_event_1")),
           Action.ClosedWriter,
-          Action.OpenedWriter, // attempt 1
-          Action.ClosedWriter,
-          Action.OpenedWriter, // attempt 2
-          Action.ClosedWriter,
-          Action.OpenedWriter, // attempt 3
+          Action.OpenedWriter,
           Action.WroteRowsToBigQuery(2),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
@@ -146,11 +132,38 @@ class ProcessingSpec extends Specification with CatsEffect {
         )
       )
     }
-
-    TestControl.executeEmbed(io)
   }
 
   def e5 = {
+    val unstructEvent: UnstructEvent = json"""
+    {
+      "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
+      "data": {
+        "schema": "iglu:com.snowplowanalytics.snowplow/web_page/jsonschema/1-0-0",
+        "data": {
+          "id": "07212d37-4257-4fdc-aed1-2ab55a3ff1d9"
+        }
+      }
+    }
+    """.as[UnstructEvent].fold(throw _, identity)
+    runTest(inputEvents(count = 1, good(unstructEvent))) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(2),
+          Action.AddedGoodCountMetric(2),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs(0).ack))
+        )
+      )
+    }
+  }
+
+  def e6 = {
     val mocks = Mocks.default.copy(
       writerResponses = List(
         MockEnvironment.Response.Success(Writer.WriteResult.SerializationFailures(Map(0 -> "boom!"))),
@@ -175,7 +188,67 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
   }
 
-  def e6 = {
+  def e7 = {
+    val mocks = Mocks.default.copy(
+      writerResponses = List(
+        MockEnvironment.Response.Success(Writer.WriteResult.ServerSideSchemaMismatch(new RuntimeException("boom!"))),
+        MockEnvironment.Response.Success(Writer.WriteResult.ServerSideSchemaMismatch(new RuntimeException("boom!"))),
+        MockEnvironment.Response.Success(Writer.WriteResult.Success)
+      )
+    )
+    val io = runTest(inputEvents(count = 1, good()), mocks) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(2),
+          Action.AddedGoodCountMetric(2),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs(0).ack))
+        )
+      )
+    }
+    TestControl.executeEmbed(io)
+  }
+
+  def e8 = {
+    val mocks = Mocks.default.copy(
+      writerResponses = List(
+        MockEnvironment.Response.Success(Writer.WriteResult.WriterWasClosedByEarlierError(new RuntimeException("boom!"))),
+        MockEnvironment.Response.Success(Writer.WriteResult.WriterWasClosedByEarlierError(new RuntimeException("boom!"))),
+        MockEnvironment.Response.Success(Writer.WriteResult.Success)
+      )
+    )
+    val io = runTest(inputEvents(count = 1, good()), mocks) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(2),
+          Action.AddedGoodCountMetric(2),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs(0).ack))
+        )
+      )
+    }
+    TestControl.executeEmbed(io)
+  }
+
+  def e9 = {
     val messageTime = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime = Instant.parse("2023-10-24T10:00:42.123Z")
 
@@ -208,7 +281,7 @@ class ProcessingSpec extends Specification with CatsEffect {
 
   }
 
-  def e7 = {
+  def e10 = {
     val mocks = Mocks.default.copy(
       badSinkResponse = MockEnvironment.Response.ExceptionThrown(new RuntimeException("Some error when sinking bad data"))
     )
@@ -221,7 +294,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
   }
 
-  def e8 = {
+  def e11 = {
     val mocks = Mocks.default.copy(
       writerResponses = List(MockEnvironment.Response.ExceptionThrown(new RuntimeException("Some error when writing to the Writer")))
     )

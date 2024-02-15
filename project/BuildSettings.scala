@@ -41,7 +41,11 @@ object BuildSettings {
   )
 
   lazy val coreSettings = Seq(
-    igluUris := Seq("iglu:com.snowplowanalytics.snowplow/web_page/jsonschema/1-0-0")
+    Test / igluUris := Seq(
+      // Iglu schemas used in unit tests
+      "iglu:com.snowplowanalytics.snowplow/web_page/jsonschema/1-0-0",
+      "iglu:com.snowplowanalytics.snowplow.media/ad_start_event/jsonschema/1-0-0"
+    )
   ) ++ commonSettings
 
   lazy val appSettings = Seq(

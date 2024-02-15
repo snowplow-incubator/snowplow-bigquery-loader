@@ -16,12 +16,14 @@ import com.google.protobuf.{DescriptorProtos, Descriptors}
  */
 object AtomicDescriptor {
 
-  def get: Descriptors.Descriptor = {
+  /** The initial descriptor altering table for self-describing entities */
+  def initial: Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, eventId.setNumber(1)) // For laziness, only adding one atomic field
     fromDescriptorProtoBuilder(descriptorProto)
   }
 
+  /** A table which has been altered to add the web_page unstruct event column */
   def withWebPage: Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, eventId.setNumber(1))

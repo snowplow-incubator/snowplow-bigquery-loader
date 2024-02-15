@@ -113,4 +113,9 @@ object BigQuerySchemaUtils {
   private def bqModeOf(nullability: Type.Nullability): BQField.Mode =
     if (nullability.nullable) BQField.Mode.NULLABLE else BQField.Mode.REQUIRED
 
+  def showDescriptor(descriptor: Descriptors.Descriptor): String =
+    descriptor.getFields.asScala
+      .map(_.getName)
+      .mkString(", ")
+
 }

@@ -82,6 +82,9 @@ object Writer {
      * The result of `write` when some events could not be serialized according to the underlying
      * protobuf descriptor
      *
+     * This is a **client-side** failure. The schema-aware Writer rejects the events before sending
+     * them to BigQuery.
+     *
      * This indicates a mis-match in schema between the incoming events and the target table.
      *
      * @param failuresByIndex
@@ -90,6 +93,27 @@ object Writer {
      *   assume that event has no serialization problems.
      */
     case class SerializationFailures(failuresByIndex: Map[Int, String]) extends WriteResult
+
+    /**
+     * The result of `write` when the events are rejected by BigQuery because the events do not
+     * match the table's schema
+     *
+     * This is a **server-side** failure. The schema-aware Writer (client) accepted the events, but
+     * they got rejected after sending them to BigQuery.
+     *
+     * This exception is expected in the short period immediately after altering a table to add new
+     * columns.
+     */
+    case class ServerSideSchemaMismatch(cause: Exception) extends WriteResult
+
+    /**
+     * The result of `write` when the underlying Writer was already closed for some other reason.
+     *
+     * This could happen if we have multiple fibers calling `write` in parallel, and if an exception
+     * happened in one of the other fibers. A fiber receiving this exception should close the writer
+     * resource and try again.
+     */
+    case class WriterWasClosedByEarlierError(cause: Exception) extends WriteResult
   }
 
   def builder[F[_]: Async](
@@ -99,7 +123,15 @@ object Writer {
     for {
       client <- createWriteClient(config, credentials)
     } yield new Builder[F] {
-      def build: F[CloseableWriter[F]] = buildWriter[F](config, client).map(impl[F])
+      def build: F[CloseableWriter[F]] =
+        buildWriter[F](config, client)
+          .map(impl[F])
+          .flatTap { w =>
+            for {
+              descriptor <- w.descriptor
+              _ <- Logger[F].info(s"Opened Writer with fields: ${BigQuerySchemaUtils.showDescriptor(descriptor)}")
+            } yield ()
+          }
     }
 
   def provider[F[_]: Async](
@@ -140,6 +172,12 @@ object Writer {
               FutureInterop
                 .fromFuture(fut)
                 .as[WriteResult](WriteResult.Success)
+                .recover {
+                  case e: BQExceptions.SchemaMismatchedException =>
+                    WriteResult.ServerSideSchemaMismatch(e)
+                  case e: BQExceptions.StreamWriterClosedException =>
+                    WriteResult.WriterWasClosedByEarlierError(e)
+                }
             case Left(appendSerializationError) =>
               Applicative[F].pure {
                 WriteResult.SerializationFailures {

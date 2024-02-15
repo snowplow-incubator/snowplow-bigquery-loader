@@ -15,14 +15,14 @@ import cats.effect.kernel.Unique
 import fs2.{Chunk, Pipe, Stream}
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import retry.RetryDetails
+import retry.{PolicyDecision, RetryDetails, RetryPolicy}
 import retry.implicits._
 
 import java.nio.charset.StandardCharsets
+import scala.concurrent.duration.Duration
 
 import com.snowplowanalytics.iglu.schemaddl.parquet.Caster
 import com.snowplowanalytics.iglu.client.resolver.registries.{Http4sRegistryLookup, RegistryLookup}
-import com.snowplowanalytics.iglu.schemaddl.parquet.Field
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Payload => BadPayload, Processor => BadRowProcessor}
 import com.snowplowanalytics.snowplow.badrows.Payload.{RawPayload => BadRowRawPayload}
@@ -186,21 +186,83 @@ object Processing {
   ): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
     _.parEvalMap(env.batching.writeBatchConcurrency) { batch =>
       writeUntilSuccessful(env, badProcessor, batch)
+        .onError { _ =>
+          env.appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = false)
+        }
     }
 
-  private def writeUntilSuccessful[F[_]: Sync](
+  implicit private class WriteResultOps[F[_]: Async](val attempt: F[Writer.WriteResult]) {
+
+    /**
+     * Hard-coded constant. Forgive me.
+     *
+     * If we recover before reaching this number of retries, then there's really no need to log a
+     * known exception. If we exceed this number of retries then it's unexpected, and it would be
+     * helpful to have something in the logs instead of hiding the exception.
+     */
+    private def errorsAllowedWithShortLogging = 4
+
+    def handlingServerSideSchemaMismatches(env: Environment[F]): F[Writer.WriteResult] = {
+      def onFailure(wr: Writer.WriteResult, details: RetryDetails): F[Unit] = {
+        val extractedDetail = BigQueryRetrying.extractRetryDetails(details)
+        val msg             = s"Newly added columns have not yet propagated to the BigQuery Writer. $extractedDetail"
+        val log = wr match {
+          case Writer.WriteResult.ServerSideSchemaMismatch(e) if details.retriesSoFar > errorsAllowedWithShortLogging =>
+            Logger[F].warn(e)(msg)
+          case _ =>
+            Logger[F].warn(msg)
+        }
+        log *> env.writer.closed.use_
+      }
+      attempt
+        .retryingOnFailures(
+          policy = env.alterTableWaitPolicy,
+          wasSuccessful = {
+            case Writer.WriteResult.ServerSideSchemaMismatch(_) => false.pure[F]
+            case _                                              => true.pure[F]
+          },
+          onFailure = onFailure
+        )
+    }
+
+    def handlingWriterWasClosedByEarlierErrors(env: Environment[F]): F[Writer.WriteResult] = {
+      def onFailure(wr: Writer.WriteResult, details: RetryDetails): F[Unit] = {
+        val msg =
+          "BigQuery Writer was already closed by an earlier exception in a different Fiber.  Will reset the Writer and try again immediately"
+        val log = wr match {
+          case Writer.WriteResult.WriterWasClosedByEarlierError(e) if details.retriesSoFar > errorsAllowedWithShortLogging =>
+            Logger[F].warn(e)(msg)
+          case _ =>
+            Logger[F].warn(msg)
+        }
+        log *> env.writer.closed.use_
+      }
+      val retryImmediately = PolicyDecision.DelayAndRetry(Duration.Zero)
+      attempt
+        .retryingOnFailures(
+          policy = RetryPolicy.lift[F](_ => retryImmediately),
+          wasSuccessful = {
+            case Writer.WriteResult.WriterWasClosedByEarlierError(_) => false.pure[F]
+            case _                                                   => true.pure[F]
+          },
+          onFailure = onFailure
+        )
+    }
+  }
+
+  private def writeUntilSuccessful[F[_]: Async](
     env: Environment[F],
     badProcessor: BadRowProcessor,
     batch: BatchAfterTransform
   ): F[BatchAfterTransform] =
     if (batch.toBeInserted.isEmpty)
       batch.pure[F]
-    else {
-      val attempt = env.writer.opened
+    else
+      env.writer.opened
         .use(_.write(batch.toBeInserted.map(_._2)))
+        .handlingWriterWasClosedByEarlierErrors(env)
+        .handlingServerSideSchemaMismatches(env)
         .flatMap {
-          case Writer.WriteResult.Success =>
-            Sync[F].pure(batch.copy(toBeInserted = List.empty))
           case Writer.WriteResult.SerializationFailures(failures) =>
             val (badRows, tryAgains) = batch.toBeInserted.zipWithIndex.foldLeft((List.empty[BadRow], List.empty[EventWithTransform])) {
               case ((badRows, tryAgains), (eventWithTransform, index)) =>
@@ -217,60 +279,34 @@ object Processing {
               badProcessor,
               batch.copy(toBeInserted = tryAgains, badAccumulated = batch.badAccumulated.prepend(badRows))
             )
+          case _ =>
+            Sync[F].pure(batch.copy(toBeInserted = List.empty))
         }
-      attempt
-        .onError { _ =>
-          env.appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = false)
-        }
-    }
 
   /**
    * Alters the table to add any columns that were present in the Events but not currently in the
    * table
    */
-  private def handleSchemaEvolution[F[_]: Async](
+  private def handleSchemaEvolution[F[_]: Sync](
     env: Environment[F]
   ): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
     _.evalTap { batch =>
-      val fields = batch.entities.fields.flatMap { tte =>
-        tte.mergedField :: tte.recoveries.map(_._2)
-      }
-      val attempt = alterTableRequired(env, fields).flatMap {
-        case true =>
-          env.tableManager.addColumns(fields) *>
-            waitForAlteredWriter(env, fields)
-        case false =>
-          Sync[F].unit
-      }
-
-      attempt
+      env.writer.opened
+        .use(_.descriptor)
+        .flatMap { descriptor =>
+          val fields = batch.entities.fields.flatMap { tte =>
+            tte.mergedField :: tte.recoveries.map(_._2)
+          }
+          if (BigQuerySchemaUtils.alterTableRequired(descriptor, fields)) {
+            env.tableManager.addColumns(fields) *> env.writer.closed.use_
+          } else {
+            Sync[F].unit
+          }
+        }
         .onError { _ =>
           env.appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = false)
         }
     }
-
-  private def alterTableRequired[F[_]: Sync](env: Environment[F], fields: List[Field]): F[Boolean] =
-    env.writer.opened.use(_.descriptor).map { descriptor =>
-      BigQuerySchemaUtils.alterTableRequired(descriptor, fields)
-    }
-
-  /**
-   * Repeatedly close and open the Writer it picks up the new columns we just added to the table
-   */
-  private def waitForAlteredWriter[F[_]: Async](env: Environment[F], fields: List[Field]): F[Unit] = {
-    def logFailure(a: Boolean, details: RetryDetails): F[Unit] = {
-      val _               = a
-      val extractedDetail = BigQueryRetrying.extractRetryDetails(details)
-      Logger[F].warn(s"Newly added columns have not yet propagated to the BigQuery Writer. $extractedDetail")
-    }
-    (env.writer.closed.use_ *> alterTableRequired(env, fields))
-      .retryingOnFailures(
-        policy        = env.alterTableWaitPolicy,
-        wasSuccessful = { required => Sync[F].pure(!required) },
-        onFailure     = logFailure
-      )
-      .void
-  }
 
   private def sendFailedEvents[F[_]: Sync](
     env: Environment[F],

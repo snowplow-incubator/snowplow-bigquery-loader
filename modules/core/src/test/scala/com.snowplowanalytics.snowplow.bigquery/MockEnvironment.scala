@@ -104,9 +104,9 @@ object MockEnvironment {
   }
 
   val appInfo = new AppInfo {
-    def name        = "snowflake-loader-test"
+    def name        = "bigquery-loader-test"
     def version     = "0.0.0"
-    def dockerAlias = "snowplow/snowflake-loader-test:0.0.0"
+    def dockerAlias = "snowplow/bigquery-loader-test:0.0.0"
     def cloud       = "OnPrem"
   }
 

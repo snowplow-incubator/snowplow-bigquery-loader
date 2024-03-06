@@ -93,20 +93,26 @@ object Dependencies {
     kafka,
     slf4j      % Runtime,
     julToSlf4j % Runtime,
-    azureIdentity
+    azureIdentity,
+    specs2,
+    catsEffectSpecs2
   )
 
   val pubsubDependencies = Seq(
     pubsub,
     slf4j      % Runtime,
-    julToSlf4j % Runtime
+    julToSlf4j % Runtime,
+    specs2,
+    catsEffectSpecs2
   )
 
   val kinesisDependencies = Seq(
     kinesis,
     slf4j      % Runtime,
     julToSlf4j % Runtime,
-    stsSdk2    % Runtime
+    stsSdk2    % Runtime,
+    specs2,
+    catsEffectSpecs2
   )
 
 }

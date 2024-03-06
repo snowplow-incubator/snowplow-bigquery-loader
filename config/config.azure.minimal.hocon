@@ -12,7 +12,7 @@
 
     "good": {
       "project": "my-project"
-      "dataset": "snowplow"
+      "dataset": "my-dataset"
     }
 
     "bad": {

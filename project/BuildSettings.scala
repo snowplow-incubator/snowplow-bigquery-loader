@@ -52,7 +52,7 @@ object BuildSettings {
     buildInfoKeys := Seq[BuildInfoKey](dockerAlias, name, version),
     buildInfoPackage := "com.snowplowanalytics.snowplow.bigquery",
     buildInfoOptions += BuildInfoOption.Traits("com.snowplowanalytics.snowplow.runtime.AppInfo")
-  ) ++ commonSettings
+  ) ++ commonSettings ++ addExampleConfToTestCp
 
   lazy val kafkaSettings = appSettings ++ Seq(
     name := "bigquery-loader-kafka",
@@ -69,4 +69,17 @@ object BuildSettings {
     buildInfoKeys += BuildInfoKey("cloud" -> "AWS")
   )
 
+  lazy val addExampleConfToTestCp = Seq(
+    Test / unmanagedClasspath += {
+      if (baseDirectory.value.getPath.contains("distroless")) {
+        // baseDirectory is like 'root/modules/distroless/module',
+        // we're at 'module' and need to get to 'root/config/'
+        baseDirectory.value.getParentFile.getParentFile.getParentFile / "config"
+      } else {
+        // baseDirectory is like 'root/modules/module',
+        // we're at 'module' and need to get to 'root/config/'
+        baseDirectory.value.getParentFile.getParentFile / "config"
+      }
+    }
+  )
 }

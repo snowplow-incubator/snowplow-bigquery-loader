@@ -11,6 +11,7 @@ package com.snowplowanalytics.snowplow.bigquery.processing
 import cats.Applicative
 import cats.implicits._
 import cats.effect.{Async, Poll, Resource, Sync}
+import com.google.api.gax.batching.FlowControlSettings
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.json.JSONArray
@@ -29,7 +30,6 @@ import com.google.api.gax.core.CredentialsProvider
 import com.google.auth.Credentials
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.api.gax.rpc.FixedHeaderProvider
-
 import com.snowplowanalytics.snowplow.bigquery.{Alert, AppHealth, Config, Monitoring}
 import com.snowplowanalytics.snowplow.runtime.processing.Coldswap
 
@@ -202,7 +202,19 @@ object Writer {
       _ <- Logger[F].info(show"Opening BigQuery stream writer: $streamId")
       // Set the table schema explicitly, to prevent the JsonStreamWriter from fetching it automatically when we're not in control.
       schema <- getTableSchema[F](client, config)
-      w <- Sync[F].blocking(JsonStreamWriter.newBuilder(streamId, schema, client).build)
+      w <- Sync[F].blocking {
+             JsonStreamWriter
+               .newBuilder(streamId, schema, client)
+               .setFlowControlSettings {
+                 FlowControlSettings
+                   .newBuilder()
+                   // Large values so we never block underlying writer threads
+                   .setMaxOutstandingElementCount(1_000_000L) // Default 1000
+                   .setMaxOutstandingRequestBytes(1024 * 1024 * 1024) // 1Gb. Default 100 Mb.
+                   .build
+               }
+               .build
+           }
     } yield w
   }
 

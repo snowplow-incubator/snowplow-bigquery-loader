@@ -11,11 +11,11 @@
 
     "good": {
       "project": "my-project"
-      "dataset": "snowplow"
+      "dataset": "my-dataset"
     }
 
     "bad": {
-      "topic": "projects/myproject/topics/snowplow-bad"
+      "topic": "projects/my-project/topics/snowplow-bad"
     }
 
   }

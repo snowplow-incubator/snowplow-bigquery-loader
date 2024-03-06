@@ -135,7 +135,7 @@ object Processing {
       } yield ParseResult(events, badRows, numBytes, token)
     }
 
-  /** Transform the Event into values compatible with the snowflake ingest sdk */
+  /** Transform the Event into values compatible with the BigQuery sdk */
   private def transform[F[_]: Sync: RegistryLookup](
     env: Environment[F],
     badProcessor: BadRowProcessor

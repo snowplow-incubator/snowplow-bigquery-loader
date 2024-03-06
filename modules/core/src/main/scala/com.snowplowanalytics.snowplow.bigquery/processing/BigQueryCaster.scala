@@ -18,7 +18,7 @@ import com.snowplowanalytics.iglu.schemaddl.parquet.Caster
 
 import scala.jdk.CollectionConverters._
 
-/** Converts schema-ddl values into objects which are compatible with the snowflake ingest sdk */
+/** Converts schema-ddl values into objects which are compatible with the BigQuery sdk */
 private[processing] object BigQueryCaster extends Caster[AnyRef] {
 
   override def nullValue: Null                             = null

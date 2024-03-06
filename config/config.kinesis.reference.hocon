@@ -45,7 +45,7 @@
       "project": "my-project"
 
       # -- the BigQuery dataset to which events will be loaded
-      "dataset": "my-project"
+      "dataset": "my-dataset"
 
       # -- the table within the BigQuery dataset to which events will be loaded
       "table": "events"
@@ -106,7 +106,7 @@
     # -- Configures backoff when waiting for the BigQuery Writer to detect that we have altered the
     # -- table by adding new columns
     "alterTableWait": {
-      "delay": 1 second"
+      "delay": "1 second"
     }
   } 
 
@@ -127,7 +127,7 @@
         "period": "1 minute"
 
         # -- Prefix used for the metric name when sending to statsd
-        "prefix": "snowplow.bigquery-loader"
+        "prefix": "snowplow.bigquery.loader"
       }
     }
 
@@ -138,6 +138,16 @@
       # -- Map of key/value pairs to be included as tags
       "tags": {
         "myTag": "xyz"
+      }
+    }
+    
+    # -- Report alerts to the webhook 
+    "webhook": {
+      # An actual HTTP endpoint
+      "endpoint": "https://webhook.acme.com",
+      # Set of arbitrary key-value pairs attached to the payload
+      "tags": {
+        "pipeline": "production"
       }
     }
   }

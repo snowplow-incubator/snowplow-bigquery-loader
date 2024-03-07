@@ -17,7 +17,7 @@ import com.comcast.ip4s.Port
 import com.snowplowanalytics.snowplow.bigquery.Config.GcpUserAgent
 import com.snowplowanalytics.snowplow.pubsub.{GcpUserAgent => PubsubUserAgent}
 import com.snowplowanalytics.snowplow.runtime.Metrics.StatsdConfig
-import com.snowplowanalytics.snowplow.runtime.{ConfigParser, Telemetry}
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, Telemetry}
 import com.snowplowanalytics.snowplow.sinks.pubsub.PubsubSinkConfig
 import com.snowplowanalytics.snowplow.sources.pubsub.PubsubSourceConfig
 import org.http4s.implicits.http4sLiteralsSyntax
@@ -115,7 +115,8 @@ object PubsubConfigSpec {
       sentry      = None,
       healthProbe = Config.HealthProbe(port = Port.fromInt(8000).get, unhealthyLatency = 5.minutes),
       webhook     = None
-    )
+    ),
+    license = AcceptedLicense()
   )
 
   private val extendedConfig = Config[PubsubSourceConfig, PubsubSinkConfig](
@@ -187,6 +188,7 @@ object PubsubConfigSpec {
         unhealthyLatency = 5.minutes
       ),
       webhook = Some(Config.Webhook(endpoint = uri"https://webhook.acme.com", tags = Map("pipeline" -> "production")))
-    )
+    ),
+    license = AcceptedLicense()
   )
 }

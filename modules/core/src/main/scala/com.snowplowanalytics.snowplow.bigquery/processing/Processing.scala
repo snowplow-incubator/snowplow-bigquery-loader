@@ -145,7 +145,7 @@ object Processing {
         now <- Sync[F].realTimeInstant
         loadTstamp = BigQueryCaster.timestampValue(now)
         _ <- Logger[F].debug(s"Processing batch of size ${events.size}")
-        nonAtomicFields <- NonAtomicFields.resolveTypes[F](env.resolver, entities)
+        nonAtomicFields <- NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip)
         (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, nonAtomicFields)
       } yield BatchAfterTransform(
         rows,

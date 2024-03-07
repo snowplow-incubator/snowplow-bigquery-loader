@@ -16,7 +16,7 @@ import scala.jdk.CollectionConverters._
 
 object BigQuerySchemaUtils {
 
-  def alterTableRequired(tableDescriptor: Descriptors.Descriptor, ddlFields: List[Field]): Boolean =
+  def alterTableRequired(tableDescriptor: Descriptors.Descriptor, ddlFields: Seq[Field]): Boolean =
     ddlFields.exists { field =>
       Option(tableDescriptor.findFieldByName(field.name)) match {
         case Some(fieldDescriptor) =>
@@ -40,7 +40,7 @@ object BigQuerySchemaUtils {
         false
     }
 
-  def mergeInColumns(bqFields: FieldList, ddlFields: List[Field]): FieldList = {
+  def mergeInColumns(bqFields: FieldList, ddlFields: Seq[Field]): FieldList = {
     val ddlFieldsByName = ddlFields.map(f => f.name -> f).toMap
     val bqFieldNames    = bqFields.asScala.map(f => f.getName).toSet
     val alteredExisting = bqFields.asScala.map { bqField =>

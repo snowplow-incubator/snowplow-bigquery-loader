@@ -23,7 +23,7 @@ object Alert {
   private val MaxAlertPayloadLength = 4096
 
   final case class FailedToCreateEventsTable(cause: Throwable) extends Alert
-  final case class FailedToAddColumns(columns: List[String], cause: Throwable) extends Alert
+  final case class FailedToAddColumns(columns: Vector[String], cause: Throwable) extends Alert
   final case class FailedToOpenBigQueryWriter(cause: Throwable) extends Alert
 
   def toSelfDescribingJson(

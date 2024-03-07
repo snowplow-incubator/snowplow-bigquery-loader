@@ -122,7 +122,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.AlterTableAddedColumns(List("unstruct_event_com_snowplowanalytics_snowplow_media_ad_start_event_1")),
+          Action.AlterTableAddedColumns(Vector("unstruct_event_com_snowplowanalytics_snowplow_media_ad_start_event_1")),
           Action.ClosedWriter,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(2),

@@ -14,9 +14,10 @@ import cats.Id
 import cats.effect.testing.specs2.CatsEffect
 import cats.effect.{ExitCode, IO}
 import com.comcast.ip4s.Port
+import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.snowplow.bigquery.Config.GcpUserAgent
 import com.snowplowanalytics.snowplow.runtime.Metrics.StatsdConfig
-import com.snowplowanalytics.snowplow.runtime.{ConfigParser, Telemetry}
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, Telemetry}
 import com.snowplowanalytics.snowplow.sinks.kafka.KafkaSinkConfig
 import com.snowplowanalytics.snowplow.sources.kafka.KafkaSourceConfig
 import org.http4s.implicits.http4sLiteralsSyntax
@@ -65,7 +66,10 @@ object KafkaConfigSpec {
       consumerConf = Map(
         "group.id" -> "snowplow-bigquery-loader",
         "allow.auto.create.topics" -> "false",
-        "auto.offset.reset" -> "latest"
+        "auto.offset.reset" -> "latest",
+        "security.protocol" -> "SASL_SSL",
+        "sasl.mechanism" -> "OAUTHBEARER",
+        "sasl.jaas.config" -> "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;"
       )
     ),
     output = Config.Output(
@@ -81,7 +85,10 @@ object KafkaConfigSpec {
           topicName        = "sp-dev-bad",
           bootstrapServers = "localhost:9092",
           producerConf = Map(
-            "client.id" -> "snowplow-bigquery-loader"
+            "client.id" -> "snowplow-bigquery-loader",
+            "security.protocol" -> "SASL_SSL",
+            "sasl.mechanism" -> "OAUTHBEARER",
+            "sasl.jaas.config" -> "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;"
           )
         ),
         maxRecordSize = 1000000
@@ -114,7 +121,9 @@ object KafkaConfigSpec {
       sentry      = None,
       healthProbe = Config.HealthProbe(port = Port.fromInt(8000).get, unhealthyLatency = 5.minutes),
       webhook     = None
-    )
+    ),
+    license     = AcceptedLicense(),
+    skipSchemas = List.empty
   )
 
   private val extendedConfig = Config[KafkaSourceConfig, KafkaSinkConfig](
@@ -125,7 +134,10 @@ object KafkaConfigSpec {
         "group.id" -> "snowplow-bigquery-loader",
         "enable.auto.commit" -> "false",
         "allow.auto.create.topics" -> "false",
-        "auto.offset.reset" -> "earliest"
+        "auto.offset.reset" -> "earliest",
+        "security.protocol" -> "SASL_SSL",
+        "sasl.mechanism" -> "OAUTHBEARER",
+        "sasl.jaas.config" -> "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;"
       )
     ),
     output = Config.Output(
@@ -141,7 +153,10 @@ object KafkaConfigSpec {
           topicName        = "sp-dev-bad",
           bootstrapServers = "localhost:9092",
           producerConf = Map(
-            "client.id" -> "snowplow-bigquery-loader"
+            "client.id" -> "snowplow-bigquery-loader",
+            "security.protocol" -> "SASL_SSL",
+            "sasl.mechanism" -> "OAUTHBEARER",
+            "sasl.jaas.config" -> "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;"
           )
         ),
         maxRecordSize = 1000000
@@ -187,6 +202,13 @@ object KafkaConfigSpec {
         unhealthyLatency = 5.minutes
       ),
       webhook = Some(Config.Webhook(endpoint = uri"https://webhook.acme.com", tags = Map("pipeline" -> "production")))
+    ),
+    license = AcceptedLicense(),
+    skipSchemas = List(
+      SchemaCriterion.parse("iglu:com.acme/skipped1/jsonschema/1-0-0").get,
+      SchemaCriterion.parse("iglu:com.acme/skipped2/jsonschema/1-0-*").get,
+      SchemaCriterion.parse("iglu:com.acme/skipped3/jsonschema/1-*-*").get,
+      SchemaCriterion.parse("iglu:com.acme/skipped4/jsonschema/*-*-*").get
     )
   )
 }

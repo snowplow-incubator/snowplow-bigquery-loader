@@ -14,10 +14,11 @@ import cats.Id
 import cats.effect.testing.specs2.CatsEffect
 import cats.effect.{ExitCode, IO}
 import com.comcast.ip4s.Port
+import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.snowplow.bigquery.Config.GcpUserAgent
 import com.snowplowanalytics.snowplow.pubsub.{GcpUserAgent => PubsubUserAgent}
 import com.snowplowanalytics.snowplow.runtime.Metrics.StatsdConfig
-import com.snowplowanalytics.snowplow.runtime.{ConfigParser, Telemetry}
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, Telemetry}
 import com.snowplowanalytics.snowplow.sinks.pubsub.PubsubSinkConfig
 import com.snowplowanalytics.snowplow.sources.pubsub.PubsubSourceConfig
 import org.http4s.implicits.http4sLiteralsSyntax
@@ -115,7 +116,9 @@ object PubsubConfigSpec {
       sentry      = None,
       healthProbe = Config.HealthProbe(port = Port.fromInt(8000).get, unhealthyLatency = 5.minutes),
       webhook     = None
-    )
+    ),
+    license     = AcceptedLicense(),
+    skipSchemas = List.empty
   )
 
   private val extendedConfig = Config[PubsubSourceConfig, PubsubSinkConfig](
@@ -187,6 +190,13 @@ object PubsubConfigSpec {
         unhealthyLatency = 5.minutes
       ),
       webhook = Some(Config.Webhook(endpoint = uri"https://webhook.acme.com", tags = Map("pipeline" -> "production")))
+    ),
+    license = AcceptedLicense(),
+    skipSchemas = List(
+      SchemaCriterion.parse("iglu:com.acme/skipped1/jsonschema/1-0-0").get,
+      SchemaCriterion.parse("iglu:com.acme/skipped2/jsonschema/1-0-*").get,
+      SchemaCriterion.parse("iglu:com.acme/skipped3/jsonschema/1-*-*").get,
+      SchemaCriterion.parse("iglu:com.acme/skipped4/jsonschema/*-*-*").get
     )
   )
 }

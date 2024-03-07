@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 
 trait TableManager[F[_]] {
 
-  def addColumns(columns: List[Field]): F[Unit]
+  def addColumns(columns: Vector[Field]): F[Unit]
 
   def createTable: F[Unit]
 
@@ -63,7 +63,7 @@ object TableManager {
     monitoring: Monitoring[F]
   ): TableManager[F] = new TableManager[F] {
 
-    def addColumns(columns: List[Field]): F[Unit] =
+    def addColumns(columns: Vector[Field]): F[Unit] =
       BigQueryRetrying.withRetries(appHealth, retries, monitoring, Alert.FailedToAddColumns(columns.map(_.name), _)) {
         Logger[F].info(s"Altering table to add columns [${showColumns(columns)}]") *>
           addColumnsImpl(config, client, columns)
@@ -89,7 +89,7 @@ object TableManager {
   private def addColumnsImpl[F[_]: Sync](
     config: Config.BigQuery,
     client: BigQuery,
-    columns: List[Field]
+    columns: Vector[Field]
   ): F[Unit] =
     for {
       table <- Sync[F].blocking(client.getTable(config.dataset, config.table))
@@ -113,7 +113,7 @@ object TableManager {
     // Don't do anything else; the BigQueryRetrying will handle retries and logging the exception.
   }
 
-  private def showColumns(columns: List[Field]): String =
+  private def showColumns(columns: Vector[Field]): String =
     columns.map(_.name).mkString(", ")
 
   private def atomicTableInfo(config: Config.BigQuery): TableInfo = {

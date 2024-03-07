@@ -18,9 +18,10 @@ import com.comcast.ip4s.Port
 import org.http4s.{ParseFailure, Uri}
 
 import scala.concurrent.duration.FiniteDuration
-
 import com.snowplowanalytics.iglu.client.resolver.Resolver.ResolverConfig
-import com.snowplowanalytics.snowplow.runtime.{Metrics => CommonMetrics, Telemetry}
+import com.snowplowanalytics.iglu.core.SchemaCriterion
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, Metrics => CommonMetrics, Telemetry}
+import com.snowplowanalytics.iglu.core.circe.CirceIgluCodecs.schemaCriterionDecoder
 import com.snowplowanalytics.snowplow.runtime.HealthProbe.decoders._
 
 case class Config[+Source, +Sink](
@@ -29,7 +30,9 @@ case class Config[+Source, +Sink](
   batching: Config.Batching,
   retries: Config.Retries,
   telemetry: Telemetry.Config,
-  monitoring: Config.Monitoring
+  monitoring: Config.Monitoring,
+  license: AcceptedLicense,
+  skipSchemas: List[SchemaCriterion]
 )
 
 object Config {
@@ -117,6 +120,11 @@ object Config {
     implicit val alterTableRetries  = deriveConfiguredDecoder[AlterTableWaitRetries]
     implicit val transientRetries   = deriveConfiguredDecoder[TransientErrorRetries]
     implicit val retriesDecoder     = deriveConfiguredDecoder[Retries]
+
+    // TODO add bigquery docs
+    implicit val licenseDecoder =
+      AcceptedLicense.decoder(AcceptedLicense.DocumentationLink("https://docs.snowplow.io/limited-use-license-1.0/"))
+
     deriveConfiguredDecoder[Config[Source, Sink]]
   }
 

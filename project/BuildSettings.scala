@@ -66,7 +66,11 @@ object BuildSettings {
 
   lazy val kinesisSettings = appSettings ++ Seq(
     name := "bigquery-loader-kinesis",
-    buildInfoKeys += BuildInfoKey("cloud" -> "AWS")
+    buildInfoKeys += BuildInfoKey("cloud" -> "AWS"),
+    // used in configuration parsing unit tests
+    Test / envVars := Map(
+      "HOSTNAME" -> "test-hostname"
+    )
   )
 
   lazy val addExampleConfToTestCp = Seq(

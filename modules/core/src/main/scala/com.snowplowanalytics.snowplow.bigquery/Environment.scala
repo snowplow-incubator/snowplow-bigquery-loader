@@ -15,8 +15,8 @@ import org.http4s.client.Client
 import org.http4s.blaze.client.BlazeClientBuilder
 import io.sentry.Sentry
 import retry.RetryPolicy
-
 import com.snowplowanalytics.iglu.client.resolver.Resolver
+import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.snowplow.sources.SourceAndAck
 import com.snowplowanalytics.snowplow.sinks.Sink
 import com.snowplowanalytics.snowplow.bigquery.processing.{BigQueryRetrying, BigQueryUtils, TableManager, Writer}
@@ -34,7 +34,8 @@ case class Environment[F[_]](
   appHealth: AppHealth[F],
   alterTableWaitPolicy: RetryPolicy[F],
   batching: Config.Batching,
-  badRowMaxSize: Int
+  badRowMaxSize: Int,
+  schemasToSkip: List[SchemaCriterion]
 )
 
 object Environment {
@@ -76,7 +77,8 @@ object Environment {
       appHealth            = appHealth,
       alterTableWaitPolicy = BigQueryRetrying.policyForAlterTableWait(config.main.retries),
       batching             = config.main.batching,
-      badRowMaxSize        = config.main.output.bad.maxRecordSize
+      badRowMaxSize        = config.main.output.bad.maxRecordSize,
+      schemasToSkip        = config.main.skipSchemas
     )
 
   private def enableSentry[F[_]: Sync](appInfo: AppInfo, config: Option[Config.Sentry]): Resource[F, Unit] =

@@ -39,7 +39,7 @@ object MockEnvironment {
     case object CreatedTable extends Action
     case class Checkpointed(tokens: List[Unique.Token]) extends Action
     case class SentToBad(count: Long) extends Action
-    case class AlterTableAddedColumns(columns: List[String]) extends Action
+    case class AlterTableAddedColumns(columns: Vector[String]) extends Action
     case object OpenedWriter extends Action
     case object ClosedWriter extends Action
     case class WroteRowsToBigQuery(rowCount: Int) extends Action
@@ -83,7 +83,8 @@ object MockEnvironment {
           maxDelay              = 10.seconds,
           writeBatchConcurrency = 1
         ),
-        badRowMaxSize = 1000000
+        badRowMaxSize = 1000000,
+        schemasToSkip = List.empty
       )
       MockEnvironment(state, env)
     }
@@ -111,7 +112,7 @@ object MockEnvironment {
   }
 
   private def testTableManager(state: Ref[IO, Vector[Action]]): TableManager[IO] = new TableManager[IO] {
-    def addColumns(columns: List[Field]): IO[Unit] =
+    def addColumns(columns: Vector[Field]): IO[Unit] =
       state.update(_ :+ AlterTableAddedColumns(columns.map(_.name)))
 
     def createTable: IO[Unit] =

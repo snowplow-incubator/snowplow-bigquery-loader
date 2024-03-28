@@ -35,13 +35,18 @@ object BigQueryUtils {
   def streamIdOf(config: Config.BigQuery): String =
     tableIdOf(config).getIAMResourceName + "/streams/_default"
 
-  object BQExceptionWithLowerCaseReason {
-    def unapply(bqe: BigQueryException): Option[(String)] =
-      Option(bqe.getError()) match {
-        case Some(bqError) =>
-          Some(bqError.getReason.toLowerCase)
-        case None =>
-          None
-      }
+  implicit class BQExceptionSyntax(val bqe: BigQueryException) extends AnyVal {
+    def lowerCaseReason: String =
+      Option(bqe.getError())
+        .flatMap(e => Option(e.getReason))
+        .map(_.toLowerCase)
+        .getOrElse("")
+
+    def lowerCaseMessage: String =
+      Option(bqe.getError())
+        .flatMap(e => Option(e.getMessage))
+        .map(_.toLowerCase)
+        .getOrElse("")
+
   }
 }

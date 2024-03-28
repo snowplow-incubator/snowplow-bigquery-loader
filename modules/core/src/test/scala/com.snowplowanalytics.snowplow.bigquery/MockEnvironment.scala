@@ -111,13 +111,14 @@ object MockEnvironment {
     def cloud       = "OnPrem"
   }
 
-  private def testTableManager(state: Ref[IO, Vector[Action]]): TableManager[IO] = new TableManager[IO] {
-    def addColumns(columns: Vector[Field]): IO[Unit] =
-      state.update(_ :+ AlterTableAddedColumns(columns.map(_.name)))
+  private def testTableManager(state: Ref[IO, Vector[Action]]): TableManager.WithHandledErrors[IO] =
+    new TableManager.WithHandledErrors[IO] {
+      def addColumns(columns: Vector[Field]): IO[Unit] =
+        state.update(_ :+ AlterTableAddedColumns(columns.map(_.name)))
 
-    def createTable: IO[Unit] =
-      state.update(_ :+ CreatedTable)
-  }
+      def createTable: IO[Unit] =
+        state.update(_ :+ CreatedTable)
+    }
 
   private def testSourceAndAck(inputs: List[TokenedEvents], state: Ref[IO, Vector[Action]]): SourceAndAck[IO] =
     new SourceAndAck[IO] {
@@ -217,6 +218,7 @@ object MockEnvironment {
   def retriesConfig = Config.Retries(
     Config.SetupErrorRetries(30.seconds),
     Config.TransientErrorRetries(1.second, 5),
-    Config.AlterTableWaitRetries(1.second)
+    Config.AlterTableWaitRetries(1.second),
+    Config.TooManyColumnsRetries(300.seconds)
   )
 }

@@ -297,8 +297,9 @@ object Processing {
           val fields = batch.entities.fields.flatMap { tte =>
             tte.mergedField :: tte.recoveries.map(_._2)
           }
-          if (BigQuerySchemaUtils.alterTableRequired(descriptor, fields)) {
-            env.tableManager.addColumns(fields) *> env.writer.closed.use_
+          val fieldsToAdd = BigQuerySchemaUtils.alterTableRequired(descriptor, fields)
+          if (fieldsToAdd.nonEmpty) {
+            env.tableManager.addColumns(fieldsToAdd.toVector) *> env.writer.closed.use_
           } else {
             Sync[F].unit
           }

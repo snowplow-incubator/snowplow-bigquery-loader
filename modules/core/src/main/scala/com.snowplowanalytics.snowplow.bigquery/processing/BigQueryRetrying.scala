@@ -12,12 +12,14 @@ import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
 import com.google.api.gax.rpc.PermissionDeniedException
+import com.google.cloud.bigquery.BigQueryException
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import retry._
 import retry.implicits.retrySyntaxError
 
 import com.snowplowanalytics.snowplow.bigquery.{Alert, AppHealth, Config, Monitoring}
+import com.snowplowanalytics.snowplow.bigquery.processing.BigQueryUtils.BQExceptionSyntax
 
 object BigQueryRetrying {
 
@@ -54,7 +56,7 @@ object BigQueryRetrying {
       )
 
   private def isSetupError[F[_]: Sync](t: Throwable): F[Boolean] = t match {
-    case BigQueryUtils.BQExceptionWithLowerCaseReason("notfound" | "accessdenied") =>
+    case bqe: BigQueryException if Set("notfound", "accessdenied").contains(bqe.lowerCaseReason) =>
       true.pure[F]
     case _: PermissionDeniedException =>
       true.pure[F]

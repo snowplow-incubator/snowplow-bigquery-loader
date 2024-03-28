@@ -16,8 +16,8 @@ import scala.jdk.CollectionConverters._
 
 object BigQuerySchemaUtils {
 
-  def alterTableRequired(tableDescriptor: Descriptors.Descriptor, ddlFields: Seq[Field]): Boolean =
-    ddlFields.exists { field =>
+  def alterTableRequired(tableDescriptor: Descriptors.Descriptor, ddlFields: Seq[Field]): Seq[Field] =
+    ddlFields.filter { field =>
       Option(tableDescriptor.findFieldByName(field.name)) match {
         case Some(fieldDescriptor) =>
           val nullableMismatch = fieldDescriptor.isRequired && field.nullability.nullable
@@ -32,7 +32,7 @@ object BigQuerySchemaUtils {
       case Descriptors.FieldDescriptor.Type.MESSAGE =>
         ddlField.fieldType match {
           case Type.Struct(nestedFields) =>
-            alterTableRequired(tableField.getMessageType, nestedFields)
+            alterTableRequired(tableField.getMessageType, nestedFields).nonEmpty
           case _ =>
             false
         }

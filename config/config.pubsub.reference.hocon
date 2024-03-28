@@ -88,6 +88,14 @@
     "alterTableWait": {
       "delay": "1 second"
     }
+
+    # -- Relevant when the BigQuery table is close to exceeding the limit on max allowed columns in a single table.
+    # -- The loader will ignore a failure to alter the table due to too many columns, and it will continue to run.
+    # -- Some events will inevitably go to the failed events output topic until new columns have been added.
+    # -- This param configures how often the loader will retry to alter the table after an earlier failure.
+    "tooManyColumns": {
+      "delay": "300 seconds"
+    }
   } 
 
   # -- Schemas that won't be loaded to BigQuery. Optional, default value []

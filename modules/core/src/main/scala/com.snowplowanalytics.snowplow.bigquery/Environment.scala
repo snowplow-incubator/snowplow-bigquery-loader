@@ -28,7 +28,7 @@ case class Environment[F[_]](
   badSink: Sink[F],
   resolver: Resolver[F],
   httpClient: Client[F],
-  tableManager: TableManager[F],
+  tableManager: TableManager.WithHandledErrors[F],
   writer: Writer.Provider[F],
   metrics: Metrics[F],
   appHealth: AppHealth[F],
@@ -62,7 +62,8 @@ object Environment {
       badSink <- toSink(config.main.output.bad.sink)
       metrics <- Resource.eval(Metrics.build(config.main.monitoring.metrics))
       creds <- Resource.eval(BigQueryUtils.credentials(config.main.output.good))
-      tableManager <- Resource.eval(TableManager.make(config.main.output.good, config.main.retries, creds, appHealth, monitoring))
+      tableManager <- Resource.eval(TableManager.make(config.main.output.good, creds))
+      tableManagerWrapped <- Resource.eval(TableManager.withHandledErrors(tableManager, config.main.retries, appHealth, monitoring))
       writerBuilder <- Writer.builder(config.main.output.good, creds)
       writerProvider <- Writer.provider(writerBuilder, config.main.retries, appHealth, monitoring)
     } yield Environment(
@@ -71,7 +72,7 @@ object Environment {
       badSink              = badSink,
       resolver             = resolver,
       httpClient           = httpClient,
-      tableManager         = tableManager,
+      tableManager         = tableManagerWrapped,
       writer               = writerProvider,
       metrics              = metrics,
       appHealth            = appHealth,

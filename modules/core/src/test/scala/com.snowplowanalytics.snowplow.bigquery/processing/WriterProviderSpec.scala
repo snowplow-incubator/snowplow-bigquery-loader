@@ -318,7 +318,8 @@ object WriterProviderSpec {
   def retriesConfig = Config.Retries(
     Config.SetupErrorRetries(30.seconds),
     Config.TransientErrorRetries(1.second, 5),
-    Config.AlterTableWaitRetries(1.second)
+    Config.AlterTableWaitRetries(1.second),
+    Config.TooManyColumnsRetries(300.seconds)
   )
 
   def control: IO[Control] =

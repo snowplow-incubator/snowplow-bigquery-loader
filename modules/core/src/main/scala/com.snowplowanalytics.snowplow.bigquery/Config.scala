@@ -86,11 +86,13 @@ object Config {
   case class SetupErrorRetries(delay: FiniteDuration)
   case class AlterTableWaitRetries(delay: FiniteDuration)
   case class TransientErrorRetries(delay: FiniteDuration, attempts: Int)
+  case class TooManyColumnsRetries(delay: FiniteDuration)
 
   case class Retries(
     setupErrors: SetupErrorRetries,
     transientErrors: TransientErrorRetries,
-    alterTableWait: AlterTableWaitRetries
+    alterTableWait: AlterTableWaitRetries,
+    tooManyColumns: TooManyColumnsRetries
   )
 
   implicit def decoder[Source: Decoder, Sink: Decoder]: Decoder[Config[Source, Sink]] = {
@@ -119,6 +121,7 @@ object Config {
     implicit val setupRetries       = deriveConfiguredDecoder[SetupErrorRetries]
     implicit val alterTableRetries  = deriveConfiguredDecoder[AlterTableWaitRetries]
     implicit val transientRetries   = deriveConfiguredDecoder[TransientErrorRetries]
+    implicit val tooManyColsRetries = deriveConfiguredDecoder[TooManyColumnsRetries]
     implicit val retriesDecoder     = deriveConfiguredDecoder[Retries]
 
     // TODO add bigquery docs

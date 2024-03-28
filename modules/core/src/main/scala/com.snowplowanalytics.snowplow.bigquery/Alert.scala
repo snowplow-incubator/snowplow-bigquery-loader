@@ -41,7 +41,7 @@ object Alert {
       )
     ).normalize
 
-  private def getMessage(alert: Alert): String = {
+  def getMessage(alert: Alert): String = {
     val full = alert match {
       case FailedToCreateEventsTable(cause)   => show"Failed to create events table: $cause"
       case FailedToAddColumns(columns, cause) => show"Failed to add columns: ${columns.mkString("[", ",", "]")}. Cause: $cause"
@@ -52,16 +52,26 @@ object Alert {
   }
 
   private implicit def throwableShow: Show[Throwable] = {
-    def go(acc: List[String], next: Throwable): String = {
-      val nextMessage = Option(next.getMessage)
-      val msgs        = nextMessage.filterNot(msg => acc.headOption.contains(msg)) ++: acc
+    def removeDuplicateMessages(in: List[String]): List[String] =
+      in match {
+        case h :: t :: rest =>
+          if (h.contains(t)) removeDuplicateMessages(h :: rest)
+          else if (t.contains(h)) removeDuplicateMessages(t :: rest)
+          else h :: removeDuplicateMessages(t :: rest)
+        case fewer => fewer
+      }
 
-      Option(next.getCause) match {
-        case Some(cause) => go(msgs, cause)
-        case None        => msgs.reverse.mkString(": ")
+    def accumulateMessages(t: Throwable): List[String] = {
+      val nextMessage = Option(t.getMessage)
+      Option(t.getCause) match {
+        case Some(cause) => nextMessage.toList ::: accumulateMessages(cause)
+        case None        => nextMessage.toList
       }
     }
 
-    Show.show(go(Nil, _))
+    Show.show { t =>
+      removeDuplicateMessages(accumulateMessages(t)).mkString(": ")
+    }
   }
+
 }

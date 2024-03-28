@@ -97,7 +97,8 @@ object PubsubConfigSpec {
     retries = Config.Retries(
       setupErrors     = Config.SetupErrorRetries(delay = 30.seconds),
       transientErrors = Config.TransientErrorRetries(delay = 1.second, attempts = 5),
-      alterTableWait  = Config.AlterTableWaitRetries(delay = 1.second)
+      alterTableWait  = Config.AlterTableWaitRetries(delay = 1.second),
+      tooManyColumns  = Config.TooManyColumnsRetries(delay = 300.seconds)
     ),
     telemetry = Telemetry.Config(
       disable         = false,
@@ -158,7 +159,8 @@ object PubsubConfigSpec {
     retries = Config.Retries(
       setupErrors     = Config.SetupErrorRetries(delay = 30.seconds),
       transientErrors = Config.TransientErrorRetries(delay = 1.second, attempts = 5),
-      alterTableWait  = Config.AlterTableWaitRetries(delay = 1.second)
+      alterTableWait  = Config.AlterTableWaitRetries(delay = 1.second),
+      tooManyColumns  = Config.TooManyColumnsRetries(delay = 300.seconds)
     ),
     telemetry = Telemetry.Config(
       disable         = false,

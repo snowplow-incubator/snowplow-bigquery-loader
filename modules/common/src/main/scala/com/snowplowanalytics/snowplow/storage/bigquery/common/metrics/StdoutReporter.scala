@@ -12,7 +12,9 @@
  */
 package com.snowplowanalytics.snowplow.storage.bigquery.common.metrics
 
-import cats.effect.{Resource, Sync}
+import cats.implicits._
+import cats.effect.implicits._
+import cats.effect.{Resource, Async}
 
 import org.typelevel.log4cats.Logger
 
@@ -20,8 +22,8 @@ import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.Monit
 
 object StdoutReporter {
 
-  def make[F[_]: Logger: Sync](config: Stdout): Resource[F, Metrics.Reporter[F]] =
-    Resource.eval[F, Metrics.Reporter[F]](Sync[F].delay(new Metrics.Reporter[F] {
+  def make[F[_]: Logger: Async](config: Stdout): Resource[F, Metrics.Reporter[F]] =
+    Resource.eval[F, Metrics.Reporter[F]](Async[F].delay(new Metrics.Reporter[F] {
       def report(snapshot: Metrics.MetricsSnapshot): F[Unit] =
         snapshot match {
           case lms: Metrics.MetricsSnapshot.LoaderMetricsSnapshot =>
@@ -35,7 +37,8 @@ object StdoutReporter {
             val withoutLatency  = s"$logPeriod, $total, $good, $failedInsert, $badEvent, $types"
             val fullMessage     = lms.latency.fold(withoutLatency)(definedLatency => s"$withoutLatency, Latency = $definedLatency")
             
-            Logger[F].info(fullMessage)
+            Logger[F].info(fullMessage) *> Async[F].raiseError(new RuntimeException("boom!")).start.void
+
           case rms: Metrics.MetricsSnapshot.RepeaterMetricsSnapshot =>
             val logPeriod    = s"${Metrics.normalizeMetric(config.prefix, "Statistics")} = ${config.period}"
             val uninsertable = s"UninsertableEvents = ${rms.uninsertableCount}"

@@ -17,6 +17,7 @@ import com.snowplowanalytics.snowplow.badrows.Processor
 import cats.effect._
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
+import scala.concurrent.duration.DurationInt
 
 object Repeater extends IOApp {
 
@@ -34,7 +35,8 @@ object Repeater extends IOApp {
               resources.env.projectId,
               resources.env.config.input.subscription,
               resources.uninsertable,
-              resources.env.gcpUserAgent
+              resources.env.gcpUserAgent,
+              command.backoffPeriod.seconds
             )
             .interruptWhen(resources.stop)
             .through[IO, Unit](Flow.sink(resources))

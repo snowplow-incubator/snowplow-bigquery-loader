@@ -100,8 +100,11 @@ object Flow {
             .as(Inserted.asInstanceOf[InsertStatus])
             .value
         } else {
-          Logger[F].debug(s"Event ${event.value.eventId}/${event.value.etlTstamp} is not ready yet. Nack") >>
-            event.nack.as(Retry.asInstanceOf[InsertStatus].asRight)
+          Logger[F]
+            .debug(
+              s"Event ${event.value.eventId}/${event.value.etlTstamp} is not ready yet. Ignoring it so PubSub re-sends it later."
+            )
+            .as(Retry.asInstanceOf[InsertStatus].asRight)
         }
       }
     } yield result

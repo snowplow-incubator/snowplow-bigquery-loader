@@ -109,8 +109,10 @@ class ProcessingSpec extends Specification with CatsEffect {
     {
       "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
       "data": {
-        "schema": "iglu:com.snowplowanalytics.snowplow.media/ad_start_event/jsonschema/1-0-0",
-        "data": {}
+        "schema": "iglu:com.snowplowanalytics.snowplow.media/ad_click_event/jsonschema/1-0-0",
+        "data": {
+          "percentProgress": 50
+        }
       }
     }
     """.as[UnstructEvent].fold(throw _, identity)
@@ -122,7 +124,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.AlterTableAddedColumns(Vector("unstruct_event_com_snowplowanalytics_snowplow_media_ad_start_event_1")),
+          Action.AlterTableAddedColumns(Vector("unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1")),
           Action.ClosedWriter,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(2),

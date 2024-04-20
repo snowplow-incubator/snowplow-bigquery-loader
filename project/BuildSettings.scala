@@ -44,7 +44,7 @@ object BuildSettings {
     Test / igluUris := Seq(
       // Iglu schemas used in unit tests
       "iglu:com.snowplowanalytics.snowplow/web_page/jsonschema/1-0-0",
-      "iglu:com.snowplowanalytics.snowplow.media/ad_start_event/jsonschema/1-0-0"
+      "iglu:com.snowplowanalytics.snowplow.media/ad_click_event/jsonschema/1-0-0"
     )
   ) ++ commonSettings
 

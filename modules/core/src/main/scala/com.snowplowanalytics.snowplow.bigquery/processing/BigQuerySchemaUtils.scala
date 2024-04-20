@@ -16,7 +16,7 @@ import scala.jdk.CollectionConverters._
 
 object BigQuerySchemaUtils {
 
-  def alterTableRequired(tableDescriptor: Descriptors.Descriptor, ddlFields: Seq[Field]): Seq[Field] =
+  def alterTableRequired(tableDescriptor: Descriptors.Descriptor, ddlFields: Vector[Field]): Vector[Field] =
     ddlFields.filter { field =>
       Option(tableDescriptor.findFieldByName(field.name)) match {
         case Some(fieldDescriptor) =>
@@ -32,7 +32,7 @@ object BigQuerySchemaUtils {
       case Descriptors.FieldDescriptor.Type.MESSAGE =>
         ddlField.fieldType match {
           case Type.Struct(nestedFields) =>
-            alterTableRequired(tableField.getMessageType, nestedFields).nonEmpty
+            alterTableRequired(tableField.getMessageType, nestedFields.toVector).nonEmpty
           case _ =>
             false
         }
@@ -40,7 +40,7 @@ object BigQuerySchemaUtils {
         false
     }
 
-  def mergeInColumns(bqFields: FieldList, ddlFields: Seq[Field]): FieldList = {
+  def mergeInColumns(bqFields: FieldList, ddlFields: Vector[Field]): FieldList = {
     val ddlFieldsByName = ddlFields.map(f => f.name -> f).toMap
     val bqFieldNames    = bqFields.asScala.map(f => f.getName).toSet
     val alteredExisting = bqFields.asScala.map { bqField =>
@@ -65,7 +65,7 @@ object BigQuerySchemaUtils {
         Option(bqField.getSubFields) match {
           case Some(bqNestedFields) =>
             bqField.toBuilder
-              .setType(StandardSQLTypeName.STRUCT, mergeInColumns(bqNestedFields, ddlNestedFields))
+              .setType(StandardSQLTypeName.STRUCT, mergeInColumns(bqNestedFields, ddlNestedFields.toVector))
               .build
           case None =>
             bqField
@@ -86,7 +86,7 @@ object BigQuerySchemaUtils {
           .setMode(BQField.Mode.REPEATED)
           .build
       case Type.Struct(nestedFields) =>
-        val nested = FieldList.of(nestedFields.map(bqFieldOf).asJava)
+        val nested = FieldList.of(nestedFields.map(bqFieldOf).toVector.asJava)
         BQField
           .newBuilder(ddlField.name, StandardSQLTypeName.STRUCT, nested)
           .setMode(bqModeOf(ddlField.nullability))

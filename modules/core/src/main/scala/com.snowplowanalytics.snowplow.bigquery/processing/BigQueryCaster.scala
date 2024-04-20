@@ -8,6 +8,7 @@
  */
 package com.snowplowanalytics.snowplow.bigquery.processing
 
+import cats.data.NonEmptyVector
 import io.circe.Json
 
 import java.time.{Instant, LocalDate}
@@ -32,11 +33,11 @@ private[processing] object BigQueryCaster extends Caster[AnyRef] {
     new java.math.BigDecimal(unscaled.bigInteger, details.scale)
   override def timestampValue(v: Instant): java.lang.Long = Long.box(v.toEpochMilli * 1000) // Microseconds
   override def dateValue(v: LocalDate): java.lang.Long    = Long.box(v.toEpochDay)
-  override def arrayValue(vs: List[AnyRef]): JSONArray =
+  override def arrayValue(vs: Vector[AnyRef]): JSONArray =
     // BigQuery does not permit nulls in a repeated field
     new JSONArray(vs.filterNot(_ == null).asJava)
-  override def structValue(vs: List[Caster.NamedValue[AnyRef]]): JSONObject = {
-    val map = vs
+  override def structValue(vs: NonEmptyVector[Caster.NamedValue[AnyRef]]): JSONObject = {
+    val map = vs.iterator
       .map { case Caster.NamedValue(k, v) =>
         (k, v)
       }

@@ -1,3 +1,8 @@
+Version 1.7.1 (2024-04-26)
+--------------------------
+Bump sbt-snowplow-release to 0.3.2
+Repeater: PubSub ack extensions should match backoff delay (#373)
+
 Version 1.7.0 (2023-11-20)
 --------------------------
 Set GCP user agent header for BQ and Pubsub (#363)

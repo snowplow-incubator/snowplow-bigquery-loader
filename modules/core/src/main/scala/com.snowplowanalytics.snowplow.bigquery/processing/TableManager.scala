@@ -134,7 +134,9 @@ object TableManager {
     addingColumnsEnabled: Ref[F, Boolean],
     columns: Vector[Field]
   ): PartialFunction[Throwable, F[Unit]] = {
-    case bqe: BigQueryException if bqe.lowerCaseReason === "invalid" && bqe.lowerCaseMessage.startsWith("too many columns") =>
+    case bqe: BigQueryException
+        if bqe.lowerCaseReason === "invalid" && (bqe.lowerCaseMessage
+          .startsWith("too many columns") || bqe.lowerCaseMessage.startsWith("too many total leaf fields")) =>
       val enableAfterDelay = Async[F].sleep(retries.tooManyColumns.delay) *> addingColumnsEnabled.set(true)
       for {
         _ <- Logger[F].error(bqe)(s"Could not alter table schema because of too many columns")

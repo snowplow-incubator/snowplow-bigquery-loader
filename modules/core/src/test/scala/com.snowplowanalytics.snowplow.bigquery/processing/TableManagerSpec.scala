@@ -16,7 +16,7 @@ import cats.effect.testkit.TestControl
 import com.google.api.gax.rpc.PermissionDeniedException
 import com.google.api.gax.grpc.GrpcStatusCode
 import io.grpc.Status
-import com.google.cloud.bigquery.{BigQueryError, BigQueryException}
+import com.google.cloud.bigquery.{BigQueryError, BigQueryException, FieldList}
 
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
 
@@ -448,7 +448,7 @@ object TableManagerSpec {
     for {
       mocksRef <- Ref[IO].of(mocks)
     } yield new TableManager[IO] {
-      def addColumns(columns: Vector[Field]): IO[Unit] =
+      def addColumns(columns: Vector[Field]): IO[FieldList] =
         for {
           response <- mocksRef.modify {
                         case head :: tail => (tail, head)
@@ -457,7 +457,7 @@ object TableManagerSpec {
           _ <- state.update(_ :+ Action.AddColumnsAttempted(columns))
           result <- response match {
                       case Response.Success =>
-                        IO.unit
+                        IO.pure(FieldList.of())
                       case Response.ExceptionThrown(ex) =>
                         IO.raiseError(ex).adaptError { t =>
                           t.setStackTrace(Array()) // don't clutter our test logs

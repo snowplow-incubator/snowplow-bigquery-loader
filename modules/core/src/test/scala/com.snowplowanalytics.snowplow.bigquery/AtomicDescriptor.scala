@@ -32,6 +32,17 @@ object AtomicDescriptor {
     fromDescriptorProtoBuilder(descriptorProto)
   }
 
+  /** A table which has been altered to add the ad_click_event unstruct event column */
+  def withWebPageAndAdClick: Descriptors.Descriptor = {
+    val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, eventId.setNumber(1))
+      .addField(1, webPage.setNumber(2))
+      .addField(2, adClickEvent.setNumber(3))
+      .addNestedType(webPageNestedType)
+      .addNestedType(adClickEventNestedType)
+    fromDescriptorProtoBuilder(descriptorProto)
+  }
+
   private def fromDescriptorProtoBuilder(descriptorProto: DescriptorProtos.DescriptorProto.Builder): Descriptors.Descriptor = {
     descriptorProto.setName("event")
 
@@ -64,5 +75,21 @@ object AtomicDescriptor {
     DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, webPageId.setNumber(1))
       .setName("web_page_1")
+
+  private def adClickEvent: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
+    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+    .setTypeName("ad_click_event_1")
+    .setName("unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1")
+
+  private def adClickEventPercentProgress: DescriptorProtos.FieldDescriptorProto.Builder =
+    DescriptorProtos.FieldDescriptorProto.newBuilder
+      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+      .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64)
+      .setName("percent_progress")
+
+  private def adClickEventNestedType: DescriptorProtos.DescriptorProto.Builder =
+    DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, adClickEventPercentProgress.setNumber(1))
+      .setName("ad_click_event_1")
 
 }

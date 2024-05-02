@@ -14,6 +14,7 @@ import cats.effect.kernel.{Ref, Resource, Unique}
 import org.http4s.client.Client
 import fs2.Stream
 import com.google.protobuf.Descriptors
+import com.google.cloud.bigquery.FieldList
 
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.schemaddl.parquet.Field
@@ -62,7 +63,7 @@ object MockEnvironment {
   def build(inputs: List[TokenedEvents], mocks: Mocks): Resource[IO, MockEnvironment] =
     for {
       state <- Resource.eval(Ref[IO].of(Vector.empty[Action]))
-      writerResource <- Resource.eval(testWriter(state, mocks.writerResponses))
+      writerResource <- Resource.eval(testWriter(state, mocks.writerResponses, mocks.descriptors))
       writerColdswap <- Coldswap.make(writerResource)
       source = testSourceAndAck(inputs, state)
       appHealth <- Resource.eval(AppHealth.init(10.seconds, source, everythingHealthy))
@@ -73,7 +74,7 @@ object MockEnvironment {
         badSink              = testBadSink(mocks.badSinkResponse, state),
         resolver             = Resolver[IO](Nil, None),
         httpClient           = testHttpClient,
-        tableManager         = testTableManager(state),
+        tableManager         = testTableManager(mocks.addColumnsResponse, state),
         writer               = writerColdswap,
         metrics              = testMetrics(state),
         appHealth            = appHealth,
@@ -91,11 +92,18 @@ object MockEnvironment {
 
   final case class Mocks(
     writerResponses: List[Response[Writer.WriteResult]],
-    badSinkResponse: Response[Unit]
+    badSinkResponse: Response[Unit],
+    addColumnsResponse: Response[FieldList],
+    descriptors: List[Descriptors.Descriptor]
   )
 
   object Mocks {
-    val default: Mocks = Mocks(writerResponses = List.empty, badSinkResponse = Response.Success(()))
+    val default: Mocks = Mocks(
+      writerResponses    = List.empty,
+      badSinkResponse    = Response.Success(()),
+      addColumnsResponse = Response.Success(FieldList.of()),
+      descriptors        = List.empty
+    )
   }
 
   sealed trait Response[+A]
@@ -111,10 +119,15 @@ object MockEnvironment {
     def cloud       = "OnPrem"
   }
 
-  private def testTableManager(state: Ref[IO, Vector[Action]]): TableManager.WithHandledErrors[IO] =
+  private def testTableManager(mockedResponse: Response[FieldList], state: Ref[IO, Vector[Action]]): TableManager.WithHandledErrors[IO] =
     new TableManager.WithHandledErrors[IO] {
-      def addColumns(columns: Vector[Field]): IO[Unit] =
-        state.update(_ :+ AlterTableAddedColumns(columns.map(_.name)))
+      def addColumns(columns: Vector[Field]): IO[FieldList] =
+        mockedResponse match {
+          case Response.Success(fieldList) =>
+            state.update(_ :+ AlterTableAddedColumns(columns.map(_.name))).as(fieldList)
+          case Response.ExceptionThrown(value) =>
+            IO.raiseError(value)
+        }
 
       def createTable: IO[Unit] =
         state.update(_ :+ CreatedTable)
@@ -161,15 +174,20 @@ object MockEnvironment {
    */
   private def testWriter(
     actionRef: Ref[IO, Vector[Action]],
-    responses: List[Response[Writer.WriteResult]]
+    responses: List[Response[Writer.WriteResult]],
+    descriptors: List[Descriptors.Descriptor]
   ): IO[Resource[IO, Writer[IO]]] =
     for {
       responseRef <- Ref[IO].of(responses)
+      descriptorRef <- Ref[IO].of(descriptors)
     } yield {
       val make = actionRef.update(_ :+ OpenedWriter).as {
         new Writer[IO] {
           def descriptor: IO[Descriptors.Descriptor] =
-            IO(AtomicDescriptor.withWebPage)
+            descriptorRef.modify {
+              case head :: tail => (tail, head)
+              case Nil          => (Nil, AtomicDescriptor.withWebPage)
+            }
 
           def write(rows: List[Map[String, AnyRef]]): IO[Writer.WriteResult] =
             for {

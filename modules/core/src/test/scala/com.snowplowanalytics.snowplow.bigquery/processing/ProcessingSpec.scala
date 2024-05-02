@@ -14,6 +14,7 @@ import org.specs2.Specification
 import cats.effect.testing.specs2.CatsEffect
 import cats.effect.testkit.TestControl
 import io.circe.literal._
+import com.google.cloud.bigquery.{Field => BQField, FieldList, StandardSQLTypeName}
 
 import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
@@ -22,7 +23,7 @@ import scala.concurrent.duration.DurationLong
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{UnstructEvent, unstructEventDecoder}
-import com.snowplowanalytics.snowplow.bigquery.MockEnvironment
+import com.snowplowanalytics.snowplow.bigquery.{AtomicDescriptor, MockEnvironment}
 import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.{Action, Mocks}
 import com.snowplowanalytics.snowplow.runtime.HealthProbe
 import com.snowplowanalytics.snowplow.sources.TokenedEvents
@@ -116,7 +117,23 @@ class ProcessingSpec extends Specification with CatsEffect {
       }
     }
     """.as[UnstructEvent].fold(throw _, identity)
-    runTest(inputEvents(count = 1, good(unstructEvent))) { case (inputs, control) =>
+    val mocks = Mocks.default.copy(
+      addColumnsResponse = MockEnvironment.Response.Success(
+        FieldList.of(
+          BQField.of(
+            "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1",
+            StandardSQLTypeName.STRUCT,
+            FieldList.of(BQField.of("percent_progress", StandardSQLTypeName.STRING))
+          )
+        )
+      ),
+      descriptors = List(
+        AtomicDescriptor.withWebPage,
+        AtomicDescriptor.withWebPage,
+        AtomicDescriptor.withWebPageAndAdClick
+      )
+    )
+    runTest(inputEvents(count = 1, good(unstructEvent)), mocks) { case (inputs, control) =>
       for {
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get

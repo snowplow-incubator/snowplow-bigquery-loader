@@ -17,6 +17,7 @@ import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import retry.{PolicyDecision, RetryDetails, RetryPolicy}
 import retry.implicits._
+import com.google.cloud.bigquery.FieldList
 
 import java.nio.charset.StandardCharsets
 import scala.concurrent.duration.Duration
@@ -205,7 +206,7 @@ object Processing {
     def handlingServerSideSchemaMismatches(env: Environment[F]): F[Writer.WriteResult] = {
       def onFailure(wr: Writer.WriteResult, details: RetryDetails): F[Unit] = {
         val extractedDetail = BigQueryRetrying.extractRetryDetails(details)
-        val msg             = s"Newly added columns have not yet propagated to the BigQuery Writer. $extractedDetail"
+        val msg             = s"Newly added columns have not yet propagated to the BigQuery Writer server-side. $extractedDetail"
         val log = wr match {
           case Writer.WriteResult.ServerSideSchemaMismatch(e) if details.retriesSoFar > errorsAllowedWithShortLogging =>
             Logger[F].warn(e)(msg)
@@ -287,7 +288,7 @@ object Processing {
    * Alters the table to add any columns that were present in the Events but not currently in the
    * table
    */
-  private def handleSchemaEvolution[F[_]: Sync](
+  private def handleSchemaEvolution[F[_]: Async](
     env: Environment[F]
   ): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
     _.evalTap { batch =>
@@ -299,7 +300,9 @@ object Processing {
           }
           val fieldsToAdd = BigQuerySchemaUtils.alterTableRequired(descriptor, fields)
           if (fieldsToAdd.nonEmpty) {
-            env.tableManager.addColumns(fieldsToAdd.toVector) *> env.writer.closed.use_
+            env.tableManager.addColumns(fieldsToAdd.toVector).flatMap { fieldsToExist =>
+              openWriterUntilFieldsExist(env, fieldsToExist)
+            }
           } else {
             Sync[F].unit
           }
@@ -308,6 +311,22 @@ object Processing {
           env.appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = false)
         }
     }
+
+  private def openWriterUntilFieldsExist[F[_]: Async](env: Environment[F], fieldsToExist: FieldList): F[Unit] =
+    env.writer.opened
+      .use(_.descriptor)
+      .retryingOnFailures(
+        policy = env.alterTableWaitPolicy,
+        wasSuccessful = { descriptor =>
+          (!BigQuerySchemaUtils.fieldsMissingFromDescriptor(descriptor, fieldsToExist)).pure[F]
+        },
+        onFailure = { case (_, details) =>
+          val extractedDetail = BigQueryRetrying.extractRetryDetails(details)
+          val msg             = s"Newly added columns have not yet propagated to the BigQuery Writer client-side. $extractedDetail"
+          Logger[F].warn(msg) *> env.writer.closed.use_
+        }
+      )
+      .void
 
   private def sendFailedEvents[F[_]: Sync](
     env: Environment[F],

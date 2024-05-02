@@ -37,7 +37,15 @@ import scala.jdk.CollectionConverters._
 
 trait TableManager[F[_]] {
 
-  def addColumns(columns: Vector[Field]): F[Unit]
+  /**
+   * Attempt to add columns to the table
+   *
+   * @return
+   *   A list of fields which are guaranteed to eventually exist in the table. Fields might not be
+   *   available immediately due to asynchronous nature of BigQuery. The returned list will be empty
+   *   if adding columns failed due to too many columns in the table.
+   */
+  def addColumns(columns: Vector[Field]): F[FieldList]
 
   def createTable: F[Unit]
 
@@ -66,7 +74,7 @@ object TableManager {
     for {
       addingColumnsEnabled <- Ref[F].of[Boolean](true)
     } yield new WithHandledErrors[F] {
-      def addColumns(columns: Vector[Field]): F[Unit] =
+      def addColumns(columns: Vector[Field]): F[FieldList] =
         addingColumnsEnabled.get.flatMap {
           case true =>
             BigQueryRetrying
@@ -78,7 +86,7 @@ object TableManager {
                     .onError(logOnRaceCondition)
               }
           case false =>
-            Async[F].unit
+            FieldList.of().pure[F]
         }
 
       def createTable: F[Unit] =
@@ -99,7 +107,7 @@ object TableManager {
     client: BigQuery
   ): TableManager[F] = new TableManager[F] {
 
-    def addColumns(columns: Vector[Field]): F[Unit] =
+    def addColumns(columns: Vector[Field]): F[FieldList] =
       for {
         table <- Sync[F].blocking(client.getTable(config.dataset, config.table))
         schema <- Sync[F].pure(table.getDefinition[TableDefinition].getSchema)
@@ -108,7 +116,7 @@ object TableManager {
         schema <- Sync[F].pure(Schema.of(fields))
         table <- Sync[F].pure(setTableSchema(table, schema))
         _ <- Sync[F].blocking(table.update())
-      } yield ()
+      } yield fields
 
     def createTable: F[Unit] = {
       val tableInfo = atomicTableInfo(config)
@@ -133,7 +141,7 @@ object TableManager {
     monitoring: Monitoring[F],
     addingColumnsEnabled: Ref[F, Boolean],
     columns: Vector[Field]
-  ): PartialFunction[Throwable, F[Unit]] = {
+  ): PartialFunction[Throwable, F[FieldList]] = {
     case bqe: BigQueryException
         if bqe.lowerCaseReason === "invalid" && (bqe.lowerCaseMessage
           .startsWith("too many columns") || bqe.lowerCaseMessage.startsWith("too many total leaf fields")) =>
@@ -143,7 +151,7 @@ object TableManager {
         _ <- monitoring.alert(Alert.FailedToAddColumns(columns.map(_.name), bqe))
         _ <- addingColumnsEnabled.set(false)
         _ <- enableAfterDelay.start
-      } yield ()
+      } yield FieldList.of()
   }
 
   private def showColumns(columns: Vector[Field]): String =

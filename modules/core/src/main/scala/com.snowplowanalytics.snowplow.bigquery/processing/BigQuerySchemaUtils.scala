@@ -8,6 +8,9 @@
  */
 package com.snowplowanalytics.snowplow.bigquery.processing
 
+import cats.Eq
+import cats.implicits._
+
 import com.snowplowanalytics.iglu.schemaddl.parquet.{Field, Type}
 import com.google.protobuf.Descriptors
 import com.google.cloud.bigquery.{Field => BQField, FieldList, StandardSQLTypeName}
@@ -15,6 +18,30 @@ import com.google.cloud.bigquery.{Field => BQField, FieldList, StandardSQLTypeNa
 import scala.jdk.CollectionConverters._
 
 object BigQuerySchemaUtils {
+
+  def fieldsMissingFromDescriptor(tableDescriptor: Descriptors.Descriptor, bqFields: FieldList): Boolean =
+    bqFields.asScala.exists { field =>
+      Option(tableDescriptor.findFieldByName(field.getName)) match {
+        case Some(fieldDescriptor) =>
+          val nullableMismatch = fieldDescriptor.isRequired && (field.getMode === BQField.Mode.NULLABLE)
+          nullableMismatch || nestedFieldMissingFromDescriptor(fieldDescriptor, field)
+        case None =>
+          true
+      }
+    }
+
+  private def nestedFieldMissingFromDescriptor(tableField: Descriptors.FieldDescriptor, bqField: BQField): Boolean =
+    tableField.getType match {
+      case Descriptors.FieldDescriptor.Type.MESSAGE =>
+        Option(bqField.getSubFields) match {
+          case Some(nestedFields) =>
+            fieldsMissingFromDescriptor(tableField.getMessageType, nestedFields)
+          case _ =>
+            false
+        }
+      case _ =>
+        false
+    }
 
   def alterTableRequired(tableDescriptor: Descriptors.Descriptor, ddlFields: Vector[Field]): Vector[Field] =
     ddlFields.filter { field =>
@@ -112,6 +139,8 @@ object BigQuerySchemaUtils {
 
   private def bqModeOf(nullability: Type.Nullability): BQField.Mode =
     if (nullability.nullable) BQField.Mode.NULLABLE else BQField.Mode.REQUIRED
+
+  private implicit val modeEq: Eq[BQField.Mode] = Eq.fromUniversalEquals
 
   def showDescriptor(descriptor: Descriptors.Descriptor): String =
     descriptor.getFields.asScala

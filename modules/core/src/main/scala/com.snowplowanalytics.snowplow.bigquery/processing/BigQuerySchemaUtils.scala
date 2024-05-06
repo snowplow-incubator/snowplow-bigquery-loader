@@ -144,7 +144,16 @@ object BigQuerySchemaUtils {
 
   def showDescriptor(descriptor: Descriptors.Descriptor): String =
     descriptor.getFields.asScala
-      .map(_.getName)
+      .map { field =>
+        val name      = field.getName
+        val fieldType = field.getType
+        if (field.getType == Descriptors.FieldDescriptor.Type.MESSAGE) {
+          val nested = showDescriptor(field.getMessageType)
+          s"$name : $fieldType - nested {$nested}"
+        } else {
+          s"$name : $fieldType"
+        }
+      }
       .mkString(", ")
 
 }

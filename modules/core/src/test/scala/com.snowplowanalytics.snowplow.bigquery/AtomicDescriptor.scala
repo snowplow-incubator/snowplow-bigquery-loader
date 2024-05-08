@@ -32,6 +32,46 @@ object AtomicDescriptor {
     fromDescriptorProtoBuilder(descriptorProto)
   }
 
+  def withTestUnstruct100: Descriptors.Descriptor = {
+    val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, eventId.setNumber(1))
+      .addField(1, testUnstruct.setNumber(2))
+      .addNestedType(testNestedType100)
+    fromDescriptorProtoBuilder(descriptorProto)
+  }
+
+  def withTestUnstruct101: Descriptors.Descriptor = {
+    val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, eventId.setNumber(1))
+      .addField(1, testUnstruct.setNumber(2))
+      .addNestedType(testNestedType101)
+    fromDescriptorProtoBuilder(descriptorProto)
+  }
+
+  def withTestContext100: Descriptors.Descriptor = {
+    val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, eventId.setNumber(1))
+      .addField(1, testContext.setNumber(2))
+      .addNestedType(testNestedType100)
+    fromDescriptorProtoBuilder(descriptorProto)
+  }
+
+  def withTestContext101: Descriptors.Descriptor = {
+    val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, eventId.setNumber(1))
+      .addField(1, testContext.setNumber(2))
+      .addNestedType(testNestedType101)
+    fromDescriptorProtoBuilder(descriptorProto)
+  }
+
+  def withAdClickContext: Descriptors.Descriptor = {
+    val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, eventId.setNumber(1))
+      .addField(1, adClickContext.setNumber(2))
+      .addNestedType(adClickEventNestedType)
+    fromDescriptorProtoBuilder(descriptorProto)
+  }
+
   /** A table which has been altered to add the ad_click_event unstruct event column */
   def withWebPageAndAdClick: Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
@@ -65,21 +105,59 @@ object AtomicDescriptor {
     .setTypeName("web_page_1")
     .setName("unstruct_event_com_snowplowanalytics_snowplow_web_page_1")
 
+  private def testContext: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
+    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED)
+    .setTypeName("test_1")
+    .setName("contexts_test_vendor_test_name_1")
+
+  private def testUnstruct: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
+    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+    .setTypeName("test_1")
+    .setName("unstruct_event_test_vendor_test_name_1")
+
   private def webPageId: DescriptorProtos.FieldDescriptorProto.Builder =
     DescriptorProtos.FieldDescriptorProto.newBuilder
       .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
       .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING)
       .setName("id")
 
+  private def myString: DescriptorProtos.FieldDescriptorProto.Builder =
+    DescriptorProtos.FieldDescriptorProto.newBuilder
+      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+      .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING)
+      .setName("my_string")
+
+  private def myInteger: DescriptorProtos.FieldDescriptorProto.Builder =
+    DescriptorProtos.FieldDescriptorProto.newBuilder
+      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+      .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64)
+      .setName("my_integer")
+
   private def webPageNestedType: DescriptorProtos.DescriptorProto.Builder =
     DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, webPageId.setNumber(1))
       .setName("web_page_1")
 
+  private def testNestedType100: DescriptorProtos.DescriptorProto.Builder =
+    DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, myString.setNumber(1))
+      .setName("test_1")
+
+  private def testNestedType101: DescriptorProtos.DescriptorProto.Builder =
+    DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, myString.setNumber(1))
+      .addField(1, myInteger.setNumber(2))
+      .setName("test_1")
+
   private def adClickEvent: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
     .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
     .setTypeName("ad_click_event_1")
     .setName("unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1")
+
+  private def adClickContext: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
+    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED)
+    .setTypeName("ad_click_event_1")
+    .setName("contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1")
 
   private def adClickEventPercentProgress: DescriptorProtos.FieldDescriptorProto.Builder =
     DescriptorProtos.FieldDescriptorProto.newBuilder

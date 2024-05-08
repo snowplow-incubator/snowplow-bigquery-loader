@@ -158,7 +158,7 @@ class ProcessingSpec extends Specification with CatsEffect {
   }
 
   def e4_2 = {
-    val data = json"""{ "myString": "my value"}"""
+    val data = json"""{ "percentProgress": 50 }"""
     val contexts = Contexts(
       List(
         SelfDescribingData(
@@ -171,11 +171,14 @@ class ProcessingSpec extends Specification with CatsEffect {
     val mocks = Mocks.default.copy(
       addColumnsResponse = MockEnvironment.Response.Success(
         FieldList.of(
-          BQField.of(
-            "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1",
-            StandardSQLTypeName.STRUCT,
-            FieldList.of(BQField.of("percent_progress", StandardSQLTypeName.STRING))
-          )
+          BQField
+            .newBuilder(
+              "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1",
+              StandardSQLTypeName.STRUCT,
+              FieldList.of(BQField.of("percent_progress", StandardSQLTypeName.STRING))
+            )
+            .setMode(BQField.Mode.REPEATED)
+            .build()
         )
       ),
       descriptors = List(
@@ -256,14 +259,17 @@ class ProcessingSpec extends Specification with CatsEffect {
     val mocks = Mocks.default.copy(
       addColumnsResponse = MockEnvironment.Response.Success(
         FieldList.of(
-          BQField.of(
-            "contexts_test_vendor_test_name_1",
-            StandardSQLTypeName.STRUCT,
-            FieldList.of(
-              BQField.of("my_string", StandardSQLTypeName.STRING),
-              BQField.of("my_integer", StandardSQLTypeName.INT64)
+          BQField
+            .newBuilder(
+              "contexts_test_vendor_test_name_1",
+              StandardSQLTypeName.STRUCT,
+              FieldList.of(
+                BQField.of("my_string", StandardSQLTypeName.STRING),
+                BQField.of("my_integer", StandardSQLTypeName.INT64)
+              )
             )
-          )
+            .setMode(BQField.Mode.REPEATED)
+            .build()
         )
       ),
       descriptors = List(

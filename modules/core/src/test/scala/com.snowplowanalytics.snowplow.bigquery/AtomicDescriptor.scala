@@ -106,7 +106,7 @@ object AtomicDescriptor {
     .setName("unstruct_event_com_snowplowanalytics_snowplow_web_page_1")
 
   private def testContext: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
-    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED)
     .setTypeName("test_1")
     .setName("contexts_test_vendor_test_name_1")
 
@@ -155,7 +155,7 @@ object AtomicDescriptor {
     .setName("unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1")
 
   private def adClickContext: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
-    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED)
     .setTypeName("ad_click_event_1")
     .setName("contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1")
 

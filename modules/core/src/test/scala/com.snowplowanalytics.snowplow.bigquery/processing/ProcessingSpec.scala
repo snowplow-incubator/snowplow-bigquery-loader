@@ -15,6 +15,7 @@ import cats.effect.testing.specs2.CatsEffect
 import cats.effect.testkit.TestControl
 import io.circe.literal._
 import com.google.cloud.bigquery.{Field => BQField, FieldList, StandardSQLTypeName}
+import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
 
 import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
@@ -22,7 +23,7 @@ import java.time.Instant
 import scala.concurrent.duration.DurationLong
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
-import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{UnstructEvent, unstructEventDecoder}
+import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent, unstructEventDecoder}
 import com.snowplowanalytics.snowplow.bigquery.{AtomicDescriptor, MockEnvironment}
 import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.{Action, Mocks}
 import com.snowplowanalytics.snowplow.runtime.HealthProbe
@@ -36,7 +37,10 @@ class ProcessingSpec extends Specification with CatsEffect {
     Insert events to Bigquery and ack the events $e1
     Emit BadRows when there are badly formatted events $e2
     Write good batches and bad events when input contains both $e3
-    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns $e4
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct $e4_1
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts $e4_2
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - unstruct $e4_3 
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - contexts $e4_4
     Skip altering the table when the writer's protobuf Descriptor has relevant self-describing entitiy columns $e5
     Emit BadRows when the WriterProvider reports a problem with the data $e6
     Recover when the WriterProvider reports a server-side schema mismatch $e7
@@ -105,7 +109,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
   }
 
-  def e4 = {
+  def e4_1 = {
     val unstructEvent: UnstructEvent = json"""
     {
       "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
@@ -142,6 +146,141 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.CreatedTable,
           Action.OpenedWriter,
           Action.AlterTableAddedColumns(Vector("unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1")),
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(2),
+          Action.AddedGoodCountMetric(2),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs(0).ack))
+        )
+      )
+    }
+  }
+
+  def e4_2 = {
+    val data = json"""{ "myString": "my value"}"""
+    val contexts = Contexts(
+      List(
+        SelfDescribingData(
+          SchemaKey.fromUri("iglu:com.snowplowanalytics.snowplow.media/ad_click_event/jsonschema/1-0-0").toOption.get,
+          data
+        )
+      )
+    )
+
+    val mocks = Mocks.default.copy(
+      addColumnsResponse = MockEnvironment.Response.Success(
+        FieldList.of(
+          BQField.of(
+            "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1",
+            StandardSQLTypeName.STRUCT,
+            FieldList.of(BQField.of("percent_progress", StandardSQLTypeName.STRING))
+          )
+        )
+      ),
+      descriptors = List(
+        AtomicDescriptor.initial,
+        AtomicDescriptor.initial,
+        AtomicDescriptor.withAdClickContext
+      )
+    )
+    runTest(inputEvents(count = 1, good(contexts = contexts)), mocks) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.AlterTableAddedColumns(Vector("contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1")),
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(2),
+          Action.AddedGoodCountMetric(2),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs(0).ack))
+        )
+      )
+    }
+  }
+
+  def e4_3 = {
+    val data = json"""{ "myInteger": 100 }"""
+    val unstruct = UnstructEvent(
+      Some(SelfDescribingData(SchemaKey.fromUri("iglu:test_vendor/test_name/jsonschema/1-0-1").toOption.get, data))
+    )
+
+    val mocks = Mocks.default.copy(
+      addColumnsResponse = MockEnvironment.Response.Success(
+        FieldList.of(
+          BQField.of(
+            "unstruct_event_test_vendor_test_name_1",
+            StandardSQLTypeName.STRUCT,
+            FieldList.of(
+              BQField.of("my_string", StandardSQLTypeName.STRING),
+              BQField.of("my_integer", StandardSQLTypeName.INT64)
+            )
+          )
+        )
+      ),
+      descriptors = List(
+        AtomicDescriptor.withTestUnstruct100,
+        AtomicDescriptor.withTestUnstruct100,
+        AtomicDescriptor.withTestUnstruct101
+      )
+    )
+    runTest(inputEvents(count = 1, good(ue = unstruct)), mocks) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.AlterTableAddedColumns(Vector("unstruct_event_test_vendor_test_name_1")),
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(2),
+          Action.AddedGoodCountMetric(2),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs(0).ack))
+        )
+      )
+    }
+  }
+
+  def e4_4 = {
+    val data     = json"""{ "myInteger": 100}"""
+    val contexts = Contexts(List(SelfDescribingData(SchemaKey.fromUri("iglu:test_vendor/test_name/jsonschema/1-0-1").toOption.get, data)))
+
+    val mocks = Mocks.default.copy(
+      addColumnsResponse = MockEnvironment.Response.Success(
+        FieldList.of(
+          BQField.of(
+            "contexts_test_vendor_test_name_1",
+            StandardSQLTypeName.STRUCT,
+            FieldList.of(
+              BQField.of("my_string", StandardSQLTypeName.STRING),
+              BQField.of("my_integer", StandardSQLTypeName.INT64)
+            )
+          )
+        )
+      ),
+      descriptors = List(
+        AtomicDescriptor.withTestContext100,
+        AtomicDescriptor.withTestContext100,
+        AtomicDescriptor.withTestContext101
+      )
+    )
+    runTest(inputEvents(count = 1, good(contexts = contexts)), mocks) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.AlterTableAddedColumns(Vector("contexts_test_vendor_test_name_1")),
           Action.ClosedWriter,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(2),
@@ -350,14 +489,14 @@ object ProcessingSpec {
       .compile
       .toList
 
-  def good(ue: UnstructEvent = UnstructEvent(None)): IO[TokenedEvents] =
+  def good(ue: UnstructEvent = UnstructEvent(None), contexts: Contexts = Contexts(List.empty)): IO[TokenedEvents] =
     for {
       ack <- IO.unique
       eventId1 <- IO.randomUUID
       eventId2 <- IO.randomUUID
       collectorTstamp <- IO.realTimeInstant
     } yield {
-      val event1 = Event.minimal(eventId1, collectorTstamp, "0.0.0", "0.0.0").copy(unstruct_event = ue)
+      val event1 = Event.minimal(eventId1, collectorTstamp, "0.0.0", "0.0.0").copy(unstruct_event = ue).copy(contexts = contexts)
       val event2 = Event.minimal(eventId2, collectorTstamp, "0.0.0", "0.0.0")
       val serialized = Chunk(event1, event2).map { e =>
         ByteBuffer.wrap(e.toTsv.getBytes(StandardCharsets.UTF_8))

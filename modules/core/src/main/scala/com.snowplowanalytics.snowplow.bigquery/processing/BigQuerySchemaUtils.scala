@@ -60,6 +60,8 @@ object BigQuerySchemaUtils {
         ddlField.fieldType match {
           case Type.Struct(nestedFields) =>
             alterTableRequired(tableField.getMessageType, nestedFields.toVector).nonEmpty
+          case Type.Array(Type.Struct(nestedFields), _) =>
+            alterTableRequired(tableField.getMessageType, nestedFields.toVector).nonEmpty
           case _ =>
             false
         }

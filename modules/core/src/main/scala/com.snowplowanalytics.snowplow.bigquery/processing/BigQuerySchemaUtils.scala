@@ -21,7 +21,7 @@ object BigQuerySchemaUtils {
 
   def fieldsMissingFromDescriptor(tableDescriptor: Descriptors.Descriptor, bqFields: FieldList): Boolean =
     bqFields.asScala.exists { field =>
-      Option(tableDescriptor.findFieldByName(field.getName)) match {
+      tableDescriptor.getFields.asScala.find(_.getJsonName === field.getName) match {
         case Some(fieldDescriptor) =>
           val nullableMismatch = fieldDescriptor.isRequired && (field.getMode === BQField.Mode.NULLABLE)
           nullableMismatch || nestedFieldMissingFromDescriptor(fieldDescriptor, field)
@@ -45,7 +45,7 @@ object BigQuerySchemaUtils {
 
   def alterTableRequired(tableDescriptor: Descriptors.Descriptor, ddlFields: Vector[Field]): Vector[Field] =
     ddlFields.filter { field =>
-      Option(tableDescriptor.findFieldByName(field.name)) match {
+      tableDescriptor.getFields.asScala.find(_.getJsonName === field.name) match {
         case Some(fieldDescriptor) =>
           val nullableMismatch = fieldDescriptor.isRequired && field.nullability.nullable
           nullableMismatch || alterTableRequiredForNestedFields(fieldDescriptor, field)

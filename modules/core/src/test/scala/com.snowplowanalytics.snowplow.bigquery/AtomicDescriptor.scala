@@ -99,39 +99,46 @@ object AtomicDescriptor {
       .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
       .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING)
       .setName("event_id")
+      .setJsonName("event_id")
 
   private def webPage: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
     .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
     .setTypeName("web_page_1")
     .setName("unstruct_event_com_snowplowanalytics_snowplow_web_page_1")
+    .setJsonName("unstruct_event_com_snowplowanalytics_snowplow_web_page_1")
 
   private def testContext: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
     .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED)
     .setTypeName("test_1")
     .setName("contexts_test_vendor_test_name_1")
+    .setJsonName("contexts_test_vendor_test_name_1")
 
   private def testUnstruct: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
     .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
     .setTypeName("test_1")
     .setName("unstruct_event_test_vendor_test_name_1")
+    .setJsonName("unstruct_event_test_vendor_test_name_1")
 
   private def webPageId: DescriptorProtos.FieldDescriptorProto.Builder =
     DescriptorProtos.FieldDescriptorProto.newBuilder
       .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
       .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING)
       .setName("id")
+      .setJsonName("id")
 
   private def myString: DescriptorProtos.FieldDescriptorProto.Builder =
     DescriptorProtos.FieldDescriptorProto.newBuilder
       .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
       .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING)
       .setName("my_string")
+      .setJsonName("my_string")
 
   private def myInteger: DescriptorProtos.FieldDescriptorProto.Builder =
     DescriptorProtos.FieldDescriptorProto.newBuilder
       .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
       .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64)
       .setName("my_integer")
+      .setJsonName("my_integer")
 
   private def webPageNestedType: DescriptorProtos.DescriptorProto.Builder =
     DescriptorProtos.DescriptorProto.newBuilder
@@ -153,17 +160,20 @@ object AtomicDescriptor {
     .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
     .setTypeName("ad_click_event_1")
     .setName("unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1")
+    .setJsonName("unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1")
 
   private def adClickContext: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
     .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED)
     .setTypeName("ad_click_event_1")
     .setName("contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1")
+    .setJsonName("contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1")
 
   private def adClickEventPercentProgress: DescriptorProtos.FieldDescriptorProto.Builder =
     DescriptorProtos.FieldDescriptorProto.newBuilder
       .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
       .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64)
       .setName("percent_progress")
+      .setJsonName("percent_progress")
 
   private def adClickEventNestedType: DescriptorProtos.DescriptorProto.Builder =
     DescriptorProtos.DescriptorProto.newBuilder

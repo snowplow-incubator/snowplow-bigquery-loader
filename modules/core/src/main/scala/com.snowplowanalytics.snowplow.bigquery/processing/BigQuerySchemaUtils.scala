@@ -14,6 +14,7 @@ import cats.implicits._
 import com.snowplowanalytics.iglu.schemaddl.parquet.{Field, Type}
 import com.google.protobuf.Descriptors
 import com.google.cloud.bigquery.{Field => BQField, FieldList, StandardSQLTypeName}
+import com.google.cloud.bigquery.storage.v1.{BigQuerySchemaUtil => BQUtil}
 
 import scala.jdk.CollectionConverters._
 
@@ -21,7 +22,7 @@ object BigQuerySchemaUtils {
 
   def fieldsMissingFromDescriptor(tableDescriptor: Descriptors.Descriptor, bqFields: FieldList): Boolean =
     bqFields.asScala.exists { field =>
-      Option(tableDescriptor.findFieldByName(field.getName)) match {
+      findFieldDescriptor(tableDescriptor, field.getName) match {
         case Some(fieldDescriptor) =>
           val nullableMismatch = fieldDescriptor.isRequired && (field.getMode === BQField.Mode.NULLABLE)
           nullableMismatch || nestedFieldMissingFromDescriptor(fieldDescriptor, field)
@@ -45,7 +46,7 @@ object BigQuerySchemaUtils {
 
   def alterTableRequired(tableDescriptor: Descriptors.Descriptor, ddlFields: Vector[Field]): Vector[Field] =
     ddlFields.filter { field =>
-      Option(tableDescriptor.findFieldByName(field.name)) match {
+      findFieldDescriptor(tableDescriptor, field.name) match {
         case Some(fieldDescriptor) =>
           val nullableMismatch = fieldDescriptor.isRequired && field.nullability.nullable
           nullableMismatch || alterTableRequiredForNestedFields(fieldDescriptor, field)
@@ -68,6 +69,15 @@ object BigQuerySchemaUtils {
       case _ =>
         false
     }
+
+  private def findFieldDescriptor(tableDescriptor: Descriptors.Descriptor, fieldName: String): Option[Descriptors.FieldDescriptor] = {
+    val nameToFind = if (BQUtil.isProtoCompatible(fieldName)) {
+      fieldName
+    } else {
+      BQUtil.generatePlaceholderFieldName(fieldName)
+    }
+    Option(tableDescriptor.findFieldByName(nameToFind))
+  }
 
   def mergeInColumns(bqFields: FieldList, ddlFields: Vector[Field]): FieldList = {
     val ddlFieldsByName = ddlFields.map(f => f.name -> f).toMap

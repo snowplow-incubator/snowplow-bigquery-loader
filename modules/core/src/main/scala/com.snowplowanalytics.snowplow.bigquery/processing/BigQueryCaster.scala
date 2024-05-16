@@ -16,6 +16,7 @@ import org.json.{JSONArray, JSONObject}
 
 import com.snowplowanalytics.iglu.schemaddl.parquet.Type
 import com.snowplowanalytics.iglu.schemaddl.parquet.Caster
+import com.google.cloud.bigquery.storage.v1.{BigQuerySchemaUtil => BQUtil}
 
 import scala.jdk.CollectionConverters._
 
@@ -38,8 +39,11 @@ private[processing] object BigQueryCaster extends Caster[AnyRef] {
     new JSONArray(vs.filterNot(_ == null).asJava)
   override def structValue(vs: NonEmptyVector[Caster.NamedValue[AnyRef]]): JSONObject = {
     val map = vs.iterator
-      .map { case Caster.NamedValue(k, v) =>
-        (k, v)
+      .map {
+        case Caster.NamedValue(k, v) if BQUtil.isProtoCompatible(k) =>
+          (k, v)
+        case Caster.NamedValue(k, v) =>
+          (BQUtil.generatePlaceholderFieldName(k), v)
       }
       .toMap
       .asJava

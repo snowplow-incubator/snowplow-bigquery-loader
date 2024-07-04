@@ -85,7 +85,8 @@ object MockEnvironment {
           writeBatchConcurrency = 1
         ),
         badRowMaxSize = 1000000,
-        schemasToSkip = List.empty
+        schemasToSkip = List.empty,
+        legacyColumns = false
       )
       MockEnvironment(state, env)
     }

@@ -125,6 +125,10 @@
     "iglu:com.acme/skipped3/jsonschema/1-*-*",
     "iglu:com.acme/skipped4/jsonschema/*-*-*"
   ]
+
+  # -- Whether to turn on the legacy column style used by the v1 BigQuery loader
+  # -- In this mode, there is a column per _minor_ version of each schema.
+  "legacyColumns": false
   
   "monitoring": {
     "metrics": {

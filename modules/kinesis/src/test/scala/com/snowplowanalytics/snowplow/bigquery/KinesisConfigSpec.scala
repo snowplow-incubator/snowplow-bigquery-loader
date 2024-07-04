@@ -121,8 +121,9 @@ object KinesisConfigSpec {
       healthProbe = Config.HealthProbe(port = Port.fromInt(8000).get, unhealthyLatency = 5.minutes),
       webhook     = None
     ),
-    license     = AcceptedLicense(),
-    skipSchemas = List.empty
+    license       = AcceptedLicense(),
+    skipSchemas   = List.empty,
+    legacyColumns = false
   )
 
   // workerIdentifer coming from "HOSTNAME" env variable set in BuildSettings
@@ -206,6 +207,7 @@ object KinesisConfigSpec {
       SchemaCriterion.parse("iglu:com.acme/skipped2/jsonschema/1-0-*").get,
       SchemaCriterion.parse("iglu:com.acme/skipped3/jsonschema/1-*-*").get,
       SchemaCriterion.parse("iglu:com.acme/skipped4/jsonschema/*-*-*").get
-    )
+    ),
+    legacyColumns = false
   )
 }

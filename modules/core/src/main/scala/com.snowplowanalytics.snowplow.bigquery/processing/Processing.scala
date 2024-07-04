@@ -22,7 +22,7 @@ import com.google.cloud.bigquery.FieldList
 import java.nio.charset.StandardCharsets
 import scala.concurrent.duration.Duration
 
-import com.snowplowanalytics.iglu.schemaddl.parquet.Caster
+import com.snowplowanalytics.iglu.schemaddl.parquet.{Caster, Field}
 import com.snowplowanalytics.iglu.client.resolver.registries.{Http4sRegistryLookup, RegistryLookup}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.badrows.{BadRow, Payload => BadPayload, Processor => BadRowProcessor}
@@ -31,7 +31,14 @@ import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProce
 import com.snowplowanalytics.snowplow.sinks.ListOfList
 import com.snowplowanalytics.snowplow.runtime.syntax.foldable._
 import com.snowplowanalytics.snowplow.runtime.processing.BatchUp
-import com.snowplowanalytics.snowplow.loaders.transform.{BadRowsSerializer, NonAtomicFields, SchemaSubVersion, TabledEntity, Transform}
+import com.snowplowanalytics.snowplow.loaders.transform.{
+  BadRowsSerializer,
+  NonAtomicFields,
+  SchemaSubVersion,
+  TabledEntity,
+  Transform,
+  TypedTabledEntity
+}
 import com.snowplowanalytics.snowplow.bigquery.{AppHealth, Environment, Metrics}
 
 object Processing {
@@ -63,7 +70,12 @@ object Processing {
     tokens: Vector[Unique.Token]
   )
 
-  type EventWithTransform = (Event, Map[String, AnyRef])
+  private type EventWithTransform = (Event, Map[String, AnyRef])
+
+  private sealed trait BatchEntities
+
+  private case class V2BatchEntities(value: Vector[TypedTabledEntity]) extends BatchEntities
+  private case class LegacyBatchEntities(value: Vector[Field]) extends BatchEntities
 
   /**
    * State of a batch for all stages post-transform
@@ -83,7 +95,7 @@ object Processing {
    */
   private case class BatchAfterTransform(
     toBeInserted: List[EventWithTransform],
-    entities: NonAtomicFields.Result,
+    entities: BatchEntities,
     origBatchBytes: Long,
     origBatchCount: Long,
     badAccumulated: ListOfList[BadRow],
@@ -141,16 +153,24 @@ object Processing {
     env: Environment[F],
     badProcessor: BadRowProcessor
   ): Pipe[F, Batched, BatchAfterTransform] =
+    if (env.legacyColumns) legacyTransform(env, badProcessor)
+    else v2Transform(env, badProcessor)
+
+  /** Transform the Event into values compatible with the BigQuery sdk */
+  private def v2Transform[F[_]: Sync: RegistryLookup](
+    env: Environment[F],
+    badProcessor: BadRowProcessor
+  ): Pipe[F, Batched, BatchAfterTransform] =
     _.evalMap { case Batched(events, parseFailures, countBytes, entities, tokens) =>
       for {
         now <- Sync[F].realTimeInstant
         loadTstamp = BigQueryCaster.timestampValue(now)
         _ <- Logger[F].debug(s"Processing batch of size ${events.size}")
         nonAtomicFields <- NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip)
-        (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, nonAtomicFields)
+        (moreBad, rows) <- v2TransformBatch[F](badProcessor, loadTstamp, events, nonAtomicFields)
       } yield BatchAfterTransform(
         rows,
-        nonAtomicFields,
+        V2BatchEntities(nonAtomicFields.fields),
         countBytes,
         events.size + parseFailures.size,
         parseFailures.prepend(moreBad),
@@ -158,7 +178,7 @@ object Processing {
       )
     }
 
-  private def transformBatch[F[_]: Sync](
+  private def v2TransformBatch[F[_]: Sync](
     badProcessor: BadRowProcessor,
     loadTstamp: java.lang.Long,
     events: ListOfList[Event],
@@ -178,6 +198,43 @@ object Processing {
                 .updated("load_tstamp", loadTstamp)
               event -> map
             }
+        }
+      }
+
+  /** Transform the Event into values compatible with the BigQuery sdk */
+  private def legacyTransform[F[_]: Sync: RegistryLookup](
+    env: Environment[F],
+    badProcessor: BadRowProcessor
+  ): Pipe[F, Batched, BatchAfterTransform] =
+    _.evalMap { case Batched(events, parseFailures, countBytes, entities, tokens) =>
+      for {
+        now <- Sync[F].realTimeInstant
+        loadTstamp = BigQueryCaster.timestampValue(now)
+        _ <- Logger[F].debug(s"Processing batch of size ${events.size}")
+        nonAtomicFields <- LegacyColumns.resolveTypes[F](env.resolver, entities)
+        (moreBad, rows) <- legacyTransformBatch[F](badProcessor, loadTstamp, events, nonAtomicFields)
+      } yield BatchAfterTransform(
+        rows,
+        LegacyBatchEntities(nonAtomicFields.fields.map(_.field)),
+        countBytes,
+        events.size + parseFailures.size,
+        parseFailures.prepend(moreBad),
+        tokens
+      )
+    }
+
+  private def legacyTransformBatch[F[_]: Sync](
+    badProcessor: BadRowProcessor,
+    loadTstamp: java.lang.Long,
+    events: ListOfList[Event],
+    entities: LegacyColumns.Result
+  ): F[(List[BadRow], List[EventWithTransform])] =
+    Foldable[ListOfList]
+      .traverseSeparateUnordered(events) { event =>
+        Sync[F].delay {
+          LegacyColumns
+            .transformEvent(badProcessor, event, entities, loadTstamp)
+            .map((event, _))
         }
       }
 
@@ -295,8 +352,13 @@ object Processing {
       env.writer.opened
         .use(_.descriptor)
         .flatMap { descriptor =>
-          val fields = batch.entities.fields.flatMap { tte =>
-            tte.mergedField :: tte.recoveries.map(_._2)
+          val fields = batch.entities match {
+            case V2BatchEntities(ttes) =>
+              ttes.flatMap { tte =>
+                tte.mergedField :: tte.recoveries.map(_._2)
+              }
+            case LegacyBatchEntities(fields) =>
+              fields
           }
           val fieldsToAdd = BigQuerySchemaUtils.alterTableRequired(descriptor, fields)
           if (fieldsToAdd.nonEmpty) {

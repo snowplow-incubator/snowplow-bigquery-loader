@@ -57,10 +57,16 @@ object MockEnvironment {
    *   Input events to send into the environment.
    * @param mocks
    *   Responses we want the `Writer` to return when someone calls uses the mocked services
+   * @param legacyColumns
+   *   Whether to use legacy column style of BigQuery Loader version 1
    * @return
    *   An environment and a Ref that records the actions make by the environment
    */
-  def build(inputs: List[TokenedEvents], mocks: Mocks): Resource[IO, MockEnvironment] =
+  def build(
+    inputs: List[TokenedEvents],
+    mocks: Mocks,
+    legacyColumns: Boolean
+  ): Resource[IO, MockEnvironment] =
     for {
       state <- Resource.eval(Ref[IO].of(Vector.empty[Action]))
       writerResource <- Resource.eval(testWriter(state, mocks.writerResponses, mocks.descriptors))
@@ -86,7 +92,7 @@ object MockEnvironment {
         ),
         badRowMaxSize = 1000000,
         schemasToSkip = List.empty,
-        legacyColumns = false
+        legacyColumns = legacyColumns
       )
       MockEnvironment(state, env)
     }

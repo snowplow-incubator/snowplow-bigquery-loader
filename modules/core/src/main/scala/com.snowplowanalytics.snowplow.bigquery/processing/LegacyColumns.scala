@@ -31,22 +31,75 @@ import com.snowplowanalytics.snowplow.badrows.{
   Processor => BadRowProcessor
 }
 
+/**
+ * The methods needed to support the legacy column style of v1 loader
+ *
+ * These methods are largely copied from the `loaders-common` module of common-streams, but adapted
+ * for the bigquery types in schema-ddl
+ *
+ * If we ever end support for legacy columns, then everything in this file can be deleted.
+ */
 object LegacyColumns {
 
+  /**
+   * The analog of NonAtomicFields.Result from common-streams, but adapted for the legacy bigquery
+   * types in schema-ddl
+   *
+   * @param fields
+   *   field type information about each self-describing entity to be loaded
+   * @param igluFailures
+   *   details of schemas that were present in the batch but could not be looked up by the Iglu
+   *   resolver.
+   */
   case class Result(fields: Vector[FieldForEntity], igluFailures: List[ColumnFailure])
 
+  /**
+   * Field type information for a self-describing entity to be loaded
+   *
+   * @param field
+   *   The schema-ddl Field describing the entity to be loaded. Note this is a v2 Field from the
+   *   parquet package of schema-ddl, so it must be converted from the legacy v1 Field.
+   * @param key
+   *   The Iglu schema key for this entity
+   * @param entityType
+   *   Whether this is for an unstruct_event or a context
+   */
   case class FieldForEntity(
     field: V2Field,
     key: SchemaKey,
     entityType: TabledEntity.EntityType
   )
 
+  /**
+   * Describes a failure to lookup an Iglu schema
+   *
+   * @param schemaKey
+   *   The Iglu schema key of the failure
+   * @param entityType
+   *   Whether the lookup was done for an unstruct_event or a context
+   * @param failure
+   *   Why the lookup failed
+   */
   case class ColumnFailure(
     schemaKey: SchemaKey,
     entityType: TabledEntity.EntityType,
     failure: FailureDetails.LoaderIgluError
   )
 
+  /**
+   * The analog of `NonAtomicFields.resolveTypes` from common-streams, but adapted for the legacy
+   * bigquery types in schema-ddl
+   *
+   * @param resolver
+   *   The Iglu resolver
+   * @param entities
+   *   The self-describing entities in this batch for which we need to load data
+   * @return
+   *   The typed fields for the entities to be loaded. These are v2 fields (parquet fields).
+   *
+   * This method works by deriving the legacy schema-ddl fields and then converting to the
+   * equivalent v2 (parquet) schema-ddl field.
+   */
   def resolveTypes[F[_]: Sync: RegistryLookup](
     resolver: Resolver[F],
     entities: Map[TabledEntity, Set[SchemaSubVersion]]
@@ -77,6 +130,21 @@ object LegacyColumns {
         Result(good, failures.toList)
       }
 
+  /**
+   * The analog of `Transform.transformEvent` from common-streams
+   *
+   * @param processor
+   *   Details about this loader, only used for generating a bad row
+   * @param event
+   *   The Snowplow event received from the stream
+   * @param batchInfo
+   *   Pre-calculated Iglu types for a batch of events, used to guide the transformation
+   * @param loadTstamp
+   *   The timestamp to use for the `load_tstamp` column
+   * @return
+   *   If event entities are valid, then returns a Map that is compatible with the BigQuery Write
+   *   client. If event entities are invalid then returns a bad row.
+   */
   def transformEvent(
     processor: BadRowProcessor,
     event: Event,
@@ -91,6 +159,12 @@ object LegacyColumns {
                    }.toEither
     } yield atomic ++ nonAtomic + ("load_tstamp" -> loadTstamp)
 
+  /**
+   * Convert from the legacy Field of the old v1 loader into the new style Field.
+   *
+   * This is needed because this loader only deals with v2 Fields. But we want to use the legacy
+   * methods from schema-ddl which only return legacy Fields.
+   */
   private def legacyFieldToV2Field(legacyField: LegacyField): V2Field = {
     val fieldType = legacyTypeToV2Type(legacyField.fieldType)
     legacyField.mode match {

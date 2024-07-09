@@ -119,7 +119,7 @@ object LegacyColumns {
             }
             val columnName  = legacyColumnName(entityType, schemaKey)
             val legacyField = LegacyField.build(columnName, schema, false).setMode(mode).normalized
-            val v2Field     = legacyFieldToV2Field(legacyField)
+            val v2Field     = legacyFieldToV2Field(legacyField).copy(accessors = Set.empty)
             FieldForEntity(v2Field, schemaKey, entityType)
           }
           .leftMap(ColumnFailure(schemaKey, entityType, _))
@@ -180,7 +180,7 @@ object LegacyColumns {
 
   private def legacyTypeToV2Type(legacyType: LegacyType): V2Type =
     legacyType match {
-      case LegacyType.String    => V2Type.String
+      case LegacyType.String    => V2Type.Json
       case LegacyType.Boolean   => V2Type.Boolean
       case LegacyType.Integer   => V2Type.Long
       case LegacyType.Float     => V2Type.Double
@@ -243,9 +243,22 @@ object LegacyColumns {
     }
   }
 
+  private object LegacyCaster extends BigQueryCaster {
+    override def jsonValue(v: Json): String =
+      v.asString match {
+        case Some(s) =>
+          // This line differs from the V2 behaviour. If the original value was a plain string then
+          // we load the plain string without quotes. Whereas in v2 we would load it as a quoted
+          // JSON string.
+          s
+        case None =>
+          v.noSpaces
+      }
+  }
+
   private def forAtomic(processor: BadRowProcessor, event: Event): Either[BadRow, Map[String, AnyRef]] =
     Transform
-      .transformEvent[AnyRef](processor, BigQueryCaster, event, NonAtomicFields.Result(Vector.empty, List.empty))
+      .transformEvent[AnyRef](processor, LegacyCaster, event, NonAtomicFields.Result(Vector.empty, List.empty))
       .map { namedValues =>
         namedValues.map { case Caster.NamedValue(k, v) =>
           k -> v
@@ -277,8 +290,14 @@ object LegacyColumns {
     castErrors: NonEmptyList[CastError]
   ): NonEmptyList[FailureDetails.LoaderIgluError] =
     castErrors.map {
-      case CastError.WrongType(v, e)      => FailureDetails.LoaderIgluError.WrongType(schemaKey, v, e.toString)
-      case CastError.MissingInValue(k, v) => FailureDetails.LoaderIgluError.MissingInValue(schemaKey, k, v)
+      case CastError.WrongType(v, e) =>
+        val fixedType = e match {
+          case V2Type.Json => V2Type.String.toString
+          case other       => other.toString
+        }
+        FailureDetails.LoaderIgluError.WrongType(schemaKey, v, fixedType)
+      case CastError.MissingInValue(k, v) =>
+        FailureDetails.LoaderIgluError.MissingInValue(schemaKey, k, v)
     }
 
   private def forUnstruct(
@@ -288,7 +307,7 @@ object LegacyColumns {
   ): ValidatedNel[CastError, AnyRef] =
     event.unstruct_event.data match {
       case Some(SelfDescribingData(key2, unstructData)) if schemaKey === key2 =>
-        Caster.cast(BigQueryCaster, field, unstructData)
+        Caster.cast(LegacyCaster, field, unstructData)
       case _ =>
         Validated.Valid(null)
     }
@@ -303,7 +322,7 @@ object LegacyColumns {
       .filter(context => context.schema === schemaKey)
 
     if (matchingContexts.nonEmpty)
-      Caster.cast(BigQueryCaster, field, Json.fromValues(matchingContexts.map(_.data)))
+      Caster.cast(LegacyCaster, field, Json.fromValues(matchingContexts.map(_.data)))
     else
       Validated.Valid(null)
   }

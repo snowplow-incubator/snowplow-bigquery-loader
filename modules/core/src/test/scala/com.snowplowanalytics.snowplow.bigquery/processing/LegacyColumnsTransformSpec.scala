@@ -35,15 +35,12 @@ class LegacyColumnsTransformSpec extends Specification {
     Transform an event with only atomic fields (no custom entities) $onlyAtomic
     Transform an event with one custom context $oneContext
     Transform an event with an unstruct event $unstruct
-    Transform an event with each different type of atomic field $onlyAtomicAllTypes
     Transform an unstruct event with each different type $unstructAllTypes
     Transform a context with different type $contextAllTypes
     Produce JSON null on output for unstruct column if no data matching type is provided $unstructNoData
     Produce JSON null on output for contexts column if no data matching type is provided $contextsNoData
 
   Failures:
-    Atomic currency field cannot be cast to a decimal due to rounding $atomicTooManyDecimalPoints
-    Atomic currency field cannot be cast to a decimal due to high precision $atomicHighPrecision
     Missing value for unstruct (missing required field) $unstructMissingValue
     Missing value for unstruct (null passed in required field) $unstructNullValue
     Missing value for context (missing required field) $contextMissingValue
@@ -56,14 +53,8 @@ class LegacyColumnsTransformSpec extends Specification {
   def onlyAtomic = {
     val event     = createEvent()
     val batchInfo = LegacyColumns.Result(Vector.empty, List.empty) // no custom entities
-    val expectedAtomic: Map[String, AnyRef] = Map(
-      "event_id" -> eventId.toString,
-      "collector_tstamp" -> collectorTstampMicros,
-      "geo_region" -> null,
-      "load_tstamp" -> nowMicros
-    )
 
-    assertSuccessful(event, batchInfo, expectedAtomic = expectedAtomic)
+    assertSuccessful(event, batchInfo, expectedEntities = Map.empty)
   }
 
   def oneContext = {
@@ -77,7 +68,7 @@ class LegacyColumnsTransformSpec extends Specification {
       "contexts_com_example_my_schema_1_0_0" -> json"""[{"my_int": 42}]"""
     )
 
-    assertSuccessful(inputEvent, batchInfo, expectedAllEntities = expectedOutput)
+    assertSuccessful(inputEvent, batchInfo, expectedEntities = expectedOutput)
   }
 
   def unstruct = {
@@ -91,83 +82,87 @@ class LegacyColumnsTransformSpec extends Specification {
       "unstruct_event_com_example_my_schema_1_0_0" -> json"""{"my_int": 42}"""
     )
 
-    assertSuccessful(inputEvent, batchInfo, expectedAllEntities = expectedOutput)
+    assertSuccessful(inputEvent, batchInfo, expectedEntities = expectedOutput)
   }
 
-  def onlyAtomicAllTypes = {
-    val event = createEvent()
-      .copy(
-        app_id              = Some("myapp"),
-        dvce_created_tstamp = Some(now),
-        txn_id              = Some(42),
-        geo_latitude        = Some(1.234),
-        dvce_ismobile       = Some(true),
-        tr_total            = Some(12.34)
-      )
-
-    val batchInfo = LegacyColumns.Result(Vector.empty, List.empty) // no custom entities
-    val expectedOutput: Map[String, AnyRef] = Map(
-      "app_id" -> "myapp",
-      "dvce_created_tstamp" -> Long.box(nowMicros),
-      "txn_id" -> Int.box(42),
-      "geo_latitude" -> Double.box(1.234),
-      "dvce_ismobile" -> Boolean.box(true),
-      "tr_total" -> new java.math.BigDecimal("12.34")
+  def unstructAllTypes = {
+    val inputEvent =
+      createEvent(unstruct = Some(sdj(data = dataWithAllTypes, key = "iglu:com.example/mySchema/jsonschema/1-0-0")))
+    val batchInfo = LegacyColumns.Result(
+      fields       = Vector(mySchemaUnstruct(SchemaVer.Full(1, 0, 0), schemaWithAllPossibleTypes)),
+      igluFailures = List.empty
+    )
+    val expectedOutput = Map(
+      "unstruct_event_com_example_my_schema_1_0_0" -> json"""{
+        "my_string":   "abc",
+        "my_int":       42,
+        "my_long":      42000000000,
+        "my_decimal":   1.23,
+        "my_double":    1.2323,
+        "my_boolean":   true,
+        "my_date":      19801,
+        "my_timestamp": 1710879639000000,
+        "my_array":     [1,2,3],
+        "my_object":    {"abc": "xyz"},
+        "my_empty_object": "{}"
+      }"""
     )
 
-    assertSuccessful(event, batchInfo, expectedAtomic = expectedOutput)
+    assertSuccessful(inputEvent, batchInfo, expectedEntities = expectedOutput)
   }
 
-  def atomicTooManyDecimalPoints = {
+  def contextAllTypes = {
+    val inputEvent =
+      createEvent(contexts = List(sdj(data = dataWithAllTypes, key = "iglu:com.example/mySchema/jsonschema/1-0-0")))
+    val batchInfo = LegacyColumns.Result(
+      fields       = Vector(mySchemaContexts(SchemaVer.Full(1, 0, 0), schemaWithAllPossibleTypes)),
+      igluFailures = List.empty
+    )
+    val expectedOutput = Map(
+      "contexts_com_example_my_schema_1_0_0" -> json"""[{
+        "my_string":   "abc",
+        "my_int":       42,
+        "my_long":      42000000000,
+        "my_decimal":   1.23,
+        "my_double":    1.2323,
+        "my_boolean":   true,
+        "my_date":      19801,
+        "my_timestamp": 1710879639000000,
+        "my_array":     [1,2,3],
+        "my_object":    {"abc": "xyz"},
+        "my_empty_object": "{}"
+      }]"""
+    )
+
+    assertSuccessful(inputEvent, batchInfo, expectedEntities = expectedOutput)
+  }
+
+  def unstructNoData = {
     val inputEvent = createEvent()
-      .copy(
-        tr_total         = Some(12.3456),
-        tr_tax           = Some(12.3456),
-        tr_shipping      = Some(12.3456),
-        ti_price         = Some(12.3456),
-        tr_total_base    = Some(12.3456),
-        tr_tax_base      = Some(12.3456),
-        tr_shipping_base = Some(12.3456),
-        ti_price_base    = Some(12.3456)
-      )
 
-    val batchInfo = LegacyColumns.Result(Vector.empty, List.empty)
-
-    val wrongType = FailureDetails.LoaderIgluError.WrongType(
-      SchemaKey("com.snowplowanalytics.snowplow", "atomic", "jsonschema", SchemaVer.Full(1, 0, 0)),
-      value    = json"12.3456",
-      expected = "Decimal(Digits18,2)"
+    val batchTypesInfo = LegacyColumns.Result(
+      fields       = Vector(mySchemaUnstruct(version = SchemaVer.Full(1, 0, 0))),
+      igluFailures = List.empty
+    )
+    val expectedOutput = Map(
+      "unstruct_event_com_example_my_schema_1_0_0" -> null
     )
 
-    val expectedErrors = List.fill(8)(wrongType)
-
-    assertLoaderError(inputEvent, batchInfo, expectedErrors)
+    assertSuccessful(inputEvent, batchTypesInfo, expectedEntities = expectedOutput)
   }
 
-  def atomicHighPrecision = {
+  def contextsNoData = {
     val inputEvent = createEvent()
-      .copy(
-        tr_total         = Some(12345678987654321.34),
-        tr_tax           = Some(12345678987654321.34),
-        tr_shipping      = Some(12345678987654321.34),
-        ti_price         = Some(12345678987654321.34),
-        tr_total_base    = Some(12345678987654321.34),
-        tr_tax_base      = Some(12345678987654321.34),
-        tr_shipping_base = Some(12345678987654321.34),
-        ti_price_base    = Some(12345678987654321.34)
-      )
 
-    val batchInfo = LegacyColumns.Result(Vector.empty, List.empty)
-
-    val wrongType = FailureDetails.LoaderIgluError.WrongType(
-      SchemaKey("com.snowplowanalytics.snowplow", "atomic", "jsonschema", SchemaVer.Full(1, 0, 0)),
-      value    = json"1.2345678987654322E16",
-      expected = "Decimal(Digits18,2)"
+    val batchTypesInfo = LegacyColumns.Result(
+      fields       = Vector(mySchemaContexts(version = SchemaVer.Full(1, 0, 0))),
+      igluFailures = List.empty
+    )
+    val expectedOutput = Map(
+      "contexts_com_example_my_schema_1_0_0" -> null
     )
 
-    val expectedErrors = List.fill(8)(wrongType)
-
-    assertLoaderError(inputEvent, batchInfo, expectedErrors)
+    assertSuccessful(inputEvent, batchTypesInfo, expectedEntities = expectedOutput)
   }
 
   def unstructMissingValue = {
@@ -295,93 +290,12 @@ class LegacyColumnsTransformSpec extends Specification {
     assertLoaderError(inputEvent, batchInfo, expectedErrors = List(igluResolutionError))
   }
 
-  def unstructAllTypes = {
-    val inputEvent =
-      createEvent(unstruct = Some(sdj(data = dataWithAllTypes, key = "iglu:com.example/mySchema/jsonschema/1-0-0")))
-    val batchInfo = LegacyColumns.Result(
-      fields       = Vector(mySchemaUnstruct(SchemaVer.Full(1, 0, 0), schemaWithAllPossibleTypes)),
-      igluFailures = List.empty
-    )
-    val expectedOutput = Map(
-      "unstruct_event_com_example_my_schema_1_0_0" -> json"""{
-        "my_string":   "abc",
-        "my_int":       42,
-        "my_long":      42000000000,
-        "my_decimal":   1.23,
-        "my_double":    1.2323,
-        "my_boolean":   true,
-        "my_date":      19801,
-        "my_timestamp": 1710879639000000,
-        "my_array":     [1,2,3],
-        "my_object":    {"abc": "xyz"},
-        "my_empty_object": "{}"
-      }"""
-    )
-
-    assertSuccessful(inputEvent, batchInfo, expectedAllEntities = expectedOutput)
-  }
-
-  def contextAllTypes = {
-    val inputEvent =
-      createEvent(contexts = List(sdj(data = dataWithAllTypes, key = "iglu:com.example/mySchema/jsonschema/1-0-0")))
-    val batchInfo = LegacyColumns.Result(
-      fields       = Vector(mySchemaContexts(SchemaVer.Full(1, 0, 0), schemaWithAllPossibleTypes)),
-      igluFailures = List.empty
-    )
-    val expectedOutput = Map(
-      "contexts_com_example_my_schema_1_0_0" -> json"""[{
-        "my_string":   "abc",
-        "my_int":       42,
-        "my_long":      42000000000,
-        "my_decimal":   1.23,
-        "my_double":    1.2323,
-        "my_boolean":   true,
-        "my_date":      19801,
-        "my_timestamp": 1710879639000000,
-        "my_array":     [1,2,3],
-        "my_object":    {"abc": "xyz"},
-        "my_empty_object": "{}"
-      }]"""
-    )
-
-    assertSuccessful(inputEvent, batchInfo, expectedAllEntities = expectedOutput)
-  }
-
-  def unstructNoData = {
-    val inputEvent = createEvent()
-
-    val batchTypesInfo = LegacyColumns.Result(
-      fields       = Vector(mySchemaUnstruct(version = SchemaVer.Full(1, 0, 0))),
-      igluFailures = List.empty
-    )
-    val expectedOutput = Map(
-      "unstruct_event_com_example_my_schema_1_0_0" -> null
-    )
-
-    assertSuccessful(inputEvent, batchTypesInfo, expectedAllEntities = expectedOutput)
-  }
-
-  def contextsNoData = {
-    val inputEvent = createEvent()
-
-    val batchTypesInfo = LegacyColumns.Result(
-      fields       = Vector(mySchemaContexts(version = SchemaVer.Full(1, 0, 0))),
-      igluFailures = List.empty
-    )
-    val expectedOutput = Map(
-      "contexts_com_example_my_schema_1_0_0" -> null
-    )
-
-    assertSuccessful(inputEvent, batchTypesInfo, expectedAllEntities = expectedOutput)
-  }
-
   private def assertSuccessful(
     event: Event,
     batchInfo: LegacyColumns.Result,
-    expectedAtomic: Map[String, AnyRef]    = Map.empty,
-    expectedAllEntities: Map[String, Json] = Map.empty
+    expectedEntities: Map[String, Json]
   ) = {
-    val result = LegacyColumns.transformEvent(BadRowProcessor("test-loader", "0.0.0"), event, batchInfo, nowMicros)
+    val result = LegacyColumns.transformEvent(BadRowProcessor("test-loader", "0.0.0"), event, batchInfo)
 
     result must beRight { actualValues: Map[String, AnyRef] =>
       val actualFieldNames = actualValues.keys
@@ -391,12 +305,11 @@ class LegacyColumnsTransformSpec extends Specification {
         case (k, other)           => k -> other
       }
 
-      val assertAtomicExist: MatchResult[Any]   = actualValues must containAllOf(expectedAtomic.toSeq)
-      val assertEntitiesExist: MatchResult[Any] = actualValuesAsCirce must containAllOf(expectedAllEntities.toSeq)
+      val assertEntitiesExist: MatchResult[Any] = actualValuesAsCirce must containAllOf(expectedEntities.toSeq)
       val totalNumberOfFields: MatchResult[Any] =
-        actualFieldNames.size must beEqualTo(129 + expectedAllEntities.size) // atomic + entities only
+        actualFieldNames.size must beEqualTo(expectedEntities.size) // entities only
 
-      assertAtomicExist and assertEntitiesExist and totalNumberOfFields
+      assertEntitiesExist and totalNumberOfFields
     }
   }
 
@@ -405,7 +318,7 @@ class LegacyColumnsTransformSpec extends Specification {
     batchInfo: LegacyColumns.Result,
     expectedErrors: List[FailureDetails.LoaderIgluError]
   ): MatchResult[Either[BadRow, Map[String, AnyRef]]] = {
-    val result = LegacyColumns.transformEvent(BadRowProcessor("test-loader", "0.0.0"), inputEvent, batchInfo, nowMicros)
+    val result = LegacyColumns.transformEvent(BadRowProcessor("test-loader", "0.0.0"), inputEvent, batchInfo)
 
     result must beLeft.like { case BadRow.LoaderIgluError(_, Failure.LoaderIgluErrors(errors), _) =>
       errors.toList must containTheSameElementsAs(expectedErrors)
@@ -454,11 +367,8 @@ object LegacyColumnsTransformSpec {
    }
    """
 
-  private val now                   = Instant.now
-  private val nowMicros             = Long.box(now.toEpochMilli * 1000)
-  private val collectorTstamp       = now.minusSeconds(42L)
-  private val collectorTstampMicros = Long.box(collectorTstamp.toEpochMilli * 1000)
-  private val eventId               = UUID.randomUUID()
+  private val collectorTstamp = Instant.now.minusSeconds(42L)
+  private val eventId         = UUID.randomUUID()
 
   private def createEvent(unstruct: Option[SelfDescribingData[Json]] = None, contexts: List[SelfDescribingData[Json]] = List.empty): Event =
     Event

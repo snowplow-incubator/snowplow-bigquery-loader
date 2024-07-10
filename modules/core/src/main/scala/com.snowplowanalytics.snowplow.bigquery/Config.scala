@@ -33,7 +33,7 @@ case class Config[+Source, +Sink](
   monitoring: Config.Monitoring,
   license: AcceptedLicense,
   skipSchemas: List[SchemaCriterion],
-  legacyColumns: Boolean
+  legacyColumns: List[SchemaCriterion]
 )
 
 object Config {

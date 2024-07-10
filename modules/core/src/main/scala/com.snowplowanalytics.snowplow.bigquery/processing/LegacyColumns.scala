@@ -16,13 +16,13 @@ import io.circe.Json
 
 import com.snowplowanalytics.iglu.client.{ClientError, Resolver}
 import com.snowplowanalytics.iglu.client.resolver.registries.RegistryLookup
-import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
+import com.snowplowanalytics.iglu.core.{SchemaCriterion, SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.iglu.schemaddl.bigquery.{Field => LegacyField, Mode => LegacyMode, Type => LegacyType}
 import com.snowplowanalytics.iglu.schemaddl.parquet.{CastError, Caster, Field => V2Field, Type => V2Type}
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.Schema
 import com.snowplowanalytics.iglu.schemaddl.jsonschema.circe.implicits.toSchema
 import com.snowplowanalytics.snowplow.analytics.scalasdk.{Data => SdkData, Event, SnowplowEvent}
-import com.snowplowanalytics.snowplow.loaders.transform.{NonAtomicFields, SchemaSubVersion, TabledEntity, Transform}
+import com.snowplowanalytics.snowplow.loaders.transform.{SchemaSubVersion, TabledEntity}
 import com.snowplowanalytics.snowplow.badrows.{
   BadRow,
   Failure => BadRowFailure,
@@ -94,6 +94,8 @@ object LegacyColumns {
    *   The Iglu resolver
    * @param entities
    *   The self-describing entities in this batch for which we need to load data
+   * @param matchCriteria
+   *   Lists the schemas that we want to load in the legacy v1 column style
    * @return
    *   The typed fields for the entities to be loaded. These are v2 fields (parquet fields).
    *
@@ -102,13 +104,18 @@ object LegacyColumns {
    */
   def resolveTypes[F[_]: Sync: RegistryLookup](
     resolver: Resolver[F],
-    entities: Map[TabledEntity, Set[SchemaSubVersion]]
+    entities: Map[TabledEntity, Set[SchemaSubVersion]],
+    matchCriteria: List[SchemaCriterion]
   ): F[Result] =
     entities.toVector
       .flatMap { case (tabledEntity, subVersions) =>
-        subVersions.map { subVersion =>
-          (tabledEntity.entityType, TabledEntity.toSchemaKey(tabledEntity, subVersion))
-        }
+        subVersions
+          .map { subVersion =>
+            (tabledEntity.entityType, TabledEntity.toSchemaKey(tabledEntity, subVersion))
+          }
+          .filter { case (_, schemaKey) =>
+            matchCriteria.exists(_.matches(schemaKey))
+          }
       }
       .traverse { case (entityType, schemaKey) =>
         getSchema(resolver, schemaKey)
@@ -139,8 +146,6 @@ object LegacyColumns {
    *   The Snowplow event received from the stream
    * @param batchInfo
    *   Pre-calculated Iglu types for a batch of events, used to guide the transformation
-   * @param loadTstamp
-   *   The timestamp to use for the `load_tstamp` column
    * @return
    *   If event entities are valid, then returns a Map that is compatible with the BigQuery Write
    *   client. If event entities are invalid then returns a bad row.
@@ -148,16 +153,12 @@ object LegacyColumns {
   def transformEvent(
     processor: BadRowProcessor,
     event: Event,
-    batchInfo: Result,
-    loadTstamp: java.lang.Long
+    batchInfo: Result
   ): Either[BadRow, Map[String, AnyRef]] =
-    for {
-      _ <- failForResolverErrors(processor, event, batchInfo.igluFailures)
-      atomic <- forAtomic(processor, event)
-      nonAtomic <- forEntities(event, batchInfo.fields).leftMap { nel =>
-                     BadRow.LoaderIgluError(processor, BadRowFailure.LoaderIgluErrors(nel), BadPayload.LoaderPayload(event))
-                   }.toEither
-    } yield atomic ++ nonAtomic + ("load_tstamp" -> loadTstamp)
+    failForResolverErrors(processor, event, batchInfo.igluFailures) *>
+      forEntities(event, batchInfo.fields).leftMap { nel =>
+        BadRow.LoaderIgluError(processor, BadRowFailure.LoaderIgluErrors(nel), BadPayload.LoaderPayload(event))
+      }.toEither
 
   /**
    * Convert from the legacy Field of the old v1 loader into the new style Field.
@@ -255,15 +256,6 @@ object LegacyColumns {
           v.noSpaces
       }
   }
-
-  private def forAtomic(processor: BadRowProcessor, event: Event): Either[BadRow, Map[String, AnyRef]] =
-    Transform
-      .transformEvent[AnyRef](processor, LegacyCaster, event, NonAtomicFields.Result(Vector.empty, List.empty))
-      .map { namedValues =>
-        namedValues.map { case Caster.NamedValue(k, v) =>
-          k -> v
-        }.toMap
-      }
 
   private def forEntities(
     event: Event,

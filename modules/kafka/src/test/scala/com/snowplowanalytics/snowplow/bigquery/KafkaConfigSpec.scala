@@ -125,7 +125,7 @@ object KafkaConfigSpec {
     ),
     license       = AcceptedLicense(),
     skipSchemas   = List.empty,
-    legacyColumns = false
+    legacyColumns = List.empty
   )
 
   private val extendedConfig = Config[KafkaSourceConfig, KafkaSinkConfig](
@@ -213,6 +213,9 @@ object KafkaConfigSpec {
       SchemaCriterion.parse("iglu:com.acme/skipped3/jsonschema/1-*-*").get,
       SchemaCriterion.parse("iglu:com.acme/skipped4/jsonschema/*-*-*").get
     ),
-    legacyColumns = false
+    legacyColumns = List(
+      SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/1-*-*").get,
+      SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/2-*-*").get
+    )
   )
 }

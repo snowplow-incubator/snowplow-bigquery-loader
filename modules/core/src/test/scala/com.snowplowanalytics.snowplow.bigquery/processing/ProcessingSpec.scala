@@ -15,7 +15,7 @@ import cats.effect.testing.specs2.CatsEffect
 import cats.effect.testkit.TestControl
 import io.circe.literal._
 import com.google.cloud.bigquery.{Field => BQField, FieldList, StandardSQLTypeName}
-import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
+import com.snowplowanalytics.iglu.core.{SchemaCriterion, SchemaKey, SelfDescribingData}
 
 import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
@@ -143,7 +143,11 @@ class ProcessingSpec extends Specification with CatsEffect {
       )
     )
 
-    runTest(inputEvents(count = 1, good(unstructEvent)), mocks, legacyColumns) { case (inputs, control) =>
+    val legacyCriteria =
+      if (legacyColumns) List(SchemaCriterion("com.snowplowanalytics.snowplow.media", "ad_click_event", "jsonschema", 1))
+      else Nil
+
+    runTest(inputEvents(count = 1, good(unstructEvent)), mocks, legacyCriteria) { case (inputs, control) =>
       for {
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
@@ -199,7 +203,12 @@ class ProcessingSpec extends Specification with CatsEffect {
         AtomicDescriptor.withAdClickContext
       )
     )
-    runTest(inputEvents(count = 1, good(contexts = contexts)), mocks, legacyColumns) { case (inputs, control) =>
+
+    val legacyCriteria =
+      if (legacyColumns) List(SchemaCriterion("com.snowplowanalytics.snowplow.media", "ad_click_event", "jsonschema", 1))
+      else Nil
+
+    runTest(inputEvents(count = 1, good(contexts = contexts)), mocks, legacyCriteria) { case (inputs, control) =>
       for {
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
@@ -492,13 +501,13 @@ object ProcessingSpec {
 
   def runTest[A](
     toInputs: IO[List[TokenedEvents]],
-    mocks: Mocks           = Mocks.default,
-    legacyColumns: Boolean = false
+    mocks: Mocks                          = Mocks.default,
+    legacyCriteria: List[SchemaCriterion] = Nil
   )(
     f: (List[TokenedEvents], MockEnvironment) => IO[A]
   ): IO[A] =
     toInputs.flatMap { inputs =>
-      MockEnvironment.build(inputs, mocks, legacyColumns).use { control =>
+      MockEnvironment.build(inputs, mocks, legacyCriteria).use { control =>
         f(inputs, control)
       }
     }

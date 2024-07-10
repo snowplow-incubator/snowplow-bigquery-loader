@@ -36,7 +36,7 @@ case class Environment[F[_]](
   batching: Config.Batching,
   badRowMaxSize: Int,
   schemasToSkip: List[SchemaCriterion],
-  legacyColumns: Boolean
+  legacyColumns: List[SchemaCriterion]
 )
 
 object Environment {

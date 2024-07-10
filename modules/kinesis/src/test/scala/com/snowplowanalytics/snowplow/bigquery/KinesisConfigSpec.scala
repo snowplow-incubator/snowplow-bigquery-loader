@@ -123,7 +123,7 @@ object KinesisConfigSpec {
     ),
     license       = AcceptedLicense(),
     skipSchemas   = List.empty,
-    legacyColumns = false
+    legacyColumns = List.empty
   )
 
   // workerIdentifer coming from "HOSTNAME" env variable set in BuildSettings
@@ -208,6 +208,9 @@ object KinesisConfigSpec {
       SchemaCriterion.parse("iglu:com.acme/skipped3/jsonschema/1-*-*").get,
       SchemaCriterion.parse("iglu:com.acme/skipped4/jsonschema/*-*-*").get
     ),
-    legacyColumns = false
+    legacyColumns = List(
+      SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/1-*-*").get,
+      SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/2-*-*").get
+    )
   )
 }

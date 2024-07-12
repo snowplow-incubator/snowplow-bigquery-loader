@@ -15,7 +15,7 @@ import cats.effect.testing.specs2.CatsEffect
 import cats.effect.testkit.TestControl
 import io.circe.literal._
 import com.google.cloud.bigquery.{Field => BQField, FieldList, StandardSQLTypeName}
-import com.snowplowanalytics.iglu.core.{SchemaKey, SelfDescribingData}
+import com.snowplowanalytics.iglu.core.{SchemaCriterion, SchemaKey, SelfDescribingData}
 
 import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
@@ -37,10 +37,12 @@ class ProcessingSpec extends Specification with CatsEffect {
     Insert events to Bigquery and ack the events $e1
     Emit BadRows when there are badly formatted events $e2
     Write good batches and bad events when input contains both $e3
-    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct $e4_1
-    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts $e4_2
-    Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - unstruct $e4_3 
-    Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - contexts $e4_4
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct $alter1
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct with legacy columns $alter1_legacy
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts $alter2
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts $alter2_legacy
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - unstruct $alter3 
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - contexts $alter4
     Skip altering the table when the writer's protobuf Descriptor has relevant self-describing entitiy columns $e5
     Emit BadRows when the WriterProvider reports a problem with the data $e6
     Recover when the WriterProvider reports a server-side schema mismatch $e7
@@ -109,7 +111,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
   }
 
-  def e4_1 = {
+  def alter1_base(legacyColumns: Boolean) = {
     val unstructEvent: UnstructEvent = json"""
     {
       "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
@@ -121,11 +123,14 @@ class ProcessingSpec extends Specification with CatsEffect {
       }
     }
     """.as[UnstructEvent].fold(throw _, identity)
+    val expectedColumnName =
+      if (legacyColumns) "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
+      else "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1"
     val mocks = Mocks.default.copy(
       addColumnsResponse = MockEnvironment.Response.Success(
         FieldList.of(
           BQField.of(
-            "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1",
+            expectedColumnName,
             StandardSQLTypeName.STRUCT,
             FieldList.of(BQField.of("percent_progress", StandardSQLTypeName.STRING))
           )
@@ -137,7 +142,12 @@ class ProcessingSpec extends Specification with CatsEffect {
         AtomicDescriptor.withWebPageAndAdClick
       )
     )
-    runTest(inputEvents(count = 1, good(unstructEvent)), mocks) { case (inputs, control) =>
+
+    val legacyCriteria =
+      if (legacyColumns) List(SchemaCriterion("com.snowplowanalytics.snowplow.media", "ad_click_event", "jsonschema", 1))
+      else Nil
+
+    runTest(inputEvents(count = 1, good(unstructEvent)), mocks, legacyCriteria) { case (inputs, control) =>
       for {
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
@@ -145,7 +155,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.AlterTableAddedColumns(Vector("unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1")),
+          Action.AlterTableAddedColumns(Vector(expectedColumnName)),
           Action.ClosedWriter,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(2),
@@ -157,7 +167,10 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
   }
 
-  def e4_2 = {
+  def alter1        = alter1_base(legacyColumns = false)
+  def alter1_legacy = alter1_base(legacyColumns = true)
+
+  def alter2_base(legacyColumns: Boolean) = {
     val data = json"""{ "percentProgress": 50 }"""
     val contexts = Contexts(
       List(
@@ -167,13 +180,16 @@ class ProcessingSpec extends Specification with CatsEffect {
         )
       )
     )
+    val expectedColumnName =
+      if (legacyColumns) "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
+      else "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1"
 
     val mocks = Mocks.default.copy(
       addColumnsResponse = MockEnvironment.Response.Success(
         FieldList.of(
           BQField
             .newBuilder(
-              "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1",
+              expectedColumnName,
               StandardSQLTypeName.STRUCT,
               FieldList.of(BQField.of("percent_progress", StandardSQLTypeName.STRING))
             )
@@ -187,7 +203,12 @@ class ProcessingSpec extends Specification with CatsEffect {
         AtomicDescriptor.withAdClickContext
       )
     )
-    runTest(inputEvents(count = 1, good(contexts = contexts)), mocks) { case (inputs, control) =>
+
+    val legacyCriteria =
+      if (legacyColumns) List(SchemaCriterion("com.snowplowanalytics.snowplow.media", "ad_click_event", "jsonschema", 1))
+      else Nil
+
+    runTest(inputEvents(count = 1, good(contexts = contexts)), mocks, legacyCriteria) { case (inputs, control) =>
       for {
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
@@ -195,7 +216,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.AlterTableAddedColumns(Vector("contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1")),
+          Action.AlterTableAddedColumns(Vector(expectedColumnName)),
           Action.ClosedWriter,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(2),
@@ -207,7 +228,10 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
   }
 
-  def e4_3 = {
+  def alter2        = alter2_base(legacyColumns = false)
+  def alter2_legacy = alter2_base(legacyColumns = true)
+
+  def alter3 = {
     val data = json"""{ "myInteger": 100 }"""
     val unstruct = UnstructEvent(
       Some(SelfDescribingData(SchemaKey.fromUri("iglu:test_vendor/test_name/jsonschema/1-0-1").toOption.get, data))
@@ -252,7 +276,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
   }
 
-  def e4_4 = {
+  def alter4 = {
     val data     = json"""{ "myInteger": 100}"""
     val contexts = Contexts(List(SelfDescribingData(SchemaKey.fromUri("iglu:test_vendor/test_name/jsonschema/1-0-1").toOption.get, data)))
 
@@ -477,12 +501,13 @@ object ProcessingSpec {
 
   def runTest[A](
     toInputs: IO[List[TokenedEvents]],
-    mocks: Mocks = Mocks.default
+    mocks: Mocks                          = Mocks.default,
+    legacyCriteria: List[SchemaCriterion] = Nil
   )(
     f: (List[TokenedEvents], MockEnvironment) => IO[A]
   ): IO[A] =
     toInputs.flatMap { inputs =>
-      MockEnvironment.build(inputs, mocks).use { control =>
+      MockEnvironment.build(inputs, mocks, legacyCriteria).use { control =>
         f(inputs, control)
       }
     }

@@ -35,7 +35,8 @@ case class Environment[F[_]](
   alterTableWaitPolicy: RetryPolicy[F],
   batching: Config.Batching,
   badRowMaxSize: Int,
-  schemasToSkip: List[SchemaCriterion]
+  schemasToSkip: List[SchemaCriterion],
+  legacyColumns: List[SchemaCriterion]
 )
 
 object Environment {
@@ -79,7 +80,8 @@ object Environment {
       alterTableWaitPolicy = BigQueryRetrying.policyForAlterTableWait(config.main.retries),
       batching             = config.main.batching,
       badRowMaxSize        = config.main.output.bad.maxRecordSize,
-      schemasToSkip        = config.main.skipSchemas
+      schemasToSkip        = config.main.skipSchemas,
+      legacyColumns        = config.main.legacyColumns
     )
 
   private def enableSentry[F[_]: Sync](appInfo: AppInfo, config: Option[Config.Sentry]): Resource[F, Unit] =

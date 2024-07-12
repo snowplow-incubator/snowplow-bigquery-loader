@@ -123,8 +123,9 @@ object KafkaConfigSpec {
       healthProbe = Config.HealthProbe(port = Port.fromInt(8000).get, unhealthyLatency = 5.minutes),
       webhook     = None
     ),
-    license     = AcceptedLicense(),
-    skipSchemas = List.empty
+    license       = AcceptedLicense(),
+    skipSchemas   = List.empty,
+    legacyColumns = List.empty
   )
 
   private val extendedConfig = Config[KafkaSourceConfig, KafkaSinkConfig](
@@ -211,6 +212,10 @@ object KafkaConfigSpec {
       SchemaCriterion.parse("iglu:com.acme/skipped2/jsonschema/1-0-*").get,
       SchemaCriterion.parse("iglu:com.acme/skipped3/jsonschema/1-*-*").get,
       SchemaCriterion.parse("iglu:com.acme/skipped4/jsonschema/*-*-*").get
+    ),
+    legacyColumns = List(
+      SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/1-*-*").get,
+      SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/2-*-*").get
     )
   )
 }

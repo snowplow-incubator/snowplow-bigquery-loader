@@ -20,7 +20,7 @@ import com.snowplowanalytics.iglu.schemaddl.parquet.Caster
 import scala.jdk.CollectionConverters._
 
 /** Converts schema-ddl values into objects which are compatible with the BigQuery sdk */
-private[processing] object BigQueryCaster extends Caster[AnyRef] {
+private[processing] trait BigQueryCaster extends Caster[AnyRef] {
 
   override def nullValue: Null                             = null
   override def jsonValue(v: Json): String                  = v.noSpaces
@@ -46,3 +46,5 @@ private[processing] object BigQueryCaster extends Caster[AnyRef] {
     new JSONObject(map)
   }
 }
+
+private[processing] object BigQueryCaster extends BigQueryCaster

@@ -17,6 +17,7 @@ import com.google.protobuf.Descriptors
 import com.google.cloud.bigquery.FieldList
 
 import com.snowplowanalytics.iglu.client.Resolver
+import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.iglu.schemaddl.parquet.Field
 import com.snowplowanalytics.snowplow.runtime.AppInfo
 import com.snowplowanalytics.snowplow.runtime.processing.Coldswap
@@ -57,10 +58,16 @@ object MockEnvironment {
    *   Input events to send into the environment.
    * @param mocks
    *   Responses we want the `Writer` to return when someone calls uses the mocked services
+   * @param legacyColumns
+   *   Schemas for which to use legacy column style of BigQuery Loader version 1
    * @return
    *   An environment and a Ref that records the actions make by the environment
    */
-  def build(inputs: List[TokenedEvents], mocks: Mocks): Resource[IO, MockEnvironment] =
+  def build(
+    inputs: List[TokenedEvents],
+    mocks: Mocks,
+    legacyColumns: List[SchemaCriterion]
+  ): Resource[IO, MockEnvironment] =
     for {
       state <- Resource.eval(Ref[IO].of(Vector.empty[Action]))
       writerResource <- Resource.eval(testWriter(state, mocks.writerResponses, mocks.descriptors))
@@ -85,7 +92,8 @@ object MockEnvironment {
           writeBatchConcurrency = 1
         ),
         badRowMaxSize = 1000000,
-        schemasToSkip = List.empty
+        schemasToSkip = List.empty,
+        legacyColumns = legacyColumns
       )
       MockEnvironment(state, env)
     }

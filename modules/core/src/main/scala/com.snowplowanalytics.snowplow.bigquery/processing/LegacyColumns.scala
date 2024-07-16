@@ -125,8 +125,8 @@ object LegacyColumns {
               case TabledEntity.Context       => LegacyMode.Repeated
             }
             val columnName  = legacyColumnName(entityType, schemaKey)
-            val legacyField = LegacyField.build(columnName, schema, false).setMode(mode).normalized
-            val v2Field     = legacyFieldToV2Field(legacyField).copy(accessors = Set.empty)
+            val legacyField = LegacyField.build(columnName, schema, false).setMode(mode)
+            val v2Field     = V2Field.normalize(legacyFieldToV2Field(legacyField)).copy(accessors = Set.empty)
             FieldForEntity(v2Field, schemaKey, entityType)
           }
           .leftMap(ColumnFailure(schemaKey, entityType, _))
@@ -159,6 +159,24 @@ object LegacyColumns {
       forEntities(event, batchInfo.fields).leftMap { nel =>
         BadRow.LoaderIgluError(processor, BadRowFailure.LoaderIgluErrors(nel), BadPayload.LoaderPayload(event))
       }.toEither
+
+  /**
+   * Replaces any Json type with a String type
+   *
+   * This must be run after transformation, but before handling schema evolution. It is needed
+   * because the legacy loader used String columns where the v2 loader would create Json columns
+   */
+  def dropJsonTypes(v2Field: V2Field): V2Field = {
+    def dropFromType(t: V2Type): V2Type = t match {
+      case V2Type.Json                        => V2Type.String
+      case V2Type.Array(element, nullability) => V2Type.Array(dropFromType(element), nullability)
+      case V2Type.Struct(fields)              => V2Type.Struct(fields.map(dropJsonTypes))
+      case other                              => other
+    }
+
+    v2Field.copy(fieldType = dropFromType(v2Field.fieldType))
+
+  }
 
   /**
    * Convert from the legacy Field of the old v1 loader into the new style Field.

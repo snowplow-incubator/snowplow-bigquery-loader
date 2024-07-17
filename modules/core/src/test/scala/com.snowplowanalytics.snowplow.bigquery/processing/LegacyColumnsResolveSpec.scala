@@ -58,11 +58,12 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     val expected = {
       val expectedStruct = Type.Struct(
         NonEmptyVector.of(
-          Field("col_a", Type.Json, Required)
+          Field("col_camel", Type.Json, Required, Set("colCamel")),
+          Field("col_snake", Type.Json, Required, Set("col_snake"))
         )
       )
 
-      val expectedField = Field("unstruct_event_myvendor_myschema_7_0_0", expectedStruct, Nullable, Set.empty)
+      val expectedField = Field("unstruct_event_myvendor_myschema_7_0_0", expectedStruct, Nullable)
 
       LegacyColumns.FieldForEntity(
         expectedField,
@@ -92,11 +93,12 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     val expected100 = {
       val expectedStruct = Type.Struct(
         NonEmptyVector.of(
-          Field("col_a", Type.Json, Required)
+          Field("col_camel", Type.Json, Required, Set("colCamel")),
+          Field("col_snake", Type.Json, Required, Set("col_snake"))
         )
       )
 
-      val expectedField = Field("unstruct_event_myvendor_myschema_7_0_0", expectedStruct, Nullable, Set.empty)
+      val expectedField = Field("unstruct_event_myvendor_myschema_7_0_0", expectedStruct, Nullable)
 
       LegacyColumns.FieldForEntity(
         expectedField,
@@ -108,12 +110,13 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     val expected110 = {
       val expectedStruct = Type.Struct(
         NonEmptyVector.of(
-          Field("col_a", Type.Json, Required),
-          Field("col_c", Type.Long, Nullable)
+          Field("col_camel", Type.Json, Required, Set("colCamel")),
+          Field("col_snake", Type.Json, Required, Set("col_snake")),
+          Field("col_other", Type.Long, Nullable, Set("col_other"))
         )
       )
 
-      val expectedField = Field("unstruct_event_myvendor_myschema_7_1_0", expectedStruct, Nullable, Set.empty)
+      val expectedField = Field("unstruct_event_myvendor_myschema_7_1_0", expectedStruct, Nullable)
 
       LegacyColumns.FieldForEntity(
         expectedField,
@@ -145,7 +148,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     val expected = {
       val expectedType = Type.Json
       val expectedField =
-        Field("unstruct_event_com_snowplowanalytics_snowplow_media_ad_break_end_event_1_0_0", expectedType, Nullable, Set.empty)
+        Field("unstruct_event_com_snowplowanalytics_snowplow_media_ad_break_end_event_1_0_0", expectedType, Nullable)
 
       LegacyColumns.FieldForEntity(
         expectedField,
@@ -175,7 +178,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val expected = {
       val expectedType  = Type.Json
-      val expectedField = Field("unstruct_event_com_snowplowanalytics_iglu_anything_a_1_0_0", expectedType, Nullable, Set.empty)
+      val expectedField = Field("unstruct_event_com_snowplowanalytics_iglu_anything_a_1_0_0", expectedType, Nullable)
 
       LegacyColumns.FieldForEntity(
         expectedField,
@@ -223,13 +226,14 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     val expected = {
       val expectedStruct = Type.Struct(
         NonEmptyVector.of(
-          Field("col_a", Type.Json, Required)
+          Field("col_camel", Type.Json, Required, Set("colCamel")),
+          Field("col_snake", Type.Json, Required, Set("col_snake"))
         )
       )
 
       val expectedArray = Type.Array(expectedStruct, Nullable)
 
-      val expectedField = Field("contexts_myvendor_myschema_7_0_0", expectedArray, Nullable, Set.empty)
+      val expectedField = Field("contexts_myvendor_myschema_7_0_0", expectedArray, Nullable)
 
       LegacyColumns.FieldForEntity(
         expectedField,
@@ -259,13 +263,14 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     val expected100 = {
       val expectedStruct = Type.Struct(
         NonEmptyVector.of(
-          Field("col_a", Type.Json, Required)
+          Field("col_camel", Type.Json, Required, Set("colCamel")),
+          Field("col_snake", Type.Json, Required, Set("col_snake"))
         )
       )
 
       val expectedArray = Type.Array(expectedStruct, Nullable)
 
-      val expectedField = Field("contexts_myvendor_myschema_7_0_0", expectedArray, Nullable, Set.empty)
+      val expectedField = Field("contexts_myvendor_myschema_7_0_0", expectedArray, Nullable)
 
       LegacyColumns.FieldForEntity(
         expectedField,
@@ -277,14 +282,15 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     val expected110 = {
       val expectedStruct = Type.Struct(
         NonEmptyVector.of(
-          Field("col_a", Type.Json, Required),
-          Field("col_c", Type.Long, Nullable)
+          Field("col_camel", Type.Json, Required, Set("colCamel")),
+          Field("col_snake", Type.Json, Required, Set("col_snake")),
+          Field("col_other", Type.Long, Nullable, Set("col_other"))
         )
       )
 
       val expectedArray = Type.Array(expectedStruct, Nullable)
 
-      val expectedField = Field("contexts_myvendor_myschema_7_1_0", expectedArray, Nullable, Set.empty)
+      val expectedField = Field("contexts_myvendor_myschema_7_1_0", expectedArray, Nullable)
 
       LegacyColumns.FieldForEntity(
         expectedField,
@@ -316,7 +322,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     val expected = {
       val expectedArray = Type.Array(Type.Json, Nullable)
       val expectedField =
-        Field("contexts_com_snowplowanalytics_snowplow_media_ad_break_end_event_1_0_0", expectedArray, Nullable, Set.empty)
+        Field("contexts_com_snowplowanalytics_snowplow_media_ad_break_end_event_1_0_0", expectedArray, Nullable)
 
       LegacyColumns.FieldForEntity(
         expectedField,
@@ -350,7 +356,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
       val expectedArray = Type.Array(expectedType, Nullable)
 
-      val expectedField = Field("contexts_com_snowplowanalytics_iglu_anything_a_1_0_0", expectedArray, Nullable, Set.empty)
+      val expectedField = Field("contexts_com_snowplowanalytics_iglu_anything_a_1_0_0", expectedArray, Nullable)
 
       LegacyColumns.FieldForEntity(
         expectedField,

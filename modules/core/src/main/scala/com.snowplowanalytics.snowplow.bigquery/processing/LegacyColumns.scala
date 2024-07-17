@@ -126,7 +126,7 @@ object LegacyColumns {
             }
             val columnName  = legacyColumnName(entityType, schemaKey)
             val legacyField = LegacyField.build(columnName, schema, false).setMode(mode)
-            val v2Field     = V2Field.normalize(legacyFieldToV2Field(legacyField)).copy(accessors = Set.empty)
+            val v2Field     = V2Field.normalize(legacyFieldToV2Field(legacyField))
             FieldForEntity(v2Field, schemaKey, entityType)
           }
           .leftMap(ColumnFailure(schemaKey, entityType, _))

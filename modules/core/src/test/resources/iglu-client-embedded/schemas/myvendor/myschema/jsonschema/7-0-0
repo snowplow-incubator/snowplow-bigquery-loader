@@ -8,7 +8,8 @@
   },
   "type": "object",
   "properties": {
-    "col_a": {"type": "string"}
+    "col_snake": {"type": "string"},
+    "colCamel": {"type": "string"}
   },
-  "required": ["col_a"]
+  "required": ["col_snake", "colCamel"]
 }

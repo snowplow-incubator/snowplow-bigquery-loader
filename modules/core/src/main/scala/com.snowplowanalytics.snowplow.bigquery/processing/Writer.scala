@@ -8,7 +8,6 @@
  */
 package com.snowplowanalytics.snowplow.bigquery.processing
 
-import cats.Applicative
 import cats.implicits._
 import cats.effect.{Async, Poll, Resource, Sync}
 import com.google.api.gax.batching.FlowControlSettings
@@ -166,25 +165,20 @@ object Writer {
       def write(rows: List[Map[String, AnyRef]]): F[WriteResult] =
         Sync[F]
           .delay(writer.append(new JSONArray(rows.map(_.asJava).asJava)))
-          .attemptNarrow[BQExceptions.AppendSerializationError]
-          .flatMap[WriteResult] {
-            case Right(fut) =>
-              FutureInterop
-                .fromFuture(fut)
-                .as[WriteResult](WriteResult.Success)
-                .recover {
-                  case e: BQExceptions.SchemaMismatchedException =>
-                    WriteResult.ServerSideSchemaMismatch(e)
-                  case e: BQExceptions.StreamWriterClosedException =>
-                    WriteResult.WriterWasClosedByEarlierError(e)
-                }
-            case Left(appendSerializationError) =>
-              Applicative[F].pure {
-                WriteResult.SerializationFailures {
-                  appendSerializationError.getRowIndexToErrorMessage.asScala.map { case (i, cause) =>
-                    i.toInt -> cause
-                  }.toMap
-                }
+          .flatMap(FutureInterop.fromFuture(_))
+          .as[WriteResult](WriteResult.Success)
+          .recover {
+            // Some of these errors can happen either client side during `writer.append`
+            // ...or server-side during `FutureInterop.fromFuture(_)`
+            case e: BQExceptions.SchemaMismatchedException =>
+              WriteResult.ServerSideSchemaMismatch(e)
+            case e: BQExceptions.StreamWriterClosedException =>
+              WriteResult.WriterWasClosedByEarlierError(e)
+            case e: BQExceptions.AppendSerializationError =>
+              WriteResult.SerializationFailures {
+                e.getRowIndexToErrorMessage.asScala.map { case (i, cause) =>
+                  i.toInt -> cause
+                }.toMap
               }
           }
 

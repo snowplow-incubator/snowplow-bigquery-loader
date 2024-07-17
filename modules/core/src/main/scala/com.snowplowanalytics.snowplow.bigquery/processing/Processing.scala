@@ -153,7 +153,7 @@ object Processing {
         (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, v2NonAtomicFields, legacyFields)
         fields = v2NonAtomicFields.fields.flatMap { tte =>
                    tte.mergedField :: tte.recoveries.map(_._2)
-                 } ++ legacyFields.fields.map(_.field)
+                 } ++ legacyFields.fields.map(f => LegacyColumns.dropJsonTypes(f.field))
       } yield BatchAfterTransform(
         rows,
         fields,

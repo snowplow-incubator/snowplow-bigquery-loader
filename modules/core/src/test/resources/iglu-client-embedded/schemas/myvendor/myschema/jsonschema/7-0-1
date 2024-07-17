@@ -8,8 +8,9 @@
   },
   "type": "object",
   "properties": {
-    "col_a": {"type": "string"},
-    "col_b": {"type": "string"}
+    "col_snake": {"type": "string"},
+    "colCamel": {"type": "string"},
+    "col_extra": {"type": "string"}
   },
-  "required": ["col_a", "col_b"]
+  "required": ["col_snake", "colCamel", "col_extra"]
 }

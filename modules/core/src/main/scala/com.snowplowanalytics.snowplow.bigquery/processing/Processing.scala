@@ -31,8 +31,9 @@ import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProce
 import com.snowplowanalytics.snowplow.sinks.ListOfList
 import com.snowplowanalytics.snowplow.runtime.syntax.foldable._
 import com.snowplowanalytics.snowplow.runtime.processing.BatchUp
+import com.snowplowanalytics.snowplow.runtime.Retrying.showRetryDetails
 import com.snowplowanalytics.snowplow.loaders.transform.{BadRowsSerializer, NonAtomicFields, SchemaSubVersion, TabledEntity, Transform}
-import com.snowplowanalytics.snowplow.bigquery.{AppHealth, Environment, Metrics}
+import com.snowplowanalytics.snowplow.bigquery.{Environment, Metrics, RuntimeService}
 
 object Processing {
 
@@ -41,7 +42,7 @@ object Processing {
   def stream[F[_]: Async](env: Environment[F]): Stream[F, Nothing] = {
     implicit val lookup: RegistryLookup[F] = Http4sRegistryLookup(env.httpClient)
     val eventProcessingConfig              = EventProcessingConfig(EventProcessingConfig.NoWindowing)
-    Stream.eval(env.tableManager.createTable) *>
+    Stream.eval(env.tableManager.createTableIfNotExists) *>
       Stream.eval(env.writer.opened.use_) *>
       env.source.stream(eventProcessingConfig, eventProcessor(env))
   }
@@ -201,7 +202,7 @@ object Processing {
     _.parEvalMap(env.batching.writeBatchConcurrency) { batch =>
       writeUntilSuccessful(env, badProcessor, batch)
         .onError { _ =>
-          env.appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = false)
+          env.appHealth.beUnhealthyForRuntimeService(RuntimeService.BigQueryClient)
         }
     }
 
@@ -218,8 +219,7 @@ object Processing {
 
     def handlingServerSideSchemaMismatches(env: Environment[F]): F[Writer.WriteResult] = {
       def onFailure(wr: Writer.WriteResult, details: RetryDetails): F[Unit] = {
-        val extractedDetail = BigQueryRetrying.extractRetryDetails(details)
-        val msg             = s"Newly added columns have not yet propagated to the BigQuery Writer server-side. $extractedDetail"
+        val msg = show"Newly added columns have not yet propagated to the BigQuery Writer server-side. $details"
         val log = wr match {
           case Writer.WriteResult.ServerSideSchemaMismatch(e) if details.retriesSoFar > errorsAllowedWithShortLogging =>
             Logger[F].warn(e)(msg)
@@ -318,7 +318,7 @@ object Processing {
           }
         }
         .onError { _ =>
-          env.appHealth.setServiceHealth(AppHealth.Service.BigQueryClient, isHealthy = false)
+          env.appHealth.beUnhealthyForRuntimeService(RuntimeService.BigQueryClient)
         }
     }
 
@@ -331,8 +331,7 @@ object Processing {
           (!BigQuerySchemaUtils.fieldsMissingFromDescriptor(descriptor, fieldsToExist)).pure[F]
         },
         onFailure = { case (_, details) =>
-          val extractedDetail = BigQueryRetrying.extractRetryDetails(details)
-          val msg             = s"Newly added columns have not yet propagated to the BigQuery Writer client-side. $extractedDetail"
+          val msg = show"Newly added columns have not yet propagated to the BigQuery Writer client-side. $details"
           Logger[F].warn(msg) *> env.writer.closed.use_
         }
       )
@@ -349,7 +348,7 @@ object Processing {
         env.badSink
           .sinkSimple(serialized)
           .onError { _ =>
-            env.appHealth.setServiceHealth(AppHealth.Service.BadSink, isHealthy = false)
+            env.appHealth.beUnhealthyForRuntimeService(RuntimeService.BadSink)
           }
       } else Applicative[F].unit
     }

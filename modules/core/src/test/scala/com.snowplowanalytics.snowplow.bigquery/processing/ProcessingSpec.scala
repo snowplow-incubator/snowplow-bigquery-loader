@@ -24,9 +24,8 @@ import scala.concurrent.duration.DurationLong
 
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent, unstructEventDecoder}
-import com.snowplowanalytics.snowplow.bigquery.{AtomicDescriptor, MockEnvironment}
+import com.snowplowanalytics.snowplow.bigquery.{AtomicDescriptor, MockEnvironment, RuntimeService}
 import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.{Action, Mocks}
-import com.snowplowanalytics.snowplow.runtime.HealthProbe
 import com.snowplowanalytics.snowplow.sources.TokenedEvents
 
 class ProcessingSpec extends Specification with CatsEffect {
@@ -41,7 +40,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct with legacy columns $alter1_legacy
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts $alter2
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts $alter2_legacy
-    Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - unstruct $alter3 
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - unstruct $alter3
     Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - contexts $alter4
     Skip altering the table when the writer's protobuf Descriptor has relevant self-describing entitiy columns $e5
     Emit BadRows when the WriterProvider reports a problem with the data $e6
@@ -477,8 +476,14 @@ class ProcessingSpec extends Specification with CatsEffect {
     runTest(inputEvents(count = 1, badlyFormatted), mocks) { case (_, control) =>
       for {
         _ <- Processing.stream(control.environment).compile.drain.voidError
-        healthStatus <- control.environment.appHealth.status
-      } yield healthStatus should beEqualTo(HealthProbe.Unhealthy("Bad sink is not healthy"))
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.BecameUnhealthy(RuntimeService.BadSink)
+        )
+      )
     }
   }
 
@@ -486,13 +491,19 @@ class ProcessingSpec extends Specification with CatsEffect {
     val mocks = Mocks.default.copy(
       writerResponses = List(MockEnvironment.Response.ExceptionThrown(new RuntimeException("Some error when writing to the Writer")))
     )
-
     runTest(inputEvents(count = 1, good()), mocks) { case (_, control) =>
       for {
         _ <- Processing.stream(control.environment).compile.drain.voidError
-        healthStatus <- control.environment.appHealth.status
-      } yield healthStatus should beEqualTo(HealthProbe.Unhealthy("BigQuery client is not healthy"))
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.BecameUnhealthy(RuntimeService.BigQueryClient)
+        )
+      )
     }
+
   }
 
 }

@@ -17,7 +17,7 @@ import com.comcast.ip4s.Port
 import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.snowplow.bigquery.Config.GcpUserAgent
 import com.snowplowanalytics.snowplow.runtime.Metrics.StatsdConfig
-import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, Telemetry}
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, Retrying, Telemetry, Webhook}
 import com.snowplowanalytics.snowplow.sinks.kafka.KafkaSinkConfig
 import com.snowplowanalytics.snowplow.sources.kafka.KafkaSourceConfig
 import org.http4s.implicits.http4sLiteralsSyntax
@@ -29,7 +29,7 @@ import scala.concurrent.duration.DurationInt
 class KafkaConfigSpec extends Specification with CatsEffect {
 
   def is = s2"""
-   Config parse should be able to parse 
+   Config parse should be able to parse
     minimal kafka config $minimal
     extended kafka config $extended
   """
@@ -100,8 +100,8 @@ object KafkaConfigSpec {
       writeBatchConcurrency = 3
     ),
     retries = Config.Retries(
-      setupErrors     = Config.SetupErrorRetries(delay = 30.seconds),
-      transientErrors = Config.TransientErrorRetries(delay = 1.second, attempts = 5),
+      setupErrors     = Retrying.Config.ForSetup(delay = 30.seconds),
+      transientErrors = Retrying.Config.ForTransient(delay = 1.second, attempts = 5),
       alterTableWait  = Config.AlterTableWaitRetries(delay = 1.second),
       tooManyColumns  = Config.TooManyColumnsRetries(delay = 300.seconds)
     ),
@@ -121,7 +121,7 @@ object KafkaConfigSpec {
       metrics     = Config.Metrics(None),
       sentry      = None,
       healthProbe = Config.HealthProbe(port = Port.fromInt(8000).get, unhealthyLatency = 5.minutes),
-      webhook     = None
+      webhook     = Webhook.Config(endpoint = None, tags = Map.empty, heartbeat = 60.minutes)
     ),
     license       = AcceptedLicense(),
     skipSchemas   = List.empty,
@@ -170,8 +170,8 @@ object KafkaConfigSpec {
       writeBatchConcurrency = 1
     ),
     retries = Config.Retries(
-      setupErrors     = Config.SetupErrorRetries(delay = 30.seconds),
-      transientErrors = Config.TransientErrorRetries(delay = 1.second, attempts = 5),
+      setupErrors     = Retrying.Config.ForSetup(delay = 30.seconds),
+      transientErrors = Retrying.Config.ForTransient(delay = 1.second, attempts = 5),
       alterTableWait  = Config.AlterTableWaitRetries(delay = 1.second),
       tooManyColumns  = Config.TooManyColumnsRetries(delay = 300.seconds)
     ),
@@ -204,7 +204,8 @@ object KafkaConfigSpec {
         port             = Port.fromInt(8000).get,
         unhealthyLatency = 5.minutes
       ),
-      webhook = Some(Config.Webhook(endpoint = uri"https://webhook.acme.com", tags = Map("pipeline" -> "production")))
+      webhook =
+        Webhook.Config(endpoint = Some(uri"https://webhook.acme.com"), tags = Map("pipeline" -> "production"), heartbeat = 60.minutes)
     ),
     license = AcceptedLicense(),
     skipSchemas = List(

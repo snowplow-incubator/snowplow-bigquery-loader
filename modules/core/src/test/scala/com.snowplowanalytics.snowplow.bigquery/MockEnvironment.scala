@@ -19,7 +19,7 @@ import com.google.cloud.bigquery.FieldList
 import com.snowplowanalytics.iglu.client.Resolver
 import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.iglu.schemaddl.parquet.Field
-import com.snowplowanalytics.snowplow.runtime.AppInfo
+import com.snowplowanalytics.snowplow.runtime.{AppHealth, AppInfo, Retrying}
 import com.snowplowanalytics.snowplow.runtime.processing.Coldswap
 import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, SourceAndAck, TokenedEvents}
 import com.snowplowanalytics.snowplow.sinks.Sink
@@ -30,11 +30,6 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 case class MockEnvironment(state: Ref[IO, Vector[MockEnvironment.Action]], environment: Environment[IO])
 
 object MockEnvironment {
-
-  private val everythingHealthy: Map[AppHealth.Service, Boolean] = Map(
-    AppHealth.Service.BigQueryClient -> true,
-    AppHealth.Service.BadSink -> true
-  )
 
   sealed trait Action
   object Action {
@@ -48,6 +43,8 @@ object MockEnvironment {
     case class AddedGoodCountMetric(count: Long) extends Action
     case class AddedBadCountMetric(count: Long) extends Action
     case class SetLatencyMetric(millis: Long) extends Action
+    case class BecameUnhealthy(service: RuntimeService) extends Action
+    case class BecameHealthy(service: RuntimeService) extends Action
   }
   import Action._
 
@@ -72,19 +69,17 @@ object MockEnvironment {
       state <- Resource.eval(Ref[IO].of(Vector.empty[Action]))
       writerResource <- Resource.eval(testWriter(state, mocks.writerResponses, mocks.descriptors))
       writerColdswap <- Coldswap.make(writerResource)
-      source = testSourceAndAck(inputs, state)
-      appHealth <- Resource.eval(AppHealth.init(10.seconds, source, everythingHealthy))
     } yield {
       val env = Environment(
         appInfo              = appInfo,
-        source               = source,
+        source               = testSourceAndAck(inputs, state),
         badSink              = testBadSink(mocks.badSinkResponse, state),
         resolver             = Resolver[IO](Nil, None),
         httpClient           = testHttpClient,
         tableManager         = testTableManager(mocks.addColumnsResponse, state),
         writer               = writerColdswap,
         metrics              = testMetrics(state),
-        appHealth            = appHealth,
+        appHealth            = testAppHealth(state),
         alterTableWaitPolicy = BigQueryRetrying.policyForAlterTableWait[IO](retriesConfig),
         batching = Config.Batching(
           maxBytes              = 16000000,
@@ -137,7 +132,7 @@ object MockEnvironment {
             IO.raiseError(value)
         }
 
-      def createTable: IO[Unit] =
+      def createTableIfNotExists: IO[Unit] =
         state.update(_ :+ CreatedTable)
     }
 
@@ -228,7 +223,7 @@ object MockEnvironment {
       Resource.make(make)(_ => actionRef.update(_ :+ ClosedWriter))
     }
 
-  def testMetrics(ref: Ref[IO, Vector[Action]]): Metrics[IO] = new Metrics[IO] {
+  private def testMetrics(ref: Ref[IO, Vector[Action]]): Metrics[IO] = new Metrics[IO] {
     def addBad(count: Long): IO[Unit] =
       ref.update(_ :+ AddedBadCountMetric(count))
 
@@ -241,9 +236,21 @@ object MockEnvironment {
     def report: Stream[IO, Nothing] = Stream.never[IO]
   }
 
-  def retriesConfig = Config.Retries(
-    Config.SetupErrorRetries(30.seconds),
-    Config.TransientErrorRetries(1.second, 5),
+  private def testAppHealth(ref: Ref[IO, Vector[Action]]): AppHealth.Interface[IO, Alert, RuntimeService] =
+    new AppHealth.Interface[IO, Alert, RuntimeService] {
+      def beHealthyForSetup: IO[Unit] =
+        IO.unit
+      def beUnhealthyForSetup(alert: Alert): IO[Unit] =
+        IO.unit
+      def beHealthyForRuntimeService(service: RuntimeService): IO[Unit] =
+        ref.update(_ :+ BecameHealthy(service))
+      def beUnhealthyForRuntimeService(service: RuntimeService): IO[Unit] =
+        ref.update(_ :+ BecameUnhealthy(service))
+    }
+
+  private def retriesConfig = Config.Retries(
+    Retrying.Config.ForSetup(30.seconds),
+    Retrying.Config.ForTransient(1.second, 5),
     Config.AlterTableWaitRetries(1.second),
     Config.TooManyColumnsRetries(300.seconds)
   )

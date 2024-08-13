@@ -29,8 +29,9 @@ import com.google.auth.Credentials
 import com.google.cloud.bigquery.BigQueryException
 
 import com.snowplowanalytics.iglu.schemaddl.parquet.Field
+import com.snowplowanalytics.snowplow.runtime.{AppHealth, SetupExceptionMessages}
 import com.snowplowanalytics.snowplow.loaders.transform.AtomicFields
-import com.snowplowanalytics.snowplow.bigquery.{Alert, AppHealth, Config, Monitoring}
+import com.snowplowanalytics.snowplow.bigquery.{Alert, Config, RuntimeService}
 import com.snowplowanalytics.snowplow.bigquery.processing.BigQueryUtils.BQExceptionSyntax
 
 import scala.jdk.CollectionConverters._
@@ -47,6 +48,8 @@ trait TableManager[F[_]] {
    */
   def addColumns(columns: Vector[Field]): F[FieldList]
 
+  def tableExists: F[Boolean]
+
   def createTable: F[Unit]
 
 }
@@ -55,7 +58,10 @@ object TableManager {
 
   private implicit def logger[F[_]: Sync] = Slf4jLogger.getLogger[F]
 
-  trait WithHandledErrors[F[_]] extends TableManager[F]
+  trait WithHandledErrors[F[_]] {
+    def addColumns(columns: Vector[Field]): F[FieldList]
+    def createTableIfNotExists: F[Unit]
+  }
 
   def make[F[_]: Async](
     config: Config.BigQuery,
@@ -68,8 +74,7 @@ object TableManager {
   def withHandledErrors[F[_]: Async](
     underlying: TableManager[F],
     retries: Config.Retries,
-    appHealth: AppHealth[F],
-    monitoring: Monitoring[F]
+    appHealth: AppHealth.Interface[F, Alert, RuntimeService]
   ): F[WithHandledErrors[F]] =
     for {
       addingColumnsEnabled <- Ref[F].of[Boolean](true)
@@ -78,28 +83,38 @@ object TableManager {
         addingColumnsEnabled.get.flatMap {
           case true =>
             BigQueryRetrying
-              .withRetries(appHealth, retries, monitoring, Alert.FailedToAddColumns(columns.map(_.name), _)) {
-                Logger[F].info(s"Altering table to add columns [${showColumns(columns)}]") *>
-                  underlying
-                    .addColumns(columns)
-                    .recoverWith(handleTooManyColumns(retries, monitoring, addingColumnsEnabled, columns))
-                    .onError(logOnRaceCondition)
+              .withRetries(appHealth, retries, Alert.FailedToAddColumns(columns.map(_.name), _)) {
+                underlying
+                  .addColumns(columns)
+                  .recoverWith(handleTooManyColumns(retries, appHealth, addingColumnsEnabled, columns))
+                  .onError(logOnRaceCondition)
               }
           case false =>
             FieldList.of().pure[F]
         }
 
-      def createTable: F[Unit] =
-        BigQueryRetrying.withRetries(appHealth, retries, monitoring, Alert.FailedToCreateEventsTable(_)) {
-          underlying.createTable
-            .recoverWith {
-              case bqe: BigQueryException if bqe.lowerCaseReason === "duplicate" =>
-                // Table already exists
-                Logger[F].info(s"Ignoring error when creating table: ${bqe.getMessage}")
-              case bqe: BigQueryException if bqe.lowerCaseReason === "accessdenied" =>
-                Logger[F].info(s"Access denied when trying to create table. Will ignore error and assume table already exists.")
-            }
-        }
+      def createTableIfNotExists: F[Unit] =
+        BigQueryRetrying
+          .withRetries(appHealth, retries, Alert.FailedToGetTable(_)) {
+            underlying.tableExists
+              .recoverWith {
+                case bqe: BigQueryException if bqe.lowerCaseReason === "accessdenied" =>
+                  Logger[F].info(bqe)("Failed to get details of existing table.  Will fallback to creating the table...").as(false)
+              }
+          }
+          .flatMap {
+            case true =>
+              Sync[F].unit
+            case false =>
+              BigQueryRetrying.withRetries(appHealth, retries, Alert.FailedToCreateEventsTable(_)) {
+                underlying.createTable
+                  .recoverWith {
+                    case bqe: BigQueryException if bqe.lowerCaseReason === "duplicate" =>
+                      // Table already exists
+                      Logger[F].info(s"Ignoring error when creating table: ${bqe.getMessage}")
+                  }
+              }
+          }
     }
 
   private def impl[F[_]: Async](
@@ -109,21 +124,31 @@ object TableManager {
 
     def addColumns(columns: Vector[Field]): F[FieldList] =
       for {
+        _ <- Logger[F].info(s"Attempting to fetch details of table ${config.dataset}.${config.table}...")
         table <- Sync[F].blocking(client.getTable(config.dataset, config.table))
+        _ <- Logger[F].info("Successfully fetched details of table")
         schema <- Sync[F].pure(table.getDefinition[TableDefinition].getSchema)
         fields <- Sync[F].pure(schema.getFields)
         fields <- Sync[F].pure(BigQuerySchemaUtils.mergeInColumns(fields, columns))
         schema <- Sync[F].pure(Schema.of(fields))
         table <- Sync[F].pure(setTableSchema(table, schema))
+        _ <- Logger[F].info(s"Altering table to add columns [${showColumns(columns)}]...")
         _ <- Sync[F].blocking(table.update())
+        _ <- Logger[F].info("Successfully altered table schema")
       } yield fields
+
+    def tableExists: F[Boolean] =
+      for {
+        _ <- Logger[F].info(s"Attempting to fetch details of table ${config.dataset}.${config.table}...")
+        _ <- Sync[F].blocking(client.getTable(config.dataset, config.table))
+        _ <- Logger[F].info("Successfully fetched details of table")
+      } yield true
 
     def createTable: F[Unit] = {
       val tableInfo = atomicTableInfo(config)
       Logger[F].info(show"Creating table $tableInfo") *>
-        Sync[F]
-          .blocking(client.create(tableInfo))
-          .void
+        Sync[F].blocking(client.create(tableInfo)) *>
+        Logger[F].info(show"Successfully created table $tableInfo")
     }
   }
 
@@ -138,7 +163,7 @@ object TableManager {
 
   private def handleTooManyColumns[F[_]: Async](
     retries: Config.Retries,
-    monitoring: Monitoring[F],
+    appHealth: AppHealth.Interface[F, Alert, ?],
     addingColumnsEnabled: Ref[F, Boolean],
     columns: Vector[Field]
   ): PartialFunction[Throwable, F[FieldList]] = {
@@ -148,7 +173,9 @@ object TableManager {
       val enableAfterDelay = Async[F].sleep(retries.tooManyColumns.delay) *> addingColumnsEnabled.set(true)
       for {
         _ <- Logger[F].error(bqe)(s"Could not alter table schema because of too many columns")
-        _ <- monitoring.alert(Alert.FailedToAddColumns(columns.map(_.name), bqe))
+        _ <- appHealth.beUnhealthyForSetup(
+               Alert.FailedToAddColumns(columns.map(_.name), SetupExceptionMessages(List(bqe.getMessage)))
+             )
         _ <- addingColumnsEnabled.set(false)
         _ <- enableAfterDelay.start
       } yield FieldList.of()

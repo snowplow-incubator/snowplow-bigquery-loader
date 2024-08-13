@@ -30,7 +30,8 @@ import com.google.api.gax.core.CredentialsProvider
 import com.google.auth.Credentials
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.api.gax.rpc.FixedHeaderProvider
-import com.snowplowanalytics.snowplow.bigquery.{Alert, AppHealth, Config, Monitoring}
+import com.snowplowanalytics.snowplow.bigquery.{Alert, Config, RuntimeService}
+import com.snowplowanalytics.snowplow.runtime.AppHealth
 import com.snowplowanalytics.snowplow.runtime.processing.Coldswap
 
 import scala.jdk.CollectionConverters._
@@ -137,20 +138,18 @@ object Writer {
   def provider[F[_]: Async](
     builder: Builder[F],
     retries: Config.Retries,
-    health: AppHealth[F],
-    monitoring: Monitoring[F]
+    health: AppHealth.Interface[F, Alert, RuntimeService]
   ): Resource[F, Provider[F]] =
-    Coldswap.make(builderToResource(builder, retries, health, monitoring))
+    Coldswap.make(builderToResource(builder, retries, health))
 
   private def builderToResource[F[_]: Async](
     builder: Builder[F],
     retries: Config.Retries,
-    health: AppHealth[F],
-    monitoring: Monitoring[F]
+    health: AppHealth.Interface[F, Alert, RuntimeService]
   ): Resource[F, Writer[F]] = {
     def make(poll: Poll[F]) = poll {
-      BigQueryRetrying.withRetries(health, retries, monitoring, Alert.FailedToOpenBigQueryWriter(_)) {
-        builder.build
+      BigQueryRetrying.withRetries(health, retries, Alert.FailedToOpenBigQueryWriter(_)) {
+        builder.build <* health.beHealthyForSetup
       }
     }
 

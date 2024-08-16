@@ -49,6 +49,8 @@ class ProcessingSpec extends Specification with CatsEffect {
     Set the latency metric based off the message timestamp $e9
     Mark app as unhealthy when sinking badrows fails $e10
     Mark app as unhealthy when writing to the Writer fails with runtime exception $e11
+    Emit BadRows for an unknown schema $e12 $e12Legacy
+    Crash and exit for an unrecognized schema, if exitOnMissingIgluSchema is true $e13 $e13Legacy
   """
 
   def e1 =
@@ -505,6 +507,79 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
 
   }
+
+  def e12Base(legacyColumns: Boolean) = {
+    val unstructEvent: UnstructEvent = json"""
+    {
+      "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
+      "data": {
+        "schema": "iglu:com.unkown/unknown_event/jsonschema/1-0-0",
+        "data": {
+          "abc": 50
+        }
+      }
+    }
+    """.as[UnstructEvent].fold(throw _, identity)
+
+    val legacyCriteria =
+      if (legacyColumns) List(SchemaCriterion("com.unknown", "unknown_event", "jsonschema", 1))
+      else Nil
+
+    runTest(inputEvents(count = 1, good(unstructEvent)), legacyCriteria = legacyCriteria) { case (inputs, control) =>
+      for {
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(1),
+          Action.SentToBad(1),
+          Action.AddedGoodCountMetric(1),
+          Action.AddedBadCountMetric(1),
+          Action.Checkpointed(List(inputs(0).ack))
+        )
+      )
+    }
+  }
+
+  def e12       = e12Base(legacyColumns = false)
+  def e12Legacy = e12Base(legacyColumns = true)
+
+  def e13Base(legacyColumns: Boolean) = {
+    val unstructEvent: UnstructEvent = json"""
+    {
+      "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
+      "data": {
+        "schema": "iglu:com.unkown/unknown_event/jsonschema/1-0-0",
+        "data": {
+          "abc": 50
+        }
+      }
+    }
+    """.as[UnstructEvent].fold(throw _, identity)
+
+    val legacyCriteria =
+      if (legacyColumns) List(SchemaCriterion("com.unknown", "unknown_event", "jsonschema", 1))
+      else Nil
+
+    runTest(inputEvents(count = 1, good(unstructEvent)), legacyCriteria = legacyCriteria) { case (_, control) =>
+      val environment = control.environment.copy(exitOnMissingIgluSchema = true)
+      for {
+        _ <- Processing.stream(environment).compile.drain.voidError
+        state <- control.state.get
+      } yield state should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.BecameUnhealthy(RuntimeService.Iglu)
+        )
+      )
+    }
+  }
+
+  def e13       = e13Base(legacyColumns = false)
+  def e13Legacy = e13Base(legacyColumns = true)
 
 }
 

@@ -31,7 +31,8 @@ case class Config[+Source, +Sink](
   monitoring: Config.Monitoring,
   license: AcceptedLicense,
   skipSchemas: List[SchemaCriterion],
-  legacyColumns: List[SchemaCriterion]
+  legacyColumns: List[SchemaCriterion],
+  exitOnMissingIgluSchema: Boolean
 )
 
 object Config {

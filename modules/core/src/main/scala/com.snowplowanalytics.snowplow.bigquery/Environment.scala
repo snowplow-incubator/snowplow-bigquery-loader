@@ -37,7 +37,8 @@ case class Environment[F[_]](
   batching: Config.Batching,
   badRowMaxSize: Int,
   schemasToSkip: List[SchemaCriterion],
-  legacyColumns: List[SchemaCriterion]
+  legacyColumns: List[SchemaCriterion],
+  exitOnMissingIgluSchema: Boolean
 )
 
 object Environment {
@@ -66,20 +67,21 @@ object Environment {
       writerBuilder <- Writer.builder(config.main.output.good, creds)
       writerProvider <- Writer.provider(writerBuilder, config.main.retries, appHealth)
     } yield Environment(
-      appInfo              = appInfo,
-      source               = sourceAndAck,
-      badSink              = badSink,
-      resolver             = resolver,
-      httpClient           = httpClient,
-      tableManager         = tableManagerWrapped,
-      writer               = writerProvider,
-      metrics              = metrics,
-      appHealth            = appHealth,
-      alterTableWaitPolicy = BigQueryRetrying.policyForAlterTableWait[F](config.main.retries),
-      batching             = config.main.batching,
-      badRowMaxSize        = config.main.output.bad.maxRecordSize,
-      schemasToSkip        = config.main.skipSchemas,
-      legacyColumns        = config.main.legacyColumns
+      appInfo                 = appInfo,
+      source                  = sourceAndAck,
+      badSink                 = badSink,
+      resolver                = resolver,
+      httpClient              = httpClient,
+      tableManager            = tableManagerWrapped,
+      writer                  = writerProvider,
+      metrics                 = metrics,
+      appHealth               = appHealth,
+      alterTableWaitPolicy    = BigQueryRetrying.policyForAlterTableWait[F](config.main.retries),
+      batching                = config.main.batching,
+      badRowMaxSize           = config.main.output.bad.maxRecordSize,
+      schemasToSkip           = config.main.skipSchemas,
+      legacyColumns           = config.main.legacyColumns,
+      exitOnMissingIgluSchema = config.main.exitOnMissingIgluSchema
     )
 
   private def enableSentry[F[_]: Sync](appInfo: AppInfo, config: Option[Config.Sentry]): Resource[F, Unit] =

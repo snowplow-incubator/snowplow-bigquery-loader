@@ -11,20 +11,16 @@ package com.snowplowanalytics.snowplow.bigquery.processing
 import cats.implicits._
 import cats.effect.{IO, Ref}
 import cats.effect.std.Supervisor
-import com.google.api.gax.rpc.PermissionDeniedException
-import com.google.api.gax.grpc.GrpcStatusCode
 import com.google.protobuf.Descriptors
-import io.grpc.Status
+import io.grpc.{Status => GrpcStatus, StatusRuntimeException}
 import org.specs2.Specification
 import cats.effect.testing.specs2.CatsEffect
 import cats.effect.testkit.TestControl
 
-import scala.concurrent.duration.{DurationLong, FiniteDuration}
+import scala.concurrent.duration.DurationLong
 
-import com.snowplowanalytics.snowplow.bigquery.{Alert, AppHealth, AtomicDescriptor, Config, Monitoring}
-import com.snowplowanalytics.snowplow.runtime.HealthProbe
-import com.snowplowanalytics.snowplow.bigquery.AppHealth.Service
-import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, SourceAndAck}
+import com.snowplowanalytics.snowplow.bigquery.{Alert, AtomicDescriptor, Config, RuntimeService}
+import com.snowplowanalytics.snowplow.runtime.{AppHealth, Retrying}
 
 class WriterProviderSpec extends Specification with CatsEffect {
   import WriterProviderSpec._
@@ -42,40 +38,34 @@ class WriterProviderSpec extends Specification with CatsEffect {
   """
 
   def e1 = control.flatMap { c =>
-    val io = Writer.provider(c.writerBuilder, retriesConfig, c.appHealth, c.monitoring).use_
+    val io = Writer.provider(c.writerBuilder, retriesConfig, c.appHealth).use_
 
     for {
       _ <- io
       state <- c.state.get
-      health <- c.appHealth.status
-    } yield List(
-      state should beEqualTo(Vector()),
-      health should beHealthy
-    ).reduce(_ and _)
+    } yield state should beEqualTo(Vector())
   }
 
   def e2 = control.flatMap { c =>
-    val io = Writer.provider(c.writerBuilder, retriesConfig, c.appHealth, c.monitoring).use { provider =>
+    val io = Writer.provider(c.writerBuilder, retriesConfig, c.appHealth).use { provider =>
       provider.opened.use_
     }
 
     val expectedState = Vector(
       Action.OpenedWriter,
+      Action.BecameHealthyForSetup,
+      Action.BecameHealthy(RuntimeService.BigQueryClient),
       Action.ClosedWriter
     )
 
     for {
       _ <- io
       state <- c.state.get
-      health <- c.appHealth.status
-    } yield List(
-      state should beEqualTo(expectedState),
-      health should beHealthy
-    ).reduce(_ and _)
+    } yield state should beEqualTo(expectedState)
   }
 
   def e3 = control.flatMap { c =>
-    val io = Writer.provider(c.writerBuilder, retriesConfig, c.appHealth, c.monitoring).use { provider =>
+    val io = Writer.provider(c.writerBuilder, retriesConfig, c.appHealth).use { provider =>
       provider.opened.use { _ =>
         goBOOM
       }
@@ -83,17 +73,15 @@ class WriterProviderSpec extends Specification with CatsEffect {
 
     val expectedState = Vector(
       Action.OpenedWriter,
+      Action.BecameHealthyForSetup,
+      Action.BecameHealthy(RuntimeService.BigQueryClient),
       Action.ClosedWriter
     )
 
     for {
       _ <- io.voidError
       state <- c.state.get
-      health <- c.appHealth.status
-    } yield List(
-      state should beEqualTo(expectedState),
-      health should beHealthy
-    ).reduce(_ and _)
+    } yield state should beEqualTo(expectedState)
   }
 
   def e4 = control.flatMap { c =>
@@ -103,19 +91,19 @@ class WriterProviderSpec extends Specification with CatsEffect {
         c.writerBuilder.build *> raiseForSetupError
     }
 
-    val io = Writer.provider(throwingBuilder, retriesConfig, c.appHealth, c.monitoring).use { provider =>
+    val io = Writer.provider(throwingBuilder, retriesConfig, c.appHealth).use { provider =>
       provider.opened.use_
     }
 
     val expectedState = Vector(
       Action.OpenedWriter,
-      Action.SentAlert(0L),
+      Action.BecameUnhealthyForSetup(0L),
       Action.OpenedWriter,
-      Action.SentAlert(30L),
+      Action.BecameUnhealthyForSetup(30L),
       Action.OpenedWriter,
-      Action.SentAlert(90L),
+      Action.BecameUnhealthyForSetup(90L),
       Action.OpenedWriter,
-      Action.SentAlert(210L)
+      Action.BecameUnhealthyForSetup(210L)
     )
 
     val test = for {
@@ -123,11 +111,7 @@ class WriterProviderSpec extends Specification with CatsEffect {
       _ <- IO.sleep(4.minutes)
       _ <- fiber.cancel
       state <- c.state.get
-      health <- c.appHealth.status
-    } yield List(
-      state should beEqualTo(expectedState),
-      health should beUnhealthy
-    ).reduce(_ and _)
+    } yield state should beEqualTo(expectedState)
 
     TestControl.executeEmbed(test)
   }
@@ -139,26 +123,27 @@ class WriterProviderSpec extends Specification with CatsEffect {
         c.writerBuilder.build *> goBOOM
     }
 
-    val io = Writer.provider(throwingBuilder, retriesConfig, c.appHealth, c.monitoring).use { provider =>
+    val io = Writer.provider(throwingBuilder, retriesConfig, c.appHealth).use { provider =>
       provider.opened.use_
     }
 
     val expectedState = Vector(
       Action.OpenedWriter,
+      Action.BecameUnhealthy(RuntimeService.BigQueryClient),
       Action.OpenedWriter,
+      Action.BecameUnhealthy(RuntimeService.BigQueryClient),
       Action.OpenedWriter,
+      Action.BecameUnhealthy(RuntimeService.BigQueryClient),
       Action.OpenedWriter,
-      Action.OpenedWriter
+      Action.BecameUnhealthy(RuntimeService.BigQueryClient),
+      Action.OpenedWriter,
+      Action.BecameUnhealthy(RuntimeService.BigQueryClient)
     )
 
     val test = for {
       _ <- io.voidError
       state <- c.state.get
-      health <- c.appHealth.status
-    } yield List(
-      state should beEqualTo(expectedState),
-      health should beUnhealthy
-    ).reduce(_ and _)
+    } yield state should beEqualTo(expectedState)
 
     TestControl.executeEmbed(test)
   }
@@ -171,7 +156,7 @@ class WriterProviderSpec extends Specification with CatsEffect {
     }
 
     // Three concurrent fibers wanting to build the writer:
-    val io = Writer.provider(throwingBuilder, retriesConfig, c.appHealth, c.monitoring).use { provider =>
+    val io = Writer.provider(throwingBuilder, retriesConfig, c.appHealth).use { provider =>
       Supervisor[IO](await = false).use { supervisor =>
         supervisor.supervise(provider.opened.surround(IO.never)) *>
           supervisor.supervise(provider.opened.surround(IO.never)) *>
@@ -182,25 +167,22 @@ class WriterProviderSpec extends Specification with CatsEffect {
 
     val expectedState = Vector(
       Action.OpenedWriter,
-      Action.SentAlert(0L),
+      Action.BecameUnhealthyForSetup(0L),
       Action.OpenedWriter,
-      Action.SentAlert(30L),
+      Action.BecameUnhealthyForSetup(30L),
       Action.OpenedWriter,
-      Action.SentAlert(90L),
+      Action.BecameUnhealthyForSetup(90L),
       Action.OpenedWriter,
-      Action.SentAlert(210L)
+      Action.BecameUnhealthyForSetup(210L)
     )
 
     val test = for {
       fiber <- io.start
       _ <- IO.sleep(4.minutes)
       state <- c.state.get
-      health <- c.appHealth.status
       _ <- fiber.cancel
-    } yield List(
-      state should beEqualTo(expectedState),
-      health should beUnhealthy
-    ).reduce(_ and _)
+    } yield state should beEqualTo(expectedState)
+
     TestControl.executeEmbed(test)
   }
 
@@ -219,26 +201,25 @@ class WriterProviderSpec extends Specification with CatsEffect {
     }
 
     val io = throwingOnceBuilder.flatMap { writerBuilder =>
-      Writer.provider(writerBuilder, retriesConfig, c.appHealth, c.monitoring).use { provider =>
+      Writer.provider(writerBuilder, retriesConfig, c.appHealth).use { provider =>
         provider.opened.use_
       }
     }
 
     val expectedState = Vector(
       Action.OpenedWriter,
-      Action.SentAlert(0L),
+      Action.BecameUnhealthyForSetup(0L),
       Action.OpenedWriter,
+      Action.BecameHealthyForSetup,
+      Action.BecameHealthy(RuntimeService.BigQueryClient),
       Action.ClosedWriter
     )
 
     val test = for {
       _ <- io
       state <- c.state.get
-      health <- c.appHealth.status
-    } yield List(
-      state should beEqualTo(expectedState),
-      health should beHealthy
-    ).reduce(_ and _)
+    } yield state should beEqualTo(expectedState)
+
     TestControl.executeEmbed(test)
   }
 
@@ -257,45 +238,28 @@ class WriterProviderSpec extends Specification with CatsEffect {
     }
 
     val io = throwingOnceBuilder.flatMap { writerBuilder =>
-      Writer.provider(writerBuilder, retriesConfig, c.appHealth, c.monitoring).use { provider =>
+      Writer.provider(writerBuilder, retriesConfig, c.appHealth).use { provider =>
         provider.opened.use_
       }
     }
 
     val expectedState = Vector(
       Action.OpenedWriter,
+      Action.BecameUnhealthy(RuntimeService.BigQueryClient),
       Action.OpenedWriter,
+      Action.BecameHealthyForSetup,
+      Action.BecameHealthy(RuntimeService.BigQueryClient),
       Action.ClosedWriter
     )
 
     val test = for {
       _ <- io
       state <- c.state.get
-      health <- c.appHealth.status
-    } yield List(
-      state should beEqualTo(expectedState),
-      health should beHealthy
-    ).reduce(_ and _)
+    } yield state should beEqualTo(expectedState)
+
     TestControl.executeEmbed(test)
   }
 
-  /** Convenience matchers for health probe * */
-
-  def beHealthy: org.specs2.matcher.Matcher[HealthProbe.Status] = { (status: HealthProbe.Status) =>
-    val result = status match {
-      case HealthProbe.Healthy      => true
-      case HealthProbe.Unhealthy(_) => false
-    }
-    (result, s"$status is not healthy")
-  }
-
-  def beUnhealthy: org.specs2.matcher.Matcher[HealthProbe.Status] = { (status: HealthProbe.Status) =>
-    val result = status match {
-      case HealthProbe.Healthy      => false
-      case HealthProbe.Unhealthy(_) => true
-    }
-    (result, s"$status is not unhealthy")
-  }
 }
 
 object WriterProviderSpec {
@@ -305,19 +269,21 @@ object WriterProviderSpec {
   object Action {
     case object OpenedWriter extends Action
     case object ClosedWriter extends Action
-    case class SentAlert(timeSentSeconds: Long) extends Action
+    case class BecameUnhealthy(service: RuntimeService) extends Action
+    case class BecameHealthy(service: RuntimeService) extends Action
+    case object BecameHealthyForSetup extends Action
+    case class BecameUnhealthyForSetup(timeSeconds: Long) extends Action
   }
 
   case class Control(
     state: Ref[IO, Vector[Action]],
     writerBuilder: Writer.Builder[IO],
-    appHealth: AppHealth[IO],
-    monitoring: Monitoring[IO]
+    appHealth: AppHealth.Interface[IO, Alert, RuntimeService]
   )
 
   def retriesConfig = Config.Retries(
-    Config.SetupErrorRetries(30.seconds),
-    Config.TransientErrorRetries(1.second, 5),
+    Retrying.Config.ForSetup(30.seconds),
+    Retrying.Config.ForTransient(1.second, 5),
     Config.AlterTableWaitRetries(1.second),
     Config.TooManyColumnsRetries(300.seconds)
   )
@@ -325,20 +291,22 @@ object WriterProviderSpec {
   def control: IO[Control] =
     for {
       state <- Ref[IO].of(Vector.empty[Action])
-      appHealth <- testAppHealth()
-    } yield Control(state, testWriterBuilder(state), appHealth, testMonitoring(state))
+    } yield Control(state, testWriterBuilder(state), testAppHealth(state))
 
-  private def testAppHealth(): IO[AppHealth[IO]] = {
-    val everythingHealthy: Map[AppHealth.Service, Boolean] = Map(Service.BigQueryClient -> true, Service.BadSink -> true)
-    val healthySource = new SourceAndAck[IO] {
-      override def stream(config: EventProcessingConfig, processor: EventProcessor[IO]): fs2.Stream[IO, Nothing] =
-        fs2.Stream.empty
-
-      override def isHealthy(maxAllowedProcessingLatency: FiniteDuration): IO[SourceAndAck.HealthStatus] =
-        IO(SourceAndAck.Healthy)
+  private def testAppHealth(state: Ref[IO, Vector[Action]]): AppHealth.Interface[IO, Alert, RuntimeService] =
+    new AppHealth.Interface[IO, Alert, RuntimeService] {
+      def beHealthyForSetup: IO[Unit] =
+        state.update(_ :+ Action.BecameHealthyForSetup)
+      def beUnhealthyForSetup(alert: Alert): IO[Unit] =
+        for {
+          now <- IO.realTime
+          _ <- state.update(_ :+ Action.BecameUnhealthyForSetup(now.toSeconds))
+        } yield ()
+      def beHealthyForRuntimeService(service: RuntimeService): IO[Unit] =
+        state.update(_ :+ Action.BecameHealthy(service))
+      def beUnhealthyForRuntimeService(service: RuntimeService): IO[Unit] =
+        state.update(_ :+ Action.BecameUnhealthy(service))
     }
-    AppHealth.init(10.seconds, healthySource, everythingHealthy)
-  }
 
   private def testWriterBuilder(state: Ref[IO, Vector[Action]]): Writer.Builder[IO] =
     new Writer.Builder[IO] {
@@ -355,14 +323,6 @@ object WriterProviderSpec {
     def close: IO[Unit] = state.update(_ :+ Action.ClosedWriter)
   }
 
-  private def testMonitoring(state: Ref[IO, Vector[Action]]): Monitoring[IO] = new Monitoring[IO] {
-    def alert(message: Alert): IO[Unit] =
-      for {
-        now <- IO.realTime
-        _ <- state.update(_ :+ Action.SentAlert(now.toSeconds))
-      } yield ()
-  }
-
   // Raise an exception in an IO
   def goBOOM[A]: IO[A] = IO.raiseError(new RuntimeException("boom!")).adaptError { t =>
     t.setStackTrace(Array()) // don't clutter our test logs
@@ -371,9 +331,9 @@ object WriterProviderSpec {
 
   // Raise a known exception that indicates a problem with the warehouse setup
   def raiseForSetupError[A]: IO[A] = IO.raiseError {
-    val inner = new RuntimeException("go away")
+    val inner = new StatusRuntimeException(GrpcStatus.PERMISSION_DENIED)
     inner.setStackTrace(Array()) // don't clutter our test logs
-    val t = new PermissionDeniedException(inner, GrpcStatusCode.of(Status.Code.PERMISSION_DENIED), false)
+    val t = new RuntimeException("go away", inner)
     t.setStackTrace(Array()) // don't clutter our test logs
     t
   }

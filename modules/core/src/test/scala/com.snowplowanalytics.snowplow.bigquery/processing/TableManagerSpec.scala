@@ -13,18 +13,14 @@ import cats.effect.{IO, Ref}
 import org.specs2.Specification
 import cats.effect.testing.specs2.CatsEffect
 import cats.effect.testkit.TestControl
-import com.google.api.gax.rpc.PermissionDeniedException
-import com.google.api.gax.grpc.GrpcStatusCode
-import io.grpc.Status
+import io.grpc.{Status => GrpcStatus, StatusRuntimeException}
 import com.google.cloud.bigquery.{BigQueryError, BigQueryException, FieldList}
 
-import scala.concurrent.duration.{DurationLong, FiniteDuration}
+import scala.concurrent.duration.DurationLong
 
 import com.snowplowanalytics.iglu.schemaddl.parquet.{Field, Type}
-import com.snowplowanalytics.snowplow.bigquery.{Alert, AppHealth, Config, Monitoring}
-import com.snowplowanalytics.snowplow.runtime.HealthProbe
-import com.snowplowanalytics.snowplow.bigquery.AppHealth.Service
-import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, SourceAndAck}
+import com.snowplowanalytics.snowplow.bigquery.{Alert, Config, RuntimeService}
+import com.snowplowanalytics.snowplow.runtime.{AppHealth, Retrying}
 
 class TableManagerSpec extends Specification with CatsEffect {
   import TableManagerSpec._
@@ -40,6 +36,10 @@ class TableManagerSpec extends Specification with CatsEffect {
     Disable future attempts to add columns if the table has too many columns - exception type 2 $e6_2
     Eventually re-enable future attempts to add columns if the table has too many columns - exception type 1 $e7_1
     Eventually re-enable future attempts to add columns if the table has too many columns - exception type 2 $e7_2
+
+    Attempt to get the existing table if told to create if not exists $create1
+    Attempt to create the table if failed to get existing table $create2
+
   """
 
   def e1 = control().flatMap { c =>
@@ -54,24 +54,22 @@ class TableManagerSpec extends Specification with CatsEffect {
     )
 
     val io = for {
-      tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth, c.monitoring)
+      tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
       _ <- tableManager.addColumns(testFields1)
       _ <- tableManager.addColumns(testFields2)
     } yield ()
 
     val expected = Vector(
       Action.AddColumnsAttempted(testFields1),
-      Action.AddColumnsAttempted(testFields2)
+      Action.BecameHealthy(RuntimeService.BigQueryClient),
+      Action.AddColumnsAttempted(testFields2),
+      Action.BecameHealthy(RuntimeService.BigQueryClient)
     )
 
     for {
       _ <- io
       state <- c.state.get
-      health <- c.appHealth.status
-    } yield List(
-      state should beEqualTo(expected),
-      health should beHealthy
-    ).reduce(_ and _)
+    } yield state should beEqualTo(expected)
   }
 
   def e2 = {
@@ -84,19 +82,19 @@ class TableManagerSpec extends Specification with CatsEffect {
       )
 
       val io = for {
-        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth, c.monitoring)
+        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
         _ <- tableManager.addColumns(testFields)
       } yield ()
 
       val expected = Vector(
         Action.AddColumnsAttempted(testFields),
-        Action.SentAlert(0L),
+        Action.BecameUnhealthyForSetup,
         Action.AddColumnsAttempted(testFields),
-        Action.SentAlert(30L),
+        Action.BecameUnhealthyForSetup,
         Action.AddColumnsAttempted(testFields),
-        Action.SentAlert(90L),
+        Action.BecameUnhealthyForSetup,
         Action.AddColumnsAttempted(testFields),
-        Action.SentAlert(210L)
+        Action.BecameUnhealthyForSetup
       )
 
       val test = for {
@@ -104,11 +102,7 @@ class TableManagerSpec extends Specification with CatsEffect {
         _ <- IO.sleep(4.minutes)
         _ <- fiber.cancel
         state <- c.state.get
-        health <- c.appHealth.status
-      } yield List(
-        state should beEqualTo(expected),
-        health should beUnhealthy
-      ).reduce(_ and _)
+      } yield state should beEqualTo(expected)
 
       TestControl.executeEmbed(test)
     }
@@ -123,26 +117,27 @@ class TableManagerSpec extends Specification with CatsEffect {
       )
 
       val io = for {
-        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth, c.monitoring)
+        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
         _ <- tableManager.addColumns(testFields)
       } yield ()
 
       val expected = Vector(
         Action.AddColumnsAttempted(testFields),
+        Action.BecameUnhealthy(RuntimeService.BigQueryClient),
         Action.AddColumnsAttempted(testFields),
+        Action.BecameUnhealthy(RuntimeService.BigQueryClient),
         Action.AddColumnsAttempted(testFields),
+        Action.BecameUnhealthy(RuntimeService.BigQueryClient),
         Action.AddColumnsAttempted(testFields),
-        Action.AddColumnsAttempted(testFields)
+        Action.BecameUnhealthy(RuntimeService.BigQueryClient),
+        Action.AddColumnsAttempted(testFields),
+        Action.BecameUnhealthy(RuntimeService.BigQueryClient)
       )
 
       val test = for {
         _ <- io.voidError
         state <- c.state.get
-        health <- c.appHealth.status
-      } yield List(
-        state should beEqualTo(expected),
-        health should beUnhealthy
-      ).reduce(_ and _)
+      } yield state should beEqualTo(expected)
 
       TestControl.executeEmbed(test)
     }
@@ -158,24 +153,21 @@ class TableManagerSpec extends Specification with CatsEffect {
       )
 
       val io = for {
-        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth, c.monitoring)
+        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
         _ <- tableManager.addColumns(testFields)
       } yield ()
 
       val expected = Vector(
         Action.AddColumnsAttempted(testFields),
-        Action.SentAlert(0L),
-        Action.AddColumnsAttempted(testFields)
+        Action.BecameUnhealthyForSetup,
+        Action.AddColumnsAttempted(testFields),
+        Action.BecameHealthy(RuntimeService.BigQueryClient)
       )
 
       val test = for {
         _ <- io.voidError
         state <- c.state.get
-        health <- c.appHealth.status
-      } yield List(
-        state should beEqualTo(expected),
-        health should beHealthy
-      ).reduce(_ and _)
+      } yield state should beEqualTo(expected)
 
       TestControl.executeEmbed(test)
     }
@@ -191,23 +183,21 @@ class TableManagerSpec extends Specification with CatsEffect {
       )
 
       val io = for {
-        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth, c.monitoring)
+        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
         _ <- tableManager.addColumns(testFields)
       } yield ()
 
       val expected = Vector(
         Action.AddColumnsAttempted(testFields),
-        Action.AddColumnsAttempted(testFields)
+        Action.BecameUnhealthy(RuntimeService.BigQueryClient),
+        Action.AddColumnsAttempted(testFields),
+        Action.BecameHealthy(RuntimeService.BigQueryClient)
       )
 
       val test = for {
         _ <- io.voidError
         state <- c.state.get
-        health <- c.appHealth.status
-      } yield List(
-        state should beEqualTo(expected),
-        health should beHealthy
-      ).reduce(_ and _)
+      } yield state should beEqualTo(expected)
 
       TestControl.executeEmbed(test)
     }
@@ -229,7 +219,7 @@ class TableManagerSpec extends Specification with CatsEffect {
       )
 
       val io = for {
-        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth, c.monitoring)
+        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
         _ <- tableManager.addColumns(testFields1)
         _ <- IO.sleep(10.seconds)
         _ <- tableManager.addColumns(testFields2)
@@ -237,17 +227,14 @@ class TableManagerSpec extends Specification with CatsEffect {
 
       val expected = Vector(
         Action.AddColumnsAttempted(testFields1),
-        Action.SentAlert(0L)
+        Action.BecameUnhealthyForSetup,
+        Action.BecameHealthy(RuntimeService.BigQueryClient)
       )
 
       val test = for {
         _ <- io
         state <- c.state.get
-        health <- c.appHealth.status
-      } yield List(
-        state should beEqualTo(expected),
-        health should beHealthy
-      ).reduce(_ and _)
+      } yield state should beEqualTo(expected)
 
       TestControl.executeEmbed(test)
     }
@@ -269,7 +256,7 @@ class TableManagerSpec extends Specification with CatsEffect {
       )
 
       val io = for {
-        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth, c.monitoring)
+        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
         _ <- tableManager.addColumns(testFields1)
         _ <- IO.sleep(10.seconds)
         _ <- tableManager.addColumns(testFields2)
@@ -277,17 +264,14 @@ class TableManagerSpec extends Specification with CatsEffect {
 
       val expected = Vector(
         Action.AddColumnsAttempted(testFields1),
-        Action.SentAlert(0L)
+        Action.BecameUnhealthyForSetup,
+        Action.BecameHealthy(RuntimeService.BigQueryClient)
       )
 
       val test = for {
         _ <- io
         state <- c.state.get
-        health <- c.appHealth.status
-      } yield List(
-        state should beEqualTo(expected),
-        health should beHealthy
-      ).reduce(_ and _)
+      } yield state should beEqualTo(expected)
 
       TestControl.executeEmbed(test)
     }
@@ -309,7 +293,7 @@ class TableManagerSpec extends Specification with CatsEffect {
       )
 
       val io = for {
-        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth, c.monitoring)
+        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
         _ <- tableManager.addColumns(testFields1)
         _ <- IO.sleep(310.seconds)
         _ <- tableManager.addColumns(testFields2)
@@ -317,18 +301,16 @@ class TableManagerSpec extends Specification with CatsEffect {
 
       val expected = Vector(
         Action.AddColumnsAttempted(testFields1),
-        Action.SentAlert(0L),
-        Action.AddColumnsAttempted(testFields2)
+        Action.BecameUnhealthyForSetup,
+        Action.BecameHealthy(RuntimeService.BigQueryClient),
+        Action.AddColumnsAttempted(testFields2),
+        Action.BecameHealthy(RuntimeService.BigQueryClient)
       )
 
       val test = for {
         _ <- io
         state <- c.state.get
-        health <- c.appHealth.status
-      } yield List(
-        state should beEqualTo(expected),
-        health should beHealthy
-      ).reduce(_ and _)
+      } yield state should beEqualTo(expected)
 
       TestControl.executeEmbed(test)
     }
@@ -350,7 +332,7 @@ class TableManagerSpec extends Specification with CatsEffect {
       )
 
       val io = for {
-        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth, c.monitoring)
+        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
         _ <- tableManager.addColumns(testFields1)
         _ <- IO.sleep(310.seconds)
         _ <- tableManager.addColumns(testFields2)
@@ -358,40 +340,61 @@ class TableManagerSpec extends Specification with CatsEffect {
 
       val expected = Vector(
         Action.AddColumnsAttempted(testFields1),
-        Action.SentAlert(0L),
-        Action.AddColumnsAttempted(testFields2)
+        Action.BecameUnhealthyForSetup,
+        Action.BecameHealthy(RuntimeService.BigQueryClient),
+        Action.AddColumnsAttempted(testFields2),
+        Action.BecameHealthy(RuntimeService.BigQueryClient)
       )
 
       val test = for {
         _ <- io
         state <- c.state.get
-        health <- c.appHealth.status
-      } yield List(
-        state should beEqualTo(expected),
-        health should beHealthy
-      ).reduce(_ and _)
+      } yield state should beEqualTo(expected)
 
       TestControl.executeEmbed(test)
     }
   }
 
-  /** Convenience matchers for health probe * */
+  def create1 = control().flatMap { c =>
+    val io = for {
+      tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
+      _ <- tableManager.createTableIfNotExists
+    } yield ()
 
-  def beHealthy: org.specs2.matcher.Matcher[HealthProbe.Status] = { (status: HealthProbe.Status) =>
-    val result = status match {
-      case HealthProbe.Healthy      => true
-      case HealthProbe.Unhealthy(_) => false
-    }
-    (result, s"$status is not healthy")
+    val expected = Vector(
+      Action.GetTableAttempted,
+      Action.BecameHealthy(RuntimeService.BigQueryClient)
+    )
+
+    for {
+      _ <- io
+      state <- c.state.get
+    } yield state should beEqualTo(expected)
   }
 
-  def beUnhealthy: org.specs2.matcher.Matcher[HealthProbe.Status] = { (status: HealthProbe.Status) =>
-    val result = status match {
-      case HealthProbe.Healthy      => false
-      case HealthProbe.Unhealthy(_) => true
+  def create2 = {
+    val mocks = Mocks(getTableResults = List(Response.ExceptionThrown(testFailedToGetTableError)))
+
+    control(mocks).flatMap { c =>
+      val io = for {
+        tableManager <- TableManager.withHandledErrors(c.tableManager, retriesConfig, c.appHealth)
+        _ <- tableManager.createTableIfNotExists
+      } yield ()
+
+      val expected = Vector(
+        Action.GetTableAttempted,
+        Action.BecameHealthy(RuntimeService.BigQueryClient),
+        Action.CreateTableAttempted,
+        Action.BecameHealthy(RuntimeService.BigQueryClient)
+      )
+
+      for {
+        _ <- io
+        state <- c.state.get
+      } yield state should beEqualTo(expected)
     }
-    (result, s"$status is not unhealthy")
   }
+
 }
 
 object TableManagerSpec {
@@ -400,7 +403,12 @@ object TableManagerSpec {
 
   object Action {
     case class AddColumnsAttempted(columns: Vector[Field]) extends Action
-    case class SentAlert(timeSentSeconds: Long) extends Action
+    case object CreateTableAttempted extends Action
+    case object GetTableAttempted extends Action
+    case class BecameUnhealthy(service: RuntimeService) extends Action
+    case class BecameHealthy(service: RuntimeService) extends Action
+    case object BecameHealthyForSetup extends Action
+    case object BecameUnhealthyForSetup extends Action
   }
 
   sealed trait Response
@@ -409,48 +417,48 @@ object TableManagerSpec {
     final case class ExceptionThrown(value: Throwable) extends Response
   }
 
-  case class Mocks(addColumnsResults: List[Response])
+  case class Mocks(addColumnsResults: List[Response] = Nil, getTableResults: List[Response] = Nil)
 
   case class Control(
     state: Ref[IO, Vector[Action]],
     tableManager: TableManager[IO],
-    appHealth: AppHealth[IO],
-    monitoring: Monitoring[IO]
+    appHealth: AppHealth.Interface[IO, Alert, RuntimeService]
   )
 
   def retriesConfig = Config.Retries(
-    Config.SetupErrorRetries(30.seconds),
-    Config.TransientErrorRetries(1.second, 5),
+    Retrying.Config.ForSetup(30.seconds),
+    Retrying.Config.ForTransient(1.second, 5),
     Config.AlterTableWaitRetries(1.second),
     Config.TooManyColumnsRetries(300.seconds)
   )
 
-  def control(mocks: Mocks = Mocks(Nil)): IO[Control] =
+  def control(mocks: Mocks = Mocks(Nil, Nil)): IO[Control] =
     for {
       state <- Ref[IO].of(Vector.empty[Action])
-      appHealth <- testAppHealth()
-      tableManager <- testTableManager(state, mocks.addColumnsResults)
-    } yield Control(state, tableManager, appHealth, testMonitoring(state))
+      appHealth = testAppHealth(state)
+      tableManager <- testTableManager(state, mocks)
+    } yield Control(state, tableManager, appHealth)
 
-  private def testAppHealth(): IO[AppHealth[IO]] = {
-    val everythingHealthy: Map[AppHealth.Service, Boolean] = Map(Service.BigQueryClient -> true, Service.BadSink -> true)
-    val healthySource = new SourceAndAck[IO] {
-      override def stream(config: EventProcessingConfig, processor: EventProcessor[IO]): fs2.Stream[IO, Nothing] =
-        fs2.Stream.empty
-
-      override def isHealthy(maxAllowedProcessingLatency: FiniteDuration): IO[SourceAndAck.HealthStatus] =
-        IO(SourceAndAck.Healthy)
+  private def testAppHealth(state: Ref[IO, Vector[Action]]): AppHealth.Interface[IO, Alert, RuntimeService] =
+    new AppHealth.Interface[IO, Alert, RuntimeService] {
+      def beHealthyForSetup: IO[Unit] =
+        state.update(_ :+ Action.BecameHealthyForSetup)
+      def beUnhealthyForSetup(alert: Alert): IO[Unit] =
+        state.update(_ :+ Action.BecameUnhealthyForSetup)
+      def beHealthyForRuntimeService(service: RuntimeService): IO[Unit] =
+        state.update(_ :+ Action.BecameHealthy(service))
+      def beUnhealthyForRuntimeService(service: RuntimeService): IO[Unit] =
+        state.update(_ :+ Action.BecameUnhealthy(service))
     }
-    AppHealth.init(10.seconds, healthySource, everythingHealthy)
-  }
 
-  private def testTableManager(state: Ref[IO, Vector[Action]], mocks: List[Response]): IO[TableManager[IO]] =
+  private def testTableManager(state: Ref[IO, Vector[Action]], mocks: Mocks): IO[TableManager[IO]] =
     for {
-      mocksRef <- Ref[IO].of(mocks)
+      addColsMocksRef <- Ref[IO].of(mocks.addColumnsResults)
+      getTableMocksRef <- Ref[IO].of(mocks.getTableResults)
     } yield new TableManager[IO] {
       def addColumns(columns: Vector[Field]): IO[FieldList] =
         for {
-          response <- mocksRef.modify {
+          response <- addColsMocksRef.modify {
                         case head :: tail => (tail, head)
                         case Nil          => (Nil, Response.Success)
                       }
@@ -466,25 +474,38 @@ object TableManagerSpec {
                     }
         } yield result
 
+      def tableExists: IO[Boolean] =
+        for {
+          response <- getTableMocksRef.modify {
+                        case head :: tail => (tail, head)
+                        case Nil          => (Nil, Response.Success)
+                      }
+          _ <- state.update(_ :+ Action.GetTableAttempted)
+          result <- response match {
+                      case Response.Success =>
+                        IO.pure(true)
+                      case Response.ExceptionThrown(ex) =>
+                        IO.raiseError(ex).adaptError { t =>
+                          t.setStackTrace(Array()) // don't clutter our test logs
+                          t
+                        }
+                    }
+        } yield result
+
       def createTable: IO[Unit] =
-        IO.unit
+        state.update(_ :+ Action.CreateTableAttempted)
 
     }
 
-  private def testMonitoring(state: Ref[IO, Vector[Action]]): Monitoring[IO] = new Monitoring[IO] {
-    def alert(message: Alert): IO[Unit] =
-      for {
-        now <- IO.realTime
-        _ <- state.update(_ :+ Action.SentAlert(now.toSeconds))
-      } yield ()
-  }
-
   def testSetupError: Throwable = {
-    val inner = new RuntimeException("go away")
+    val inner = new StatusRuntimeException(GrpcStatus.PERMISSION_DENIED)
     inner.setStackTrace(Array()) // don't clutter our test logs
-    val t = new PermissionDeniedException(inner, GrpcStatusCode.of(Status.Code.PERMISSION_DENIED), false)
+    val t = new RuntimeException("go away", inner)
     t.setStackTrace(Array()) // don't clutter our test logs
     t
   }
+
+  def testFailedToGetTableError: Throwable =
+    new BigQueryException(42, "some message", new BigQueryError("accessdenied", "some location", "some message"))
 
 }

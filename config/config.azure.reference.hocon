@@ -94,8 +94,8 @@
     "tooManyColumns": {
       "delay": "300 seconds"
     }
-  } 
-  
+  }
+
   # -- Schemas that won't be loaded to BigQuery. Optional, default value []
   "skipSchemas": [
     "iglu:com.acme/skipped1/jsonschema/1-0-0",
@@ -142,7 +142,7 @@
       }
     }
 
-    # -- Report alerts to the webhook 
+    # -- Report alerts and heartbeats to the webhook
     "webhook": {
       # An actual HTTP endpoint
       "endpoint": "https://webhook.acme.com",
@@ -150,6 +150,8 @@
       "tags": {
         "pipeline": "production"
       }
+      # How often to send the heartbeat event
+      "heartbeat": "60.minutes"
     }
   }
 

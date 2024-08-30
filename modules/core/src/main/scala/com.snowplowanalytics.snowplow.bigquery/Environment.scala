@@ -15,12 +15,13 @@ import org.http4s.client.Client
 import org.http4s.blaze.client.BlazeClientBuilder
 import io.sentry.Sentry
 import retry.RetryPolicy
+
 import com.snowplowanalytics.iglu.client.resolver.Resolver
 import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.snowplow.sources.SourceAndAck
 import com.snowplowanalytics.snowplow.sinks.Sink
 import com.snowplowanalytics.snowplow.bigquery.processing.{BigQueryRetrying, BigQueryUtils, TableManager, Writer}
-import com.snowplowanalytics.snowplow.runtime.{AppInfo, HealthProbe}
+import com.snowplowanalytics.snowplow.runtime.{AppHealth, AppInfo, HealthProbe, Webhook}
 
 case class Environment[F[_]](
   appInfo: AppInfo,
@@ -31,7 +32,7 @@ case class Environment[F[_]](
   tableManager: TableManager.WithHandledErrors[F],
   writer: Writer.Provider[F],
   metrics: Metrics[F],
-  appHealth: AppHealth[F],
+  appHealth: AppHealth.Interface[F, Alert, RuntimeService],
   alterTableWaitPolicy: RetryPolicy[F],
   batching: Config.Batching,
   badRowMaxSize: Int,
@@ -40,11 +41,6 @@ case class Environment[F[_]](
 )
 
 object Environment {
-
-  private def initialAppHealth: Map[AppHealth.Service, Boolean] = Map(
-    AppHealth.Service.BigQueryClient -> false,
-    AppHealth.Service.BadSink -> true
-  )
 
   def fromConfig[F[_]: Async, SourceConfig, SinkConfig](
     config: Config.WithIglu[SourceConfig, SinkConfig],
@@ -55,18 +51,20 @@ object Environment {
     for {
       _ <- enableSentry[F](appInfo, config.main.monitoring.sentry)
       sourceAndAck <- Resource.eval(toSource(config.main.input))
-      appHealth <- Resource.eval(AppHealth.init(config.main.monitoring.healthProbe.unhealthyLatency, sourceAndAck, initialAppHealth))
-      _ <- HealthProbe.resource(config.main.monitoring.healthProbe.port, appHealth.status)
+      sourceReporter = sourceAndAck.isHealthy(config.main.monitoring.healthProbe.unhealthyLatency).map(_.showIfUnhealthy)
+      appHealth <- Resource.eval(AppHealth.init[F, Alert, RuntimeService](List(sourceReporter)))
       resolver <- mkResolver[F](config.iglu)
       httpClient <- BlazeClientBuilder[F].withExecutionContext(global.compute).resource
-      monitoring <- Monitoring.create[F](config.main.monitoring.webhook, appInfo, httpClient)
-      badSink <- toSink(config.main.output.bad.sink)
+      _ <- HealthProbe.resource(config.main.monitoring.healthProbe.port, appHealth)
+      _ <- Webhook.resource(config.main.monitoring.webhook, appInfo, httpClient, appHealth)
+      badSink <-
+        toSink(config.main.output.bad.sink).onError(_ => Resource.eval(appHealth.beUnhealthyForRuntimeService(RuntimeService.BadSink)))
       metrics <- Resource.eval(Metrics.build(config.main.monitoring.metrics))
       creds <- Resource.eval(BigQueryUtils.credentials(config.main.output.good))
       tableManager <- Resource.eval(TableManager.make(config.main.output.good, creds))
-      tableManagerWrapped <- Resource.eval(TableManager.withHandledErrors(tableManager, config.main.retries, appHealth, monitoring))
+      tableManagerWrapped <- Resource.eval(TableManager.withHandledErrors(tableManager, config.main.retries, appHealth))
       writerBuilder <- Writer.builder(config.main.output.good, creds)
-      writerProvider <- Writer.provider(writerBuilder, config.main.retries, appHealth, monitoring)
+      writerProvider <- Writer.provider(writerBuilder, config.main.retries, appHealth)
     } yield Environment(
       appInfo              = appInfo,
       source               = sourceAndAck,
@@ -77,7 +75,7 @@ object Environment {
       writer               = writerProvider,
       metrics              = metrics,
       appHealth            = appHealth,
-      alterTableWaitPolicy = BigQueryRetrying.policyForAlterTableWait(config.main.retries),
+      alterTableWaitPolicy = BigQueryRetrying.policyForAlterTableWait[F](config.main.retries),
       batching             = config.main.batching,
       badRowMaxSize        = config.main.output.bad.maxRecordSize,
       schemasToSkip        = config.main.skipSchemas,

@@ -18,7 +18,7 @@ import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.snowplow.bigquery.Config.GcpUserAgent
 import com.snowplowanalytics.snowplow.pubsub.{GcpUserAgent => PubsubUserAgent}
 import com.snowplowanalytics.snowplow.runtime.Metrics.StatsdConfig
-import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, Telemetry}
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, Retrying, Telemetry, Webhook}
 import com.snowplowanalytics.snowplow.sinks.pubsub.PubsubSinkConfig
 import com.snowplowanalytics.snowplow.sources.pubsub.PubsubSourceConfig
 import org.http4s.implicits.http4sLiteralsSyntax
@@ -30,7 +30,7 @@ import scala.concurrent.duration.DurationInt
 class PubsubConfigSpec extends Specification with CatsEffect {
 
   def is = s2"""
-   Config parse should be able to parse 
+   Config parse should be able to parse
     minimal pubsub config $minimal
     extended pubsub config $extended
   """
@@ -63,7 +63,7 @@ object PubsubConfigSpec {
   private val minimalConfig = Config[PubsubSourceConfig, PubsubSinkConfig](
     input = PubsubSourceConfig(
       subscription               = PubsubSourceConfig.Subscription("my-project", "snowplow-enriched"),
-      parallelPullCount          = 1,
+      parallelPullFactor         = BigDecimal(0.5),
       bufferMaxBytes             = 10000000,
       maxAckExtensionPeriod      = 1.hour,
       minDurationPerAckExtension = 1.minute,
@@ -95,8 +95,8 @@ object PubsubConfigSpec {
       writeBatchConcurrency = 3
     ),
     retries = Config.Retries(
-      setupErrors     = Config.SetupErrorRetries(delay = 30.seconds),
-      transientErrors = Config.TransientErrorRetries(delay = 1.second, attempts = 5),
+      setupErrors     = Retrying.Config.ForSetup(delay = 30.seconds),
+      transientErrors = Retrying.Config.ForTransient(delay = 1.second, attempts = 5),
       alterTableWait  = Config.AlterTableWaitRetries(delay = 1.second),
       tooManyColumns  = Config.TooManyColumnsRetries(delay = 300.seconds)
     ),
@@ -116,7 +116,7 @@ object PubsubConfigSpec {
       metrics     = Config.Metrics(None),
       sentry      = None,
       healthProbe = Config.HealthProbe(port = Port.fromInt(8000).get, unhealthyLatency = 5.minutes),
-      webhook     = None
+      webhook     = Webhook.Config(endpoint = None, tags = Map.empty, heartbeat = 60.minutes)
     ),
     license       = AcceptedLicense(),
     skipSchemas   = List.empty,
@@ -126,7 +126,7 @@ object PubsubConfigSpec {
   private val extendedConfig = Config[PubsubSourceConfig, PubsubSinkConfig](
     input = PubsubSourceConfig(
       subscription               = PubsubSourceConfig.Subscription("my-project", "snowplow-enriched"),
-      parallelPullCount          = 3,
+      parallelPullFactor         = BigDecimal(0.5),
       bufferMaxBytes             = 1000000,
       maxAckExtensionPeriod      = 1.hour,
       minDurationPerAckExtension = 1.minute,
@@ -158,8 +158,8 @@ object PubsubConfigSpec {
       writeBatchConcurrency = 1
     ),
     retries = Config.Retries(
-      setupErrors     = Config.SetupErrorRetries(delay = 30.seconds),
-      transientErrors = Config.TransientErrorRetries(delay = 1.second, attempts = 5),
+      setupErrors     = Retrying.Config.ForSetup(delay = 30.seconds),
+      transientErrors = Retrying.Config.ForTransient(delay = 1.second, attempts = 5),
       alterTableWait  = Config.AlterTableWaitRetries(delay = 1.second),
       tooManyColumns  = Config.TooManyColumnsRetries(delay = 300.seconds)
     ),
@@ -192,7 +192,8 @@ object PubsubConfigSpec {
         port             = Port.fromInt(8000).get,
         unhealthyLatency = 5.minutes
       ),
-      webhook = Some(Config.Webhook(endpoint = uri"https://webhook.acme.com", tags = Map("pipeline" -> "production")))
+      webhook =
+        Webhook.Config(endpoint = Some(uri"https://webhook.acme.com"), tags = Map("pipeline" -> "production"), heartbeat = 60.minutes)
     ),
     license = AcceptedLicense(),
     skipSchemas = List(

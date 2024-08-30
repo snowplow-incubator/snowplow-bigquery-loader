@@ -8,19 +8,17 @@
  */
 package com.snowplowanalytics.snowplow.bigquery
 
-import cats.implicits._
 import cats.Id
 import io.circe.Decoder
 import io.circe.generic.extras.semiauto._
 import io.circe.generic.extras.Configuration
 import io.circe.config.syntax._
 import com.comcast.ip4s.Port
-import org.http4s.{ParseFailure, Uri}
 
 import scala.concurrent.duration.FiniteDuration
 import com.snowplowanalytics.iglu.client.resolver.Resolver.ResolverConfig
 import com.snowplowanalytics.iglu.core.SchemaCriterion
-import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, Metrics => CommonMetrics, Telemetry}
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, Metrics => CommonMetrics, Retrying, Telemetry, Webhook}
 import com.snowplowanalytics.iglu.core.circe.CirceIgluCodecs.schemaCriterionDecoder
 import com.snowplowanalytics.snowplow.runtime.HealthProbe.decoders._
 
@@ -79,19 +77,15 @@ object Config {
     metrics: Metrics,
     sentry: Option[Sentry],
     healthProbe: HealthProbe,
-    webhook: Option[Webhook]
+    webhook: Webhook.Config
   )
 
-  final case class Webhook(endpoint: Uri, tags: Map[String, String])
-
-  case class SetupErrorRetries(delay: FiniteDuration)
   case class AlterTableWaitRetries(delay: FiniteDuration)
-  case class TransientErrorRetries(delay: FiniteDuration, attempts: Int)
   case class TooManyColumnsRetries(delay: FiniteDuration)
 
   case class Retries(
-    setupErrors: SetupErrorRetries,
-    transientErrors: TransientErrorRetries,
+    setupErrors: Retrying.Config.ForSetup,
+    transientErrors: Retrying.Config.ForTransient,
     alterTableWait: AlterTableWaitRetries,
     tooManyColumns: TooManyColumnsRetries
   )
@@ -113,15 +107,10 @@ object Config {
         case SentryM(None, _) =>
           None
       }
-    implicit val http4sUriDecoder: Decoder[Uri] =
-      Decoder[String].emap(s => Either.catchOnly[ParseFailure](Uri.unsafeFromString(s)).leftMap(_.toString))
     implicit val metricsDecoder     = deriveConfiguredDecoder[Metrics]
     implicit val healthProbeDecoder = deriveConfiguredDecoder[HealthProbe]
-    implicit val webhookDecoder     = deriveConfiguredDecoder[Webhook]
     implicit val monitoringDecoder  = deriveConfiguredDecoder[Monitoring]
-    implicit val setupRetries       = deriveConfiguredDecoder[SetupErrorRetries]
     implicit val alterTableRetries  = deriveConfiguredDecoder[AlterTableWaitRetries]
-    implicit val transientRetries   = deriveConfiguredDecoder[TransientErrorRetries]
     implicit val tooManyColsRetries = deriveConfiguredDecoder[TooManyColumnsRetries]
     implicit val retriesDecoder     = deriveConfiguredDecoder[Retries]
 

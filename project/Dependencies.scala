@@ -13,7 +13,6 @@ object Dependencies {
   object V {
     // Scala
     val catsEffect       = "3.5.4"
-    val catsRetry        = "3.1.3"
     val http4s           = "0.23.16"
     val decline          = "2.4.1"
     val circe            = "0.14.6"
@@ -30,7 +29,7 @@ object Dependencies {
     val bigquery        = "2.34.2"
 
     // Snowplow
-    val streams    = "0.6.0"
+    val streams    = "0.8.0-M2"
     val igluClient = "3.1.0"
 
     // tests
@@ -39,13 +38,12 @@ object Dependencies {
 
   }
 
-  val catsRetry         = "com.github.cb372" %% "cats-retry"           % V.catsRetry
-  val blazeClient       = "org.http4s"       %% "http4s-blaze-client"  % V.http4s
-  val decline           = "com.monovore"     %% "decline-effect"       % V.decline
-  val circeGenericExtra = "io.circe"         %% "circe-generic-extras" % V.circeExtra
-  val circeLiteral      = "io.circe"         %% "circe-literal"        % V.circe
-  val betterMonadicFor  = "com.olegpy"       %% "better-monadic-for"   % V.betterMonadicFor
-  val doobie            = "org.tpolecat"     %% "doobie-core"          % V.doobie
+  val blazeClient       = "org.http4s"   %% "http4s-blaze-client"  % V.http4s
+  val decline           = "com.monovore" %% "decline-effect"       % V.decline
+  val circeGenericExtra = "io.circe"     %% "circe-generic-extras" % V.circeExtra
+  val circeLiteral      = "io.circe"     %% "circe-literal"        % V.circe
+  val betterMonadicFor  = "com.olegpy"   %% "better-monadic-for"   % V.betterMonadicFor
+  val doobie            = "org.tpolecat" %% "doobie-core"          % V.doobie
 
   // java
   val slf4j           = "org.slf4j"              % "slf4j-simple"                 % V.slf4j
@@ -76,7 +74,6 @@ object Dependencies {
     igluClientHttp4s,
     bigqueryStorage,
     bigquery,
-    catsRetry,
     blazeClient,
     decline,
     sentry,

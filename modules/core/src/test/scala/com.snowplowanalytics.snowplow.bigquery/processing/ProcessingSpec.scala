@@ -49,8 +49,8 @@ class ProcessingSpec extends Specification with CatsEffect {
     Set the latency metric based off the message timestamp $e9
     Mark app as unhealthy when sinking badrows fails $e10
     Mark app as unhealthy when writing to the Writer fails with runtime exception $e11
-    Emit BadRows for an unknown schema $e12 $e12Legacy
-    Crash and exit for an unrecognized schema, if exitOnMissingIgluSchema is true $e13 $e13Legacy
+    Emit BadRows for an unknown schema, if exitOnMissingIgluSchema is false $e12 $e12Legacy
+    Crash and exit for an unknown schema, if exitOnMissingIgluSchema is true $e13 $e13Legacy
   """
 
   def e1 =

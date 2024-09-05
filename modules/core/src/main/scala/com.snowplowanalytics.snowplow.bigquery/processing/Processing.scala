@@ -392,7 +392,7 @@ object Processing {
         "Exiting because failed to resolve Iglu schemas.  Either check the configuration of the Iglu repos, or set the `skipSchemas` config option, or set `exitOnMissingIgluSchema` to false.\n"
       val failures = v2NonAtomicFields.igluFailures.map(_.failure) ::: legacyFields.igluFailures.map(_.failure)
       val msg      = failures.map(_.asJson.noSpaces).mkString(base, "\n", "")
-      Logger[F].error(base) *> env.appHealth.beUnhealthyForRuntimeService(RuntimeService.Iglu) *> Sync[F].raiseError(
+      env.appHealth.beUnhealthyForRuntimeService(RuntimeService.Iglu) *> Logger[F].error(base) *> Sync[F].raiseError(
         new RuntimeException(msg)
       )
     } else Applicative[F].unit

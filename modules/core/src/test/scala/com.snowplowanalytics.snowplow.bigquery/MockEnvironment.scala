@@ -86,9 +86,10 @@ object MockEnvironment {
           maxDelay              = 10.seconds,
           writeBatchConcurrency = 1
         ),
-        badRowMaxSize = 1000000,
-        schemasToSkip = List.empty,
-        legacyColumns = legacyColumns
+        badRowMaxSize           = 1000000,
+        schemasToSkip           = List.empty,
+        legacyColumns           = legacyColumns,
+        exitOnMissingIgluSchema = false
       )
       MockEnvironment(state, env)
     }

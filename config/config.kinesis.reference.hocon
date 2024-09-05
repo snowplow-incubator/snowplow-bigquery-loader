@@ -133,6 +133,12 @@
     "iglu:com.acme/legacy/jsonschema/2-*-*"
   ]
 
+  # -- Whether the loader should crash and exit if it fails to resolve an Iglu Schema.
+  # -- We recommend `true` because Snowplow enriched events have already passed validation, so a missing schema normally
+  # -- indicates an error that needs addressing.
+  # -- Change to `false` so events go the failed events stream instead of crashing the loader.
+  "exitOnMissingIgluSchema": true
+
   "monitoring": {
     "metrics": {
 

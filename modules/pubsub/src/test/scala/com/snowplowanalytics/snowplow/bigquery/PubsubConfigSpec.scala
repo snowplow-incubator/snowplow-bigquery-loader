@@ -118,9 +118,10 @@ object PubsubConfigSpec {
       healthProbe = Config.HealthProbe(port = Port.fromInt(8000).get, unhealthyLatency = 5.minutes),
       webhook     = Webhook.Config(endpoint = None, tags = Map.empty, heartbeat = 60.minutes)
     ),
-    license       = AcceptedLicense(),
-    skipSchemas   = List.empty,
-    legacyColumns = List.empty
+    license                 = AcceptedLicense(),
+    skipSchemas             = List.empty,
+    legacyColumns           = List.empty,
+    exitOnMissingIgluSchema = true
   )
 
   private val extendedConfig = Config[PubsubSourceConfig, PubsubSinkConfig](
@@ -205,6 +206,7 @@ object PubsubConfigSpec {
     legacyColumns = List(
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/1-*-*").get,
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/2-*-*").get
-    )
+    ),
+    exitOnMissingIgluSchema = true
   )
 }

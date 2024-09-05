@@ -16,10 +16,12 @@ object RuntimeService {
 
   case object BigQueryClient extends RuntimeService
   case object BadSink extends RuntimeService
+  case object Iglu extends RuntimeService
 
   implicit val show: Show[RuntimeService] = Show.show {
     case BigQueryClient => "BigQuery client"
-    case BadSink        => "Bad sink"
+    case BadSink        => "Failed event sink"
+    case Iglu           => "Iglu repositories"
   }
 
 }

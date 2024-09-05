@@ -13,6 +13,7 @@ import cats.{Applicative, Foldable}
 import cats.effect.{Async, Sync}
 import cats.effect.kernel.Unique
 import fs2.{Chunk, Pipe, Stream}
+import io.circe.syntax._
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import retry.{PolicyDecision, RetryDetails, RetryPolicy}
@@ -151,6 +152,7 @@ object Processing {
         _ <- Logger[F].debug(s"Processing batch of size ${events.size}")
         v2NonAtomicFields <- NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip ::: env.legacyColumns)
         legacyFields <- LegacyColumns.resolveTypes[F](env.resolver, entities, env.legacyColumns)
+        _ <- possiblyExitOnMissingIgluSchema(env, v2NonAtomicFields, legacyFields)
         (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, v2NonAtomicFields, legacyFields)
         fields = v2NonAtomicFields.fields.flatMap { tte =>
                    tte.mergedField :: tte.recoveries.map(_._2)
@@ -379,5 +381,20 @@ object Processing {
     def weightOf(a: ParseResult): Long =
       a.countBytes
   }
+
+  private def possiblyExitOnMissingIgluSchema[F[_]: Sync](
+    env: Environment[F],
+    v2NonAtomicFields: NonAtomicFields.Result,
+    legacyFields: LegacyColumns.Result
+  ): F[Unit] =
+    if (env.exitOnMissingIgluSchema && (v2NonAtomicFields.igluFailures.nonEmpty || legacyFields.igluFailures.nonEmpty)) {
+      val base =
+        "Exiting because failed to resolve Iglu schemas.  Either check the configuration of the Iglu repos, or set the `skipSchemas` config option, or set `exitOnMissingIgluSchema` to false.\n"
+      val failures = v2NonAtomicFields.igluFailures.map(_.failure) ::: legacyFields.igluFailures.map(_.failure)
+      val msg      = failures.map(_.asJson.noSpaces).mkString(base, "\n", "")
+      env.appHealth.beUnhealthyForRuntimeService(RuntimeService.Iglu) *> Logger[F].error(base) *> Sync[F].raiseError(
+        new RuntimeException(msg)
+      )
+    } else Applicative[F].unit
 
 }

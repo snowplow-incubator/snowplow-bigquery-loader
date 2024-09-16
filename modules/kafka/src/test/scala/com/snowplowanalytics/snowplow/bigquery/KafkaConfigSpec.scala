@@ -127,7 +127,7 @@ object KafkaConfigSpec {
     skipSchemas             = List.empty,
     legacyColumns           = List.empty,
     exitOnMissingIgluSchema = true,
-    http                    = HttpClient.Config(4)
+    http                    = Config.Http(HttpClient.Config(4))
   )
 
   private val extendedConfig = Config[KafkaSourceConfig, KafkaSinkConfig](
@@ -221,6 +221,6 @@ object KafkaConfigSpec {
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/2-*-*").get
     ),
     exitOnMissingIgluSchema = true,
-    http                    = HttpClient.Config(4)
+    http                    = Config.Http(HttpClient.Config(4))
   )
 }

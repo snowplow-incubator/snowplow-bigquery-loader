@@ -122,7 +122,7 @@ object PubsubConfigSpec {
     skipSchemas             = List.empty,
     legacyColumns           = List.empty,
     exitOnMissingIgluSchema = true,
-    http                    = HttpClient.Config(4)
+    http                    = Config.Http(HttpClient.Config(4))
   )
 
   private val extendedConfig = Config[PubsubSourceConfig, PubsubSinkConfig](
@@ -209,6 +209,6 @@ object PubsubConfigSpec {
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/2-*-*").get
     ),
     exitOnMissingIgluSchema = true,
-    http                    = HttpClient.Config(4)
+    http                    = Config.Http(HttpClient.Config(4))
   )
 }

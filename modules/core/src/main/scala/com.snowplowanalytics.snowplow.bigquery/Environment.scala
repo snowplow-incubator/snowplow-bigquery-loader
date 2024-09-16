@@ -53,7 +53,7 @@ object Environment {
       sourceReporter = sourceAndAck.isHealthy(config.main.monitoring.healthProbe.unhealthyLatency).map(_.showIfUnhealthy)
       appHealth <- Resource.eval(AppHealth.init[F, Alert, RuntimeService](List(sourceReporter)))
       resolver <- mkResolver[F](config.iglu)
-      httpClient <- HttpClient.resource[F](HttpClient.Config(config.main.http.maxConnectionsPerServer))
+      httpClient <- HttpClient.resource[F](config.main.http.client)
       _ <- HealthProbe.resource(config.main.monitoring.healthProbe.port, appHealth)
       _ <- Webhook.resource(config.main.monitoring.webhook, appInfo, httpClient, appHealth)
       badSink <-

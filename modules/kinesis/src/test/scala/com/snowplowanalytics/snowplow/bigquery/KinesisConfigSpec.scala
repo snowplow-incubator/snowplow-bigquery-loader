@@ -123,7 +123,7 @@ object KinesisConfigSpec {
     skipSchemas             = List.empty,
     legacyColumns           = List.empty,
     exitOnMissingIgluSchema = true,
-    http                    = HttpClient.Config(4)
+    http                    = Config.Http(HttpClient.Config(4))
   )
 
   // workerIdentifer coming from "HOSTNAME" env variable set in BuildSettings
@@ -213,6 +213,6 @@ object KinesisConfigSpec {
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/2-*-*").get
     ),
     exitOnMissingIgluSchema = true,
-    http                    = HttpClient.Config(4)
+    http                    = Config.Http(HttpClient.Config(4))
   )
 }

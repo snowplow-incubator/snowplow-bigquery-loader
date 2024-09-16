@@ -33,7 +33,7 @@ case class Config[+Source, +Sink](
   skipSchemas: List[SchemaCriterion],
   legacyColumns: List[SchemaCriterion],
   exitOnMissingIgluSchema: Boolean,
-  http: HttpClient.Config
+  http: Config.Http
 )
 
 object Config {
@@ -92,6 +92,8 @@ object Config {
     tooManyColumns: TooManyColumnsRetries
   )
 
+  case class Http(client: HttpClient.Config)
+
   implicit def decoder[Source: Decoder, Sink: Decoder]: Decoder[Config[Source, Sink]] = {
     implicit val configuration = Configuration.default.withDiscriminator("type")
     implicit val sinkWithMaxSize = for {
@@ -115,6 +117,7 @@ object Config {
     implicit val alterTableRetries  = deriveConfiguredDecoder[AlterTableWaitRetries]
     implicit val tooManyColsRetries = deriveConfiguredDecoder[TooManyColumnsRetries]
     implicit val retriesDecoder     = deriveConfiguredDecoder[Retries]
+    implicit val httpDecoder        = deriveConfiguredDecoder[Http]
 
     // TODO add bigquery docs
     implicit val licenseDecoder =

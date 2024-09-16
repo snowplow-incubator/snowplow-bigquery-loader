@@ -18,7 +18,7 @@ import com.comcast.ip4s.Port
 import scala.concurrent.duration.FiniteDuration
 import com.snowplowanalytics.iglu.client.resolver.Resolver.ResolverConfig
 import com.snowplowanalytics.iglu.core.SchemaCriterion
-import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, Metrics => CommonMetrics, Retrying, Telemetry, Webhook}
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, HttpClient, Metrics => CommonMetrics, Retrying, Telemetry, Webhook}
 import com.snowplowanalytics.iglu.core.circe.CirceIgluCodecs.schemaCriterionDecoder
 import com.snowplowanalytics.snowplow.runtime.HealthProbe.decoders._
 
@@ -32,7 +32,8 @@ case class Config[+Source, +Sink](
   license: AcceptedLicense,
   skipSchemas: List[SchemaCriterion],
   legacyColumns: List[SchemaCriterion],
-  exitOnMissingIgluSchema: Boolean
+  exitOnMissingIgluSchema: Boolean,
+  http: HttpClient.Config
 )
 
 object Config {

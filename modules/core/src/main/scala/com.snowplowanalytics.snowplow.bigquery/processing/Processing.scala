@@ -141,7 +141,7 @@ object Processing {
     }
 
   /** Transform the Event into values compatible with the BigQuery sdk */
-  private def transform[F[_]: Sync: RegistryLookup](
+  private def transform[F[_]: Async: RegistryLookup](
     env: Environment[F],
     badProcessor: BadRowProcessor
   ): Pipe[F, Batched, BatchAfterTransform] =

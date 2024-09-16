@@ -29,7 +29,7 @@ object Dependencies {
     val bigquery        = "2.34.2"
 
     // Snowplow
-    val streams    = "0.8.0-M2"
+    val streams    = "0.8.0-M4"
     val igluClient = "3.1.0"
 
     // tests

@@ -136,7 +136,9 @@
 
   # -- Configuration of internal http client used for iglu resolver, alerts and telemetry
   "http": {
-    "maxConnectionsPerServer": 4
+    "client": {
+      "maxConnectionsPerServer": 4
+    }
   }
 
   "monitoring": {

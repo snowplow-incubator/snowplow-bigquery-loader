@@ -117,6 +117,13 @@
   # -- Change to `false` so events go the failed events stream instead of crashing the loader.
   "exitOnMissingIgluSchema": true
 
+  # -- Configuration of internal http client used for iglu resolver, alerts and telemetry
+  "http": {
+    "client": {
+      "maxConnectionsPerServer": 4
+    }
+  }
+
   "monitoring": {
     "metrics": {
 

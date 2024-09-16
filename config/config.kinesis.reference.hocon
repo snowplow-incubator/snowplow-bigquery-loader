@@ -31,11 +31,6 @@
       # -- Only used if retrieval mode is type Polling. How many events the client may fetch in a single poll.
       "maxRecords": 1000
     }
-
-    # -- The number of batches of events which are pre-fetched from kinesis.
-    # -- Increasing this above 1 is not known to improve performance.
-    "bufferSize": 1
-
   }
 
   "output": {
@@ -138,6 +133,13 @@
   # -- indicates an error that needs addressing.
   # -- Change to `false` so events go the failed events stream instead of crashing the loader.
   "exitOnMissingIgluSchema": true
+
+  # -- Configuration of internal http client used for iglu resolver, alerts and telemetry
+  "http": {
+    "client": {
+      "maxConnectionsPerServer": 4
+    }
+  }
 
   "monitoring": {
     "metrics": {

@@ -17,7 +17,7 @@ import com.comcast.ip4s.Port
 import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.snowplow.bigquery.Config.GcpUserAgent
 import com.snowplowanalytics.snowplow.runtime.Metrics.StatsdConfig
-import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, Retrying, Telemetry, Webhook}
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, HttpClient, Retrying, Telemetry, Webhook}
 import com.snowplowanalytics.snowplow.sinks.kafka.KafkaSinkConfig
 import com.snowplowanalytics.snowplow.sources.kafka.KafkaSourceConfig
 import org.http4s.implicits.http4sLiteralsSyntax
@@ -126,7 +126,8 @@ object KafkaConfigSpec {
     license                 = AcceptedLicense(),
     skipSchemas             = List.empty,
     legacyColumns           = List.empty,
-    exitOnMissingIgluSchema = true
+    exitOnMissingIgluSchema = true,
+    http                    = Config.Http(HttpClient.Config(4))
   )
 
   private val extendedConfig = Config[KafkaSourceConfig, KafkaSinkConfig](
@@ -219,6 +220,7 @@ object KafkaConfigSpec {
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/1-*-*").get,
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/2-*-*").get
     ),
-    exitOnMissingIgluSchema = true
+    exitOnMissingIgluSchema = true,
+    http                    = Config.Http(HttpClient.Config(4))
   )
 }

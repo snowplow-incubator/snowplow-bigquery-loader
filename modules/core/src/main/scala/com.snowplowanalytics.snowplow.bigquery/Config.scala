@@ -18,7 +18,7 @@ import com.comcast.ip4s.Port
 import scala.concurrent.duration.FiniteDuration
 import com.snowplowanalytics.iglu.client.resolver.Resolver.ResolverConfig
 import com.snowplowanalytics.iglu.core.SchemaCriterion
-import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, Metrics => CommonMetrics, Retrying, Telemetry, Webhook}
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, HttpClient, Metrics => CommonMetrics, Retrying, Telemetry, Webhook}
 import com.snowplowanalytics.iglu.core.circe.CirceIgluCodecs.schemaCriterionDecoder
 import com.snowplowanalytics.snowplow.runtime.HealthProbe.decoders._
 
@@ -32,7 +32,8 @@ case class Config[+Source, +Sink](
   license: AcceptedLicense,
   skipSchemas: List[SchemaCriterion],
   legacyColumns: List[SchemaCriterion],
-  exitOnMissingIgluSchema: Boolean
+  exitOnMissingIgluSchema: Boolean,
+  http: Config.Http
 )
 
 object Config {
@@ -91,6 +92,8 @@ object Config {
     tooManyColumns: TooManyColumnsRetries
   )
 
+  case class Http(client: HttpClient.Config)
+
   implicit def decoder[Source: Decoder, Sink: Decoder]: Decoder[Config[Source, Sink]] = {
     implicit val configuration = Configuration.default.withDiscriminator("type")
     implicit val sinkWithMaxSize = for {
@@ -114,6 +117,7 @@ object Config {
     implicit val alterTableRetries  = deriveConfiguredDecoder[AlterTableWaitRetries]
     implicit val tooManyColsRetries = deriveConfiguredDecoder[TooManyColumnsRetries]
     implicit val retriesDecoder     = deriveConfiguredDecoder[Retries]
+    implicit val httpDecoder        = deriveConfiguredDecoder[Http]
 
     // TODO add bigquery docs
     implicit val licenseDecoder =

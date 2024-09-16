@@ -17,10 +17,9 @@ import com.comcast.ip4s.Port
 import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.snowplow.bigquery.Config.GcpUserAgent
 import com.snowplowanalytics.snowplow.runtime.Metrics.StatsdConfig
-import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, Retrying, Telemetry, Webhook}
+import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, HttpClient, Retrying, Telemetry, Webhook}
 import com.snowplowanalytics.snowplow.sinks.kinesis.{BackoffPolicy, KinesisSinkConfig}
 import com.snowplowanalytics.snowplow.sources.kinesis.KinesisSourceConfig
-import eu.timepit.refined.types.all.PosInt
 import org.http4s.implicits.http4sLiteralsSyntax
 import org.specs2.Specification
 
@@ -67,7 +66,6 @@ object KinesisConfigSpec {
       workerIdentifier         = "test-hostname",
       initialPosition          = KinesisSourceConfig.InitialPosition.Latest,
       retrievalMode            = KinesisSourceConfig.Retrieval.Polling(1000),
-      bufferSize               = PosInt.unsafeFrom(1),
       customEndpoint           = None,
       dynamodbCustomEndpoint   = None,
       cloudwatchCustomEndpoint = None,
@@ -124,7 +122,8 @@ object KinesisConfigSpec {
     license                 = AcceptedLicense(),
     skipSchemas             = List.empty,
     legacyColumns           = List.empty,
-    exitOnMissingIgluSchema = true
+    exitOnMissingIgluSchema = true,
+    http                    = Config.Http(HttpClient.Config(4))
   )
 
   // workerIdentifer coming from "HOSTNAME" env variable set in BuildSettings
@@ -135,7 +134,6 @@ object KinesisConfigSpec {
       workerIdentifier         = "test-hostname",
       initialPosition          = KinesisSourceConfig.InitialPosition.TrimHorizon,
       retrievalMode            = KinesisSourceConfig.Retrieval.Polling(1000),
-      bufferSize               = PosInt.unsafeFrom(1),
       customEndpoint           = None,
       dynamodbCustomEndpoint   = None,
       cloudwatchCustomEndpoint = None,
@@ -214,6 +212,7 @@ object KinesisConfigSpec {
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/1-*-*").get,
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/2-*-*").get
     ),
-    exitOnMissingIgluSchema = true
+    exitOnMissingIgluSchema = true,
+    http                    = Config.Http(HttpClient.Config(4))
   )
 }

@@ -140,9 +140,14 @@ object TableManager {
     def tableExists: F[Boolean] =
       for {
         _ <- Logger[F].info(s"Attempting to fetch details of table ${config.dataset}.${config.table}...")
-        _ <- Sync[F].blocking(client.getTable(config.dataset, config.table))
-        _ <- Logger[F].info("Successfully fetched details of table")
-      } yield true
+        attempt <- Sync[F].blocking(Option(client.getTable(config.dataset, config.table)))
+        result <- attempt match {
+                    case Some(_) =>
+                      Logger[F].info("Successfully fetched details of table").as(true)
+                    case None =>
+                      Logger[F].info("Tried to fetch details of existing table but it does not already exist").as(false)
+                  }
+      } yield result
 
     def createTable: F[Unit] = {
       val tableInfo = atomicTableInfo(config)

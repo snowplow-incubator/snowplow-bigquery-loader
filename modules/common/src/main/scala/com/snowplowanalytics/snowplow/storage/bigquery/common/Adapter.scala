@@ -59,6 +59,7 @@ object Adapter {
       case Type.Numeric   => LegacySQLTypeName.NUMERIC
       case Type.Date      => LegacySQLTypeName.DATE
       case Type.DateTime  => LegacySQLTypeName.DATETIME
+      case Type.Json      => LegacySQLTypeName.JSON
       case Type.Record(_) => LegacySQLTypeName.RECORD
     }
 }

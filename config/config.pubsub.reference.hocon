@@ -24,6 +24,9 @@
     # -- The actual value used is guided by runtime statistics collected by the pubsub client library.
     "minDurationPerAckExtension": "60 seconds"
     "maxDurationPerAckExtension": "600 seconds"
+
+    # -- Max num of streaming pulls to open per transport channel
+    "maxPullsPerTransportChannel": 16
   }
 
   "output": {

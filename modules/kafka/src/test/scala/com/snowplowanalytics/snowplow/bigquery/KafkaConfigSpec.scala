@@ -121,7 +121,7 @@ object KafkaConfigSpec {
       metrics     = Config.Metrics(None),
       sentry      = None,
       healthProbe = Config.HealthProbe(port = Port.fromInt(8000).get, unhealthyLatency = 5.minutes),
-      webhook     = Webhook.Config(endpoint = None, tags = Map.empty, heartbeat = 60.minutes)
+      webhook     = Webhook.Config(endpoint = None, tags = Map.empty, heartbeat = 5.minutes)
     ),
     license                 = AcceptedLicense(),
     skipSchemas             = List.empty,

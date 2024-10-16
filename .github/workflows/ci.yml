@@ -10,6 +10,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - name: Install sbt
+        uses: sbt/setup-sbt@v1
       - uses: actions/checkout@v2
       - uses: coursier/cache-action@v6
       - name: Set up JDK 11
@@ -32,6 +34,8 @@ jobs:
           - pubsub
           - kinesis
     steps:
+      - name: Install sbt
+        uses: sbt/setup-sbt@v1
       - name: Checkout Github
         uses: actions/checkout@v2
       - uses: coursier/cache-action@v6

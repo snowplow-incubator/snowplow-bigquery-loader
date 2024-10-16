@@ -62,14 +62,15 @@ class PubsubConfigSpec extends Specification with CatsEffect {
 object PubsubConfigSpec {
   private val minimalConfig = Config[PubsubSourceConfig, PubsubSinkConfig](
     input = PubsubSourceConfig(
-      subscription               = PubsubSourceConfig.Subscription("my-project", "snowplow-enriched"),
-      parallelPullFactor         = BigDecimal(0.5),
-      bufferMaxBytes             = 10000000,
-      maxAckExtensionPeriod      = 1.hour,
-      minDurationPerAckExtension = 1.minute,
-      maxDurationPerAckExtension = 10.minutes,
-      gcpUserAgent               = PubsubUserAgent("Snowplow OSS", "bigquery-loader"),
-      shutdownTimeout            = 30.seconds
+      subscription                = PubsubSourceConfig.Subscription("my-project", "snowplow-enriched"),
+      parallelPullFactor          = BigDecimal(0.5),
+      bufferMaxBytes              = 10000000,
+      maxAckExtensionPeriod       = 1.hour,
+      minDurationPerAckExtension  = 1.minute,
+      maxDurationPerAckExtension  = 10.minutes,
+      gcpUserAgent                = PubsubUserAgent("Snowplow OSS", "bigquery-loader"),
+      shutdownTimeout             = 30.seconds,
+      maxPullsPerTransportChannel = 16
     ),
     output = Config.Output(
       good = Config.BigQuery(
@@ -116,7 +117,7 @@ object PubsubConfigSpec {
       metrics     = Config.Metrics(None),
       sentry      = None,
       healthProbe = Config.HealthProbe(port = Port.fromInt(8000).get, unhealthyLatency = 5.minutes),
-      webhook     = Webhook.Config(endpoint = None, tags = Map.empty, heartbeat = 60.minutes)
+      webhook     = Webhook.Config(endpoint = None, tags = Map.empty, heartbeat = 5.minutes)
     ),
     license                 = AcceptedLicense(),
     skipSchemas             = List.empty,
@@ -127,14 +128,15 @@ object PubsubConfigSpec {
 
   private val extendedConfig = Config[PubsubSourceConfig, PubsubSinkConfig](
     input = PubsubSourceConfig(
-      subscription               = PubsubSourceConfig.Subscription("my-project", "snowplow-enriched"),
-      parallelPullFactor         = BigDecimal(0.5),
-      bufferMaxBytes             = 1000000,
-      maxAckExtensionPeriod      = 1.hour,
-      minDurationPerAckExtension = 1.minute,
-      maxDurationPerAckExtension = 10.minutes,
-      gcpUserAgent               = PubsubUserAgent("Snowplow OSS", "bigquery-loader"),
-      shutdownTimeout            = 30.seconds
+      subscription                = PubsubSourceConfig.Subscription("my-project", "snowplow-enriched"),
+      parallelPullFactor          = BigDecimal(0.5),
+      bufferMaxBytes              = 1000000,
+      maxAckExtensionPeriod       = 1.hour,
+      minDurationPerAckExtension  = 1.minute,
+      maxDurationPerAckExtension  = 10.minutes,
+      gcpUserAgent                = PubsubUserAgent("Snowplow OSS", "bigquery-loader"),
+      shutdownTimeout             = 30.seconds,
+      maxPullsPerTransportChannel = 16
     ),
     output = Config.Output(
       good = Config.BigQuery(

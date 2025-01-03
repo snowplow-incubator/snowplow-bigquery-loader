@@ -58,7 +58,7 @@ object Environment {
       _ <- Webhook.resource(config.main.monitoring.webhook, appInfo, httpClient, appHealth)
       badSink <-
         toSink(config.main.output.bad.sink).onError(_ => Resource.eval(appHealth.beUnhealthyForRuntimeService(RuntimeService.BadSink)))
-      metrics <- Resource.eval(Metrics.build(config.main.monitoring.metrics))
+      metrics <- Resource.eval(Metrics.build(config.main.monitoring.metrics, sourceAndAck))
       creds <- Resource.eval(BigQueryUtils.credentials(config.main.output.good))
       tableManager <- Resource.eval(TableManager.make(config.main.output.good, creds))
       tableManagerWrapped <- Resource.eval(TableManager.withHandledErrors(tableManager, config.main.retries, appHealth))

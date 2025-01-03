@@ -42,7 +42,7 @@ object MockEnvironment {
     case class WroteRowsToBigQuery(rowCount: Int) extends Action
     case class AddedGoodCountMetric(count: Long) extends Action
     case class AddedBadCountMetric(count: Long) extends Action
-    case class SetLatencyMetric(millis: Long) extends Action
+    case class SetLatencyMetric(latency: FiniteDuration) extends Action
     case class BecameUnhealthy(service: RuntimeService) extends Action
     case class BecameHealthy(service: RuntimeService) extends Action
   }
@@ -139,7 +139,7 @@ object MockEnvironment {
 
   private def testSourceAndAck(inputs: List[TokenedEvents], state: Ref[IO, Vector[Action]]): SourceAndAck[IO] =
     new SourceAndAck[IO] {
-      def stream(config: EventProcessingConfig, processor: EventProcessor[IO]): Stream[IO, Nothing] =
+      def stream(config: EventProcessingConfig[IO], processor: EventProcessor[IO]): Stream[IO, Nothing] =
         Stream
           .emits(inputs)
           .through(processor)
@@ -151,6 +151,9 @@ object MockEnvironment {
 
       def isHealthy(maxAllowedProcessingLatency: FiniteDuration): IO[SourceAndAck.HealthStatus] =
         IO.pure(SourceAndAck.Healthy)
+
+      def currentStreamLatency: IO[Option[FiniteDuration]] =
+        IO.pure(None)
     }
 
   private def testBadSink(mockedResponse: Response[Unit], state: Ref[IO, Vector[Action]]): Sink[IO] =
@@ -231,8 +234,8 @@ object MockEnvironment {
     def addGood(count: Long): IO[Unit] =
       ref.update(_ :+ AddedGoodCountMetric(count))
 
-    def setLatencyMillis(latencyMillis: Long): IO[Unit] =
-      ref.update(_ :+ SetLatencyMetric(latencyMillis))
+    def setLatency(latency: FiniteDuration): IO[Unit] =
+      ref.update(_ :+ SetLatencyMetric(latency))
 
     def report: Stream[IO, Nothing] = Stream.never[IO]
   }

@@ -62,15 +62,13 @@ class PubsubConfigSpec extends Specification with CatsEffect {
 object PubsubConfigSpec {
   private val minimalConfig = Config[PubsubSourceConfig, PubsubSinkConfig](
     input = PubsubSourceConfig(
-      subscription                = PubsubSourceConfig.Subscription("my-project", "snowplow-enriched"),
-      parallelPullFactor          = BigDecimal(0.5),
-      bufferMaxBytes              = 10000000,
-      maxAckExtensionPeriod       = 1.hour,
-      minDurationPerAckExtension  = 1.minute,
-      maxDurationPerAckExtension  = 10.minutes,
-      gcpUserAgent                = PubsubUserAgent("Snowplow OSS", "bigquery-loader"),
-      shutdownTimeout             = 30.seconds,
-      maxPullsPerTransportChannel = 16
+      subscription            = PubsubSourceConfig.Subscription("my-project", "snowplow-enriched"),
+      parallelPullFactor      = BigDecimal(0.5),
+      durationPerAckExtension = 1.minute,
+      minRemainingAckDeadline = BigDecimal(0.1),
+      gcpUserAgent            = PubsubUserAgent("Snowplow OSS", "bigquery-loader"),
+      maxMessagesPerPull      = 1000,
+      debounceRequests        = 100.millis
     ),
     output = Config.Output(
       good = Config.BigQuery(
@@ -128,15 +126,13 @@ object PubsubConfigSpec {
 
   private val extendedConfig = Config[PubsubSourceConfig, PubsubSinkConfig](
     input = PubsubSourceConfig(
-      subscription                = PubsubSourceConfig.Subscription("my-project", "snowplow-enriched"),
-      parallelPullFactor          = BigDecimal(0.5),
-      bufferMaxBytes              = 1000000,
-      maxAckExtensionPeriod       = 1.hour,
-      minDurationPerAckExtension  = 1.minute,
-      maxDurationPerAckExtension  = 10.minutes,
-      gcpUserAgent                = PubsubUserAgent("Snowplow OSS", "bigquery-loader"),
-      shutdownTimeout             = 30.seconds,
-      maxPullsPerTransportChannel = 16
+      subscription            = PubsubSourceConfig.Subscription("my-project", "snowplow-enriched"),
+      parallelPullFactor      = BigDecimal(0.5),
+      durationPerAckExtension = 1.minute,
+      minRemainingAckDeadline = BigDecimal(0.1),
+      gcpUserAgent            = PubsubUserAgent("Snowplow OSS", "bigquery-loader"),
+      maxMessagesPerPull      = 1000,
+      debounceRequests        = 100.millis
     ),
     output = Config.Output(
       good = Config.BigQuery(

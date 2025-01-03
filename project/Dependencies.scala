@@ -24,12 +24,12 @@ object Dependencies {
     val slf4j           = "2.0.12"
     val azureSdk        = "1.11.4"
     val sentry          = "6.25.2"
-    val awsSdk2         = "2.25.16"
+    val awsSdk2         = "2.29.0"
     val bigqueryStorage = "2.47.0"
     val bigquery        = "2.34.2"
 
     // Snowplow
-    val streams    = "0.8.2-M1"
+    val streams    = "0.10.0"
     val igluClient = "4.0.0"
 
     // tests

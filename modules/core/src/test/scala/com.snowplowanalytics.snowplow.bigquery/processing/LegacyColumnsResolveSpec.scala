@@ -111,8 +111,8 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
       val expectedStruct = Type.Struct(
         NonEmptyVector.of(
           Field("col_camel", Type.Json, Required, Set("colCamel")),
-          Field("col_snake", Type.Json, Required, Set("col_snake")),
-          Field("col_other", Type.Long, Nullable, Set("col_other"))
+          Field("col_other", Type.Long, Nullable, Set("col_other")),
+          Field("col_snake", Type.Json, Required, Set("col_snake"))
         )
       )
 
@@ -283,8 +283,8 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
       val expectedStruct = Type.Struct(
         NonEmptyVector.of(
           Field("col_camel", Type.Json, Required, Set("colCamel")),
-          Field("col_snake", Type.Json, Required, Set("col_snake")),
-          Field("col_other", Type.Long, Nullable, Set("col_other"))
+          Field("col_other", Type.Long, Nullable, Set("col_other")),
+          Field("col_snake", Type.Json, Required, Set("col_snake"))
         )
       )
 

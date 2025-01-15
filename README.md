@@ -77,4 +77,4 @@ Licensed under the [Snowplow Limited Use License Agreement][license]. _(If you a
 [releases]: https://github.com/snowplow-incubator/snowplow-biguery-loader/releases
 
 [license]: https://docs.snowplow.io/limited-use-license-1.1
-[license-image]: https://img.shields.io/badge/license-Snowplow--Limited-Use-blue.svg?style=flat
+[license-image]: https://img.shields.io/badge/license-Snowplow--Limited--Use-blue.svg?style=flat

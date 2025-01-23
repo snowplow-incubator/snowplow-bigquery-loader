@@ -20,9 +20,10 @@ import retry.{PolicyDecision, RetryDetails, RetryPolicy}
 import retry.implicits._
 import com.google.cloud.bigquery.FieldList
 
+import scala.concurrent.duration.DurationLong
+
 import java.nio.charset.StandardCharsets
 import scala.concurrent.duration.Duration
-
 import com.snowplowanalytics.iglu.schemaddl.parquet.{Caster, Field}
 import com.snowplowanalytics.iglu.client.resolver.registries.{Http4sRegistryLookup, RegistryLookup}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
@@ -35,6 +36,8 @@ import com.snowplowanalytics.snowplow.runtime.processing.BatchUp
 import com.snowplowanalytics.snowplow.runtime.Retrying.showRetryDetails
 import com.snowplowanalytics.snowplow.loaders.transform.{BadRowsSerializer, NonAtomicFields, SchemaSubVersion, TabledEntity, Transform}
 import com.snowplowanalytics.snowplow.bigquery.{Environment, RuntimeService}
+
+import java.time.Instant
 
 object Processing {
 
@@ -54,7 +57,8 @@ object Processing {
     events: List[Event],
     parseFailures: List[BadRow],
     countBytes: Long,
-    token: Unique.Token
+    token: Unique.Token,
+    earliestCollectorTstamp: Option[Instant]
   )
 
   private case class Batched(
@@ -62,7 +66,8 @@ object Processing {
     parseFailures: ListOfList[BadRow],
     countBytes: Long,
     entities: Map[TabledEntity, Set[SchemaSubVersion]],
-    tokens: Vector[Unique.Token]
+    tokens: Vector[Unique.Token],
+    earliestCollectorTstamp: Option[Instant]
   )
 
   private type EventWithTransform = (Event, Map[String, AnyRef])
@@ -91,7 +96,8 @@ object Processing {
     origBatchBytes: Long,
     origBatchCount: Long,
     badAccumulated: ListOfList[BadRow],
-    tokens: Vector[Unique.Token]
+    tokens: Vector[Unique.Token],
+    earliestCollectorTstamp: Option[Instant]
   )
 
   private def eventProcessor[F[_]: Async: RegistryLookup](
@@ -104,10 +110,24 @@ object Processing {
       .through(transform(env, badProcessor))
       .through(handleSchemaEvolution(env))
       .through(writeToBigQuery(env, badProcessor))
+      .through(setE2ELatencyMetric(env))
       .through(sendFailedEvents(env, badProcessor))
       .through(sendMetrics(env))
       .through(emitTokens)
   }
+
+  private def setE2ELatencyMetric[F[_]: Sync](env: Environment[F]): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
+    _.evalTap {
+      _.earliestCollectorTstamp match {
+        case Some(t) =>
+          for {
+            now <- Sync[F].realTime
+            e2eLatency = now - t.toEpochMilli.millis
+            _ <- env.metrics.setE2ELatency(e2eLatency)
+          } yield ()
+        case None => Sync[F].unit
+      }
+    }
 
   /** Parse raw bytes into Event using analytics sdk */
   private def parseBytes[F[_]: Sync](badProcessor: BadRowProcessor): Pipe[F, TokenedEvents, ParseResult] =
@@ -122,7 +142,8 @@ object Processing {
                                  }
                                }
                              }
-      } yield ParseResult(events, badRows, numBytes, token)
+        earliestCollectorTstamp = events.view.map(_.collector_tstamp).minOption
+      } yield ParseResult(events, badRows, numBytes, token, earliestCollectorTstamp)
     }
 
   /** Transform the Event into values compatible with the BigQuery sdk */
@@ -130,7 +151,7 @@ object Processing {
     env: Environment[F],
     badProcessor: BadRowProcessor
   ): Pipe[F, Batched, BatchAfterTransform] =
-    _.evalMap { case Batched(events, parseFailures, countBytes, entities, tokens) =>
+    _.evalMap { case Batched(events, parseFailures, countBytes, entities, tokens, earliestCollectorTstamp) =>
       for {
         now <- Sync[F].realTimeInstant
         loadTstamp = BigQueryCaster.timestampValue(now)
@@ -148,7 +169,8 @@ object Processing {
         countBytes,
         events.size + parseFailures.size,
         parseFailures.prepend(moreBad),
-        tokens
+        tokens,
+        earliestCollectorTstamp
       )
     }
 
@@ -357,11 +379,19 @@ object Processing {
         parseFailures = b.parseFailures.prepend(a.parseFailures),
         countBytes    = b.countBytes + a.countBytes,
         entities      = Foldable[List].foldMap(a.events)(TabledEntity.forEvent(_)) |+| b.entities,
-        tokens        = b.tokens :+ a.token
+        tokens        = b.tokens :+ a.token,
+        chooseEarliestTstamp(a.earliestCollectorTstamp, b.earliestCollectorTstamp)
       )
     def single(a: ParseResult): Batched = {
       val entities = Foldable[List].foldMap(a.events)(TabledEntity.forEvent(_))
-      Batched(ListOfList.of(List(a.events)), ListOfList.of(List(a.parseFailures)), a.countBytes, entities, Vector(a.token))
+      Batched(
+        ListOfList.of(List(a.events)),
+        ListOfList.of(List(a.parseFailures)),
+        a.countBytes,
+        entities,
+        Vector(a.token),
+        a.earliestCollectorTstamp
+      )
     }
     def weightOf(a: ParseResult): Long =
       a.countBytes
@@ -381,5 +411,13 @@ object Processing {
         new RuntimeException(msg)
       )
     } else Applicative[F].unit
+
+  private def chooseEarliestTstamp(o1: Option[Instant], o2: Option[Instant]): Option[Instant] =
+    (o1, o2)
+      .mapN { case (t1, t2) =>
+        if (t1.isBefore(t2)) t1 else t2
+      }
+      .orElse(o1)
+      .orElse(o2)
 
 }

@@ -19,12 +19,15 @@ import com.snowplowanalytics.iglu.core.{SchemaCriterion, SchemaKey, SelfDescribi
 
 import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
-
 import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent, unstructEventDecoder}
 import com.snowplowanalytics.snowplow.bigquery.{AtomicDescriptor, MockEnvironment, RuntimeService}
 import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.{Action, Mocks}
 import com.snowplowanalytics.snowplow.sources.TokenedEvents
+
+import scala.concurrent.duration.DurationLong
+
+import java.time.Instant
 
 class ProcessingSpec extends Specification with CatsEffect {
   import ProcessingSpec._
@@ -50,9 +53,13 @@ class ProcessingSpec extends Specification with CatsEffect {
     Crash and exit for an unknown schema, if exitOnMissingIgluSchema is true $e12 $e12Legacy
   """
 
-  def e1 =
-    runTest(inputEvents(count = 2, good())) { case (inputs, control) =>
+  def e1 = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
+
+    val io = runTest(inputEvents(count = 2, good(optCollectorTstamp = Option(collectorTstamp)))) { case (inputs, control) =>
       for {
+        _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
       } yield state should beEqualTo(
@@ -60,12 +67,15 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.CreatedTable,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(4),
+          Action.SetE2ELatencyMetric(42123.millis),
           Action.AddedGoodCountMetric(4),
           Action.AddedBadCountMetric(0),
           Action.Checkpointed(List(inputs(0).ack, inputs(1).ack))
         )
       )
     }
+    TestControl.executeEmbed(io)
+  }
 
   def e2 =
     runTest(inputEvents(count = 3, badlyFormatted)) { case (inputs, control) =>
@@ -85,14 +95,18 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
 
   def e3 = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:52.123Z")
+
     val toInputs = for {
       bads <- inputEvents(count = 3, badlyFormatted)
-      goods <- inputEvents(count = 3, good())
+      goods <- inputEvents(count = 3, good(optCollectorTstamp = Option(collectorTstamp)))
     } yield bads.zip(goods).map { case (bad, good) =>
       TokenedEvents(bad.events ++ good.events, good.ack)
     }
-    runTest(toInputs) { case (inputs, control) =>
+    val io = runTest(toInputs) { case (inputs, control) =>
       for {
+        _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
       } yield state should beEqualTo(
@@ -100,6 +114,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.CreatedTable,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(6),
+          Action.SetE2ELatencyMetric(52123.millis),
           Action.SentToBad(6),
           Action.AddedGoodCountMetric(6),
           Action.AddedBadCountMetric(6),
@@ -107,9 +122,13 @@ class ProcessingSpec extends Specification with CatsEffect {
         )
       )
     }
+    TestControl.executeEmbed(io)
   }
 
-  def alter1_base(legacyColumns: Boolean) = {
+  def alter1_base(legacyColumns: Boolean, timeout: Boolean) = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:01.123Z")
+
     val unstructEvent: UnstructEvent = json"""
     {
       "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
@@ -145,30 +164,38 @@ class ProcessingSpec extends Specification with CatsEffect {
       if (legacyColumns) List(SchemaCriterion("com.snowplowanalytics.snowplow.media", "ad_click_event", "jsonschema", 1))
       else Nil
 
-    runTest(inputEvents(count = 1, good(unstructEvent)), mocks, legacyCriteria) { case (inputs, control) =>
-      for {
-        _ <- Processing.stream(control.environment).compile.drain
-        state <- control.state.get
-      } yield state should beEqualTo(
-        Vector(
-          Action.CreatedTable,
-          Action.OpenedWriter,
-          Action.AlterTableAddedColumns(Vector(expectedColumnName)),
-          Action.ClosedWriter,
-          Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(2),
-          Action.AddedGoodCountMetric(2),
-          Action.AddedBadCountMetric(0),
-          Action.Checkpointed(List(inputs(0).ack))
+    val io = runTest(inputEvents(count = 1, good(unstructEvent, optCollectorTstamp = Option(collectorTstamp))), mocks, legacyCriteria) {
+      case (inputs, control) =>
+        for {
+          _ <- IO.sleep(processTime.toEpochMilli.millis)
+          _ <- Processing.stream(control.environment).compile.drain
+          state <- control.state.get
+        } yield state should beEqualTo(
+          Vector(
+            Action.CreatedTable,
+            Action.OpenedWriter,
+            Action.AlterTableAddedColumns(Vector(expectedColumnName)),
+            Action.ClosedWriter,
+            Action.OpenedWriter,
+            Action.WroteRowsToBigQuery(2),
+            Action.SetE2ELatencyMetric(2123.millis),
+            Action.AddedGoodCountMetric(2),
+            Action.AddedBadCountMetric(0),
+            Action.Checkpointed(List(inputs(0).ack))
+          )
         )
-      )
     }
+    if (timeout) TestControl.executeEmbed(io.timeout(10.seconds))
+    else TestControl.executeEmbed(io)
   }
 
-  def alter1        = alter1_base(legacyColumns = false)
-  def alter1_legacy = alter1_base(legacyColumns = true)
+  def alter1        = alter1_base(legacyColumns = false, timeout = false)
+  def alter1_legacy = alter1_base(legacyColumns = true, timeout = true)
 
-  def alter2_base(legacyColumns: Boolean) = {
+  def alter2_base(legacyColumns: Boolean, timeout: Boolean) = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
+
     val data = json"""{ "percentProgress": 50 }"""
     val contexts = Contexts(
       List(
@@ -206,30 +233,39 @@ class ProcessingSpec extends Specification with CatsEffect {
       if (legacyColumns) List(SchemaCriterion("com.snowplowanalytics.snowplow.media", "ad_click_event", "jsonschema", 1))
       else Nil
 
-    runTest(inputEvents(count = 1, good(contexts = contexts)), mocks, legacyCriteria) { case (inputs, control) =>
-      for {
-        _ <- Processing.stream(control.environment).compile.drain
-        state <- control.state.get
-      } yield state should beEqualTo(
-        Vector(
-          Action.CreatedTable,
-          Action.OpenedWriter,
-          Action.AlterTableAddedColumns(Vector(expectedColumnName)),
-          Action.ClosedWriter,
-          Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(2),
-          Action.AddedGoodCountMetric(2),
-          Action.AddedBadCountMetric(0),
-          Action.Checkpointed(List(inputs(0).ack))
-        )
-      )
-    }
+    val io =
+      runTest(inputEvents(count = 1, good(contexts = contexts, optCollectorTstamp = Option(collectorTstamp))), mocks, legacyCriteria) {
+        case (inputs, control) =>
+          for {
+            _ <- IO.sleep(processTime.toEpochMilli.millis)
+            _ <- Processing.stream(control.environment).compile.drain
+            state <- control.state.get
+          } yield state should beEqualTo(
+            Vector(
+              Action.CreatedTable,
+              Action.OpenedWriter,
+              Action.AlterTableAddedColumns(Vector(expectedColumnName)),
+              Action.ClosedWriter,
+              Action.OpenedWriter,
+              Action.WroteRowsToBigQuery(2),
+              Action.SetE2ELatencyMetric(43123.millis),
+              Action.AddedGoodCountMetric(2),
+              Action.AddedBadCountMetric(0),
+              Action.Checkpointed(List(inputs(0).ack))
+            )
+          )
+      }
+    if (timeout) TestControl.executeEmbed(io.timeout(10.seconds))
+    else TestControl.executeEmbed(io)
   }
 
-  def alter2        = alter2_base(legacyColumns = false)
-  def alter2_legacy = alter2_base(legacyColumns = true)
+  def alter2        = alter2_base(legacyColumns = false, timeout = false)
+  def alter2_legacy = alter2_base(legacyColumns = true, timeout = true)
 
   def alter3 = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
+
     val data = json"""{ "myInteger": 100 }"""
     val unstruct = UnstructEvent(
       Some(SelfDescribingData(SchemaKey.fromUri("iglu:test_vendor/test_name/jsonschema/1-0-1").toOption.get, data))
@@ -254,27 +290,34 @@ class ProcessingSpec extends Specification with CatsEffect {
         AtomicDescriptor.withTestUnstruct101
       )
     )
-    runTest(inputEvents(count = 1, good(ue = unstruct)), mocks) { case (inputs, control) =>
-      for {
-        _ <- Processing.stream(control.environment).compile.drain
-        state <- control.state.get
-      } yield state should beEqualTo(
-        Vector(
-          Action.CreatedTable,
-          Action.OpenedWriter,
-          Action.AlterTableAddedColumns(Vector("unstruct_event_test_vendor_test_name_1")),
-          Action.ClosedWriter,
-          Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(2),
-          Action.AddedGoodCountMetric(2),
-          Action.AddedBadCountMetric(0),
-          Action.Checkpointed(List(inputs(0).ack))
+    val io = runTest(inputEvents(count = 1, good(ue = unstruct, optCollectorTstamp = Option(collectorTstamp))), mocks) {
+      case (inputs, control) =>
+        for {
+          _ <- IO.sleep(processTime.toEpochMilli.millis)
+          _ <- Processing.stream(control.environment).compile.drain
+          state <- control.state.get
+        } yield state should beEqualTo(
+          Vector(
+            Action.CreatedTable,
+            Action.OpenedWriter,
+            Action.AlterTableAddedColumns(Vector("unstruct_event_test_vendor_test_name_1")),
+            Action.ClosedWriter,
+            Action.OpenedWriter,
+            Action.WroteRowsToBigQuery(2),
+            Action.SetE2ELatencyMetric(43123.millis),
+            Action.AddedGoodCountMetric(2),
+            Action.AddedBadCountMetric(0),
+            Action.Checkpointed(List(inputs(0).ack))
+          )
         )
-      )
     }
+    TestControl.executeEmbed(io)
   }
 
   def alter4 = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
+
     val data     = json"""{ "myInteger": 100}"""
     val contexts = Contexts(List(SelfDescribingData(SchemaKey.fromUri("iglu:test_vendor/test_name/jsonschema/1-0-1").toOption.get, data)))
 
@@ -300,27 +343,34 @@ class ProcessingSpec extends Specification with CatsEffect {
         AtomicDescriptor.withTestContext101
       )
     )
-    runTest(inputEvents(count = 1, good(contexts = contexts)), mocks) { case (inputs, control) =>
-      for {
-        _ <- Processing.stream(control.environment).compile.drain
-        state <- control.state.get
-      } yield state should beEqualTo(
-        Vector(
-          Action.CreatedTable,
-          Action.OpenedWriter,
-          Action.AlterTableAddedColumns(Vector("contexts_test_vendor_test_name_1")),
-          Action.ClosedWriter,
-          Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(2),
-          Action.AddedGoodCountMetric(2),
-          Action.AddedBadCountMetric(0),
-          Action.Checkpointed(List(inputs(0).ack))
+    val io = runTest(inputEvents(count = 1, good(contexts = contexts, optCollectorTstamp = Option(collectorTstamp))), mocks) {
+      case (inputs, control) =>
+        for {
+          _ <- IO.sleep(processTime.toEpochMilli.millis)
+          _ <- Processing.stream(control.environment).compile.drain
+          state <- control.state.get
+        } yield state should beEqualTo(
+          Vector(
+            Action.CreatedTable,
+            Action.OpenedWriter,
+            Action.AlterTableAddedColumns(Vector("contexts_test_vendor_test_name_1")),
+            Action.ClosedWriter,
+            Action.OpenedWriter,
+            Action.WroteRowsToBigQuery(2),
+            Action.SetE2ELatencyMetric(43123.millis),
+            Action.AddedGoodCountMetric(2),
+            Action.AddedBadCountMetric(0),
+            Action.Checkpointed(List(inputs(0).ack))
+          )
         )
-      )
     }
+    TestControl.executeEmbed(io)
   }
 
   def e5 = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:52.123Z")
+
     val unstructEvent: UnstructEvent = json"""
     {
       "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
@@ -332,8 +382,9 @@ class ProcessingSpec extends Specification with CatsEffect {
       }
     }
     """.as[UnstructEvent].fold(throw _, identity)
-    runTest(inputEvents(count = 1, good(unstructEvent))) { case (inputs, control) =>
+    val io = runTest(inputEvents(count = 1, good(unstructEvent, optCollectorTstamp = Option(collectorTstamp)))) { case (inputs, control) =>
       for {
+        _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
       } yield state should beEqualTo(
@@ -341,23 +392,29 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.CreatedTable,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(2),
+          Action.SetE2ELatencyMetric(52123.millis),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
           Action.Checkpointed(List(inputs(0).ack))
         )
       )
     }
+    TestControl.executeEmbed(io)
   }
 
   def e6 = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:52.123Z")
+
     val mocks = Mocks.default.copy(
       writerResponses = List(
         MockEnvironment.Response.Success(Writer.WriteResult.SerializationFailures(Map(0 -> "boom!"))),
         MockEnvironment.Response.Success(Writer.WriteResult.Success)
       )
     )
-    runTest(inputEvents(count = 1, good()), mocks) { case (inputs, control) =>
+    val io = runTest(inputEvents(count = 1, good(optCollectorTstamp = Option(collectorTstamp))), mocks) { case (inputs, control) =>
       for {
+        _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
       } yield state should beEqualTo(
@@ -365,6 +422,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.CreatedTable,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(1),
+          Action.SetE2ELatencyMetric(52123.millis),
           Action.SentToBad(1),
           Action.AddedGoodCountMetric(1),
           Action.AddedBadCountMetric(1),
@@ -372,9 +430,12 @@ class ProcessingSpec extends Specification with CatsEffect {
         )
       )
     }
+    TestControl.executeEmbed(io)
   }
 
   def e7 = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:52.123Z")
     val mocks = Mocks.default.copy(
       writerResponses = List(
         MockEnvironment.Response.Success(Writer.WriteResult.ServerSideSchemaMismatch(new RuntimeException("boom!"))),
@@ -382,8 +443,9 @@ class ProcessingSpec extends Specification with CatsEffect {
         MockEnvironment.Response.Success(Writer.WriteResult.Success)
       )
     )
-    val io = runTest(inputEvents(count = 1, good()), mocks) { case (inputs, control) =>
+    val io = runTest(inputEvents(count = 1, good(optCollectorTstamp = Option(collectorTstamp))), mocks) { case (inputs, control) =>
       for {
+        _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
       } yield state should beEqualTo(
@@ -395,6 +457,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.ClosedWriter,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(2),
+          Action.SetE2ELatencyMetric(54123.millis),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
           Action.Checkpointed(List(inputs(0).ack))
@@ -405,6 +468,8 @@ class ProcessingSpec extends Specification with CatsEffect {
   }
 
   def e8 = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
     val mocks = Mocks.default.copy(
       writerResponses = List(
         MockEnvironment.Response.Success(Writer.WriteResult.WriterWasClosedByEarlierError(new RuntimeException("boom!"))),
@@ -412,8 +477,9 @@ class ProcessingSpec extends Specification with CatsEffect {
         MockEnvironment.Response.Success(Writer.WriteResult.Success)
       )
     )
-    val io = runTest(inputEvents(count = 1, good()), mocks) { case (inputs, control) =>
+    val io = runTest(inputEvents(count = 1, good(optCollectorTstamp = Option(collectorTstamp))), mocks) { case (inputs, control) =>
       for {
+        _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
       } yield state should beEqualTo(
@@ -425,6 +491,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.ClosedWriter,
           Action.OpenedWriter,
           Action.WroteRowsToBigQuery(2),
+          Action.SetE2ELatencyMetric(42123.millis),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
           Action.Checkpointed(List(inputs(0).ack))
@@ -472,7 +539,10 @@ class ProcessingSpec extends Specification with CatsEffect {
 
   }
 
-  def e11Base(legacyColumns: Boolean) = {
+  def e11Base(legacyColumns: Boolean, timeout: Boolean) = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
+
     val unstructEvent: UnstructEvent = json"""
     {
       "schema": "iglu:com.snowplowanalytics.snowplow/unstruct_event/jsonschema/1-0-0",
@@ -489,26 +559,32 @@ class ProcessingSpec extends Specification with CatsEffect {
       if (legacyColumns) List(SchemaCriterion("com.unknown", "unknown_event", "jsonschema", 1))
       else Nil
 
-    runTest(inputEvents(count = 1, good(unstructEvent)), legacyCriteria = legacyCriteria) { case (inputs, control) =>
-      for {
-        _ <- Processing.stream(control.environment).compile.drain
-        state <- control.state.get
-      } yield state should beEqualTo(
-        Vector(
-          Action.CreatedTable,
-          Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(1),
-          Action.SentToBad(1),
-          Action.AddedGoodCountMetric(1),
-          Action.AddedBadCountMetric(1),
-          Action.Checkpointed(List(inputs(0).ack))
-        )
-      )
-    }
+    val io =
+      runTest(inputEvents(count = 1, good(unstructEvent, optCollectorTstamp = Option(collectorTstamp))), legacyCriteria = legacyCriteria) {
+        case (inputs, control) =>
+          for {
+            _ <- IO.sleep(processTime.toEpochMilli.millis)
+            _ <- Processing.stream(control.environment).compile.drain
+            state <- control.state.get
+          } yield state should beEqualTo(
+            Vector(
+              Action.CreatedTable,
+              Action.OpenedWriter,
+              Action.WroteRowsToBigQuery(1),
+              Action.SetE2ELatencyMetric(42123.millis),
+              Action.SentToBad(1),
+              Action.AddedGoodCountMetric(1),
+              Action.AddedBadCountMetric(1),
+              Action.Checkpointed(List(inputs(0).ack))
+            )
+          )
+      }
+    if (timeout) TestControl.executeEmbed(io.timeout(10.seconds))
+    else TestControl.executeEmbed(io)
   }
 
-  def e11       = e11Base(legacyColumns = false)
-  def e11Legacy = e11Base(legacyColumns = true)
+  def e11       = e11Base(legacyColumns = false, timeout = false)
+  def e11Legacy = e11Base(legacyColumns = true, timeout = true)
 
   def e12Base(legacyColumns: Boolean) = {
     val unstructEvent: UnstructEvent = json"""
@@ -570,12 +646,17 @@ object ProcessingSpec {
       .compile
       .toList
 
-  def good(ue: UnstructEvent = UnstructEvent(None), contexts: Contexts = Contexts(List.empty)): IO[TokenedEvents] =
+  def good(
+    ue: UnstructEvent                   = UnstructEvent(None),
+    contexts: Contexts                  = Contexts(List.empty),
+    optCollectorTstamp: Option[Instant] = None
+  ): IO[TokenedEvents] =
     for {
       ack <- IO.unique
       eventId1 <- IO.randomUUID
       eventId2 <- IO.randomUUID
-      collectorTstamp <- IO.realTimeInstant
+      now <- IO.realTimeInstant
+      collectorTstamp = optCollectorTstamp.fold(now)(identity)
     } yield {
       val event1 = Event.minimal(eventId1, collectorTstamp, "0.0.0", "0.0.0").copy(unstruct_event = ue).copy(contexts = contexts)
       val event2 = Event.minimal(eventId2, collectorTstamp, "0.0.0", "0.0.0")

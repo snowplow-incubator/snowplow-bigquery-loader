@@ -12,14 +12,16 @@ import cats.Id
 import cats.effect.testing.specs2.CatsEffect
 import cats.effect.{ExitCode, IO}
 import com.comcast.ip4s.Port
+import org.http4s.implicits.http4sLiteralsSyntax
+import org.specs2.Specification
+
 import com.snowplowanalytics.iglu.core.SchemaCriterion
 import com.snowplowanalytics.snowplow.bigquery.Config.GcpUserAgent
 import com.snowplowanalytics.snowplow.runtime.Metrics.StatsdConfig
 import com.snowplowanalytics.snowplow.runtime.{AcceptedLicense, ConfigParser, HttpClient, Retrying, Telemetry, Webhook}
-import com.snowplowanalytics.snowplow.sinks.kinesis.{BackoffPolicy, KinesisSinkConfig}
+import com.snowplowanalytics.snowplow.sinks.kinesis.KinesisSinkConfig
 import com.snowplowanalytics.snowplow.sources.kinesis.KinesisSourceConfig
-import org.http4s.implicits.http4sLiteralsSyntax
-import org.specs2.Specification
+import com.snowplowanalytics.snowplow.kinesis.BackoffPolicy
 
 import java.nio.file.Paths
 import scala.concurrent.duration.DurationInt
@@ -59,15 +61,17 @@ class KinesisConfigSpec extends Specification with CatsEffect {
 object KinesisConfigSpec {
   private val minimalConfig = Config[KinesisSourceConfig, KinesisSinkConfig](
     input = KinesisSourceConfig(
-      appName                  = "snowplow-bigquery-loader",
-      streamName               = "snowplow-enriched-events",
-      workerIdentifier         = "test-hostname",
-      initialPosition          = KinesisSourceConfig.InitialPosition.Latest,
-      retrievalMode            = KinesisSourceConfig.Retrieval.Polling(1000),
-      customEndpoint           = None,
-      dynamodbCustomEndpoint   = None,
-      cloudwatchCustomEndpoint = None,
-      leaseDuration            = 10.seconds
+      appName                          = "snowplow-bigquery-loader",
+      streamName                       = "snowplow-enriched-events",
+      workerIdentifier                 = "test-hostname",
+      initialPosition                  = KinesisSourceConfig.InitialPosition.Latest,
+      retrievalMode                    = KinesisSourceConfig.Retrieval.Polling(1000),
+      customEndpoint                   = None,
+      dynamodbCustomEndpoint           = None,
+      cloudwatchCustomEndpoint         = None,
+      leaseDuration                    = 10.seconds,
+      maxLeasesToStealAtOneTimeFactor  = BigDecimal("2.0"),
+      checkpointThrottledBackoffPolicy = BackoffPolicy(minBackoff = 100.millis, maxBackoff = 1.second)
     ),
     output = Config.Output(
       good = Config.BigQuery(
@@ -80,7 +84,7 @@ object KinesisConfigSpec {
       bad = Config.SinkWithMaxSize(
         sink = KinesisSinkConfig(
           streamName             = "bad",
-          throttledBackoffPolicy = BackoffPolicy(minBackoff = 100.millis, maxBackoff = 1.second, maxRetries = None),
+          throttledBackoffPolicy = BackoffPolicy(minBackoff = 100.millis, maxBackoff = 1.second),
           recordLimit            = 500,
           byteLimit              = 5242880,
           customEndpoint         = None
@@ -127,15 +131,17 @@ object KinesisConfigSpec {
   // workerIdentifer coming from "HOSTNAME" env variable set in BuildSettings
   private val extendedConfig = Config[KinesisSourceConfig, KinesisSinkConfig](
     input = KinesisSourceConfig(
-      appName                  = "snowplow-bigquery-loader",
-      streamName               = "snowplow-enriched-events",
-      workerIdentifier         = "test-hostname",
-      initialPosition          = KinesisSourceConfig.InitialPosition.TrimHorizon,
-      retrievalMode            = KinesisSourceConfig.Retrieval.Polling(1000),
-      customEndpoint           = None,
-      dynamodbCustomEndpoint   = None,
-      cloudwatchCustomEndpoint = None,
-      leaseDuration            = 10.seconds
+      appName                          = "snowplow-bigquery-loader",
+      streamName                       = "snowplow-enriched-events",
+      workerIdentifier                 = "test-hostname",
+      initialPosition                  = KinesisSourceConfig.InitialPosition.TrimHorizon,
+      retrievalMode                    = KinesisSourceConfig.Retrieval.Polling(1000),
+      customEndpoint                   = None,
+      dynamodbCustomEndpoint           = None,
+      cloudwatchCustomEndpoint         = None,
+      leaseDuration                    = 10.seconds,
+      maxLeasesToStealAtOneTimeFactor  = BigDecimal("2.0"),
+      checkpointThrottledBackoffPolicy = BackoffPolicy(minBackoff = 100.millis, maxBackoff = 1.second)
     ),
     output = Config.Output(
       good = Config.BigQuery(
@@ -148,7 +154,7 @@ object KinesisConfigSpec {
       bad = Config.SinkWithMaxSize(
         sink = KinesisSinkConfig(
           streamName             = "bad",
-          throttledBackoffPolicy = BackoffPolicy(minBackoff = 100.millis, maxBackoff = 1.second, maxRetries = None),
+          throttledBackoffPolicy = BackoffPolicy(minBackoff = 100.millis, maxBackoff = 1.second),
           recordLimit            = 500,
           byteLimit              = 5242880,
           customEndpoint         = None

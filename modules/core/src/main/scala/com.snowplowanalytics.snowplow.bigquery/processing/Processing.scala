@@ -34,7 +34,7 @@ import com.snowplowanalytics.snowplow.runtime.syntax.foldable._
 import com.snowplowanalytics.snowplow.runtime.processing.BatchUp
 import com.snowplowanalytics.snowplow.runtime.Retrying.showRetryDetails
 import com.snowplowanalytics.snowplow.loaders.transform.{BadRowsSerializer, NonAtomicFields, SchemaSubVersion, TabledEntity, Transform}
-import com.snowplowanalytics.snowplow.bigquery.{Environment, Metrics, RuntimeService}
+import com.snowplowanalytics.snowplow.bigquery.{Environment, RuntimeService}
 
 object Processing {
 
@@ -42,7 +42,7 @@ object Processing {
 
   def stream[F[_]: Async](env: Environment[F]): Stream[F, Nothing] = {
     implicit val lookup: RegistryLookup[F] = Http4sRegistryLookup(env.httpClient)
-    val eventProcessingConfig              = EventProcessingConfig(EventProcessingConfig.NoWindowing)
+    val eventProcessingConfig              = EventProcessingConfig(EventProcessingConfig.NoWindowing, env.metrics.setLatency)
     Stream.eval(env.tableManager.createTableIfNotExists) *>
       Stream.eval(env.writer.opened.use_) *>
       env.source.stream(eventProcessingConfig, eventProcessor(env))
@@ -99,8 +99,7 @@ object Processing {
   ): EventProcessor[F] = { in =>
     val badProcessor = BadRowProcessor(env.appInfo.name, env.appInfo.version)
 
-    in.through(setLatency(env.metrics))
-      .through(parseBytes(badProcessor))
+    in.through(parseBytes(badProcessor))
       .through(BatchUp.withTimeout(env.batching.maxBytes, env.batching.maxDelay))
       .through(transform(env, badProcessor))
       .through(handleSchemaEvolution(env))
@@ -110,23 +109,9 @@ object Processing {
       .through(emitTokens)
   }
 
-  private def setLatency[F[_]: Sync](metrics: Metrics[F]): Pipe[F, TokenedEvents, TokenedEvents] =
-    _.evalTap {
-      _.earliestSourceTstamp match {
-        case Some(t) =>
-          for {
-            now <- Sync[F].realTime
-            latencyMillis = now.toMillis - t.toEpochMilli
-            _ <- metrics.setLatencyMillis(latencyMillis)
-          } yield ()
-        case None =>
-          Applicative[F].unit
-      }
-    }
-
   /** Parse raw bytes into Event using analytics sdk */
   private def parseBytes[F[_]: Sync](badProcessor: BadRowProcessor): Pipe[F, TokenedEvents, ParseResult] =
-    _.evalMap { case TokenedEvents(chunk, token, _) =>
+    _.evalMap { case TokenedEvents(chunk, token) =>
       for {
         numBytes <- Sync[F].delay(Foldable[Chunk].sumBytes(chunk))
         (badRows, events) <- Foldable[Chunk].traverseSeparateUnordered(chunk) { byteBuffer =>

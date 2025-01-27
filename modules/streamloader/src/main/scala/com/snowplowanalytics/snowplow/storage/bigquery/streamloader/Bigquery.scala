@@ -15,13 +15,19 @@ package com.snowplowanalytics.snowplow.storage.bigquery.streamloader
 import com.snowplowanalytics.snowplow.storage.bigquery.common.{LoaderRow, createGcpUserAgentHeader}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.model.{BigQueryRetrySettings, Output}
 import com.snowplowanalytics.snowplow.storage.bigquery.common.metrics.Metrics
-import cats.Parallel
 import cats.effect.{Async, Sync}
 import cats.implicits._
 import retry.{RetryDetails, RetryPolicy, retryingOnAllErrors}
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.gax.retrying.RetrySettings
-import com.google.cloud.bigquery.{BigQuery, BigQueryOptions, InsertAllRequest, InsertAllResponse, TableId}
+import com.google.cloud.bigquery.{
+  BigQuery,
+  BigQueryException,
+  BigQueryOptions,
+  InsertAllRequest,
+  InsertAllResponse,
+  TableId
+}
 import com.google.cloud.bigquery.InsertAllRequest.RowToInsert
 import com.snowplowanalytics.snowplow.storage.bigquery.common.config.AllAppsConfig.GcpUserAgent
 import org.threeten.bp.Duration
@@ -36,51 +42,68 @@ object Bigquery {
 
   implicit private def logger[F[_]: Sync] = Slf4jLogger.getLogger[F]
 
+  // A trait for responses from BigQuery which we know how to handle
+  sealed trait HandledResponse
+
+  object HandledResponse {
+    case class Success(response: InsertAllResponse) extends HandledResponse
+    case class RequestWasInvalid(bqe: BigQueryException) extends HandledResponse
+  }
+
   /**
     * Insert rows into BigQuery or into "failed inserts" PubSub topic if BQ client returns
     * any known errors.
     *
     * Exceptions from the underlying `insertAll` call are propagated.
     */
-  def insert[F[_]: Parallel: Sync](
+  def insert[F[_]: Sync](
     failedInsertProducer: Producer[F, FailedInsert],
     metrics: Metrics[F],
     toLoad: List[LoaderRow]
   )(
-    mkInsert: List[LoaderRow] => F[InsertAllResponse]
+    mkInsert: List[LoaderRow] => F[HandledResponse]
   ): F[Unit] = {
 
-    def go(toLoad: List[LoaderRow], prevFailures: List[LoaderRow], prevSuccesses: List[LoaderRow]): F[Unit] =
-      mkInsert(toLoad).flatMap { response =>
-        val partitioned = partitionRowResults(toLoad, response)
-        val logF = partitioned.reasonsAndLocations.toSeq.traverse {
-          case (reason, location) =>
-            // We cannot log the `message` because it contains customer data.  But `reason` and `location` are safe.
-            Logger[F].warn(s"Bigquery inserts failed. Reason: [$reason]. Location: [$location]")
-        }
-        if (partitioned.stopped.nonEmpty && partitioned.failed.nonEmpty) {
-          // The request contained valid rows, but they were stopped because the request also contained invalid rows.
-          // Iterate again without the invalid rows.
-          logF *> go(partitioned.stopped, partitioned.failed ::: prevFailures, partitioned.successful ::: prevSuccesses)
-        } else {
-          // Either:
-          // - All rows in this iteration were successful
-          // - All rows in this iteration were invalid
-          // - Some rows were stopped but there were no failures.
-          // The 3rd case is unexpected and unlikely. Here we treat stopped rows as failures, to avoid any potential deadlock.
-          logF *>
-            (
-              handleFailedRows(
-                metrics,
-                failedInsertProducer,
-                partitioned.failed ::: partitioned.stopped ::: prevFailures
-              ),
-              handleSuccessfulRows(metrics, partitioned.successful ::: prevSuccesses)
-            ).parTupled.void
-        }
+    def go(toLoad: List[LoaderRow]): F[Unit] =
+      mkInsert(toLoad).flatMap {
+        case HandledResponse.RequestWasInvalid(bqe) if toLoad.size <= 1 =>
+          Logger[F].warn(s"Bigquery insert failed caused by invalid request: ${bqe.getMessage}") >>
+            handleFailedRows(metrics, failedInsertProducer, toLoad)
+        case HandledResponse.RequestWasInvalid(_) =>
+          Logger[F].info(
+            "Bigquery inserts failed caused by invalid request.  Will retry the inserts in smaller batches"
+          ) >>
+            toLoad.traverse_ { single =>
+              go(List(single))
+            }
+        case HandledResponse.Success(response) =>
+          val partitioned = partitionRowResults(toLoad, response)
+          val logF = partitioned.reasonsAndLocations.toSeq.traverse {
+            case (reason, location) =>
+              // We cannot log the `message` because it contains customer data.  But `reason` and `location` are safe.
+              Logger[F].warn(s"Bigquery inserts failed. Reason: [$reason]. Location: [$location]")
+          }
+
+          if (partitioned.stopped.nonEmpty && partitioned.failed.nonEmpty) {
+            // The request contained valid rows, but they were stopped because the request also contained invalid rows.
+            // Iterate again without the invalid rows.
+            logF >>
+              handleFailedRows(metrics, failedInsertProducer, partitioned.failed) >>
+              handleSuccessfulRows(metrics, partitioned.successful) >>
+              go(partitioned.stopped)
+          } else {
+            // Either:
+            // - All rows in this iteration were successful
+            // - All rows in this iteration were invalid
+            // - Some rows were stopped but there were no failures.
+            // The 3rd case is unexpected and unlikely. Here we treat stopped rows as failures, to avoid any potential deadlock.
+            logF >>
+              handleFailedRows(metrics, failedInsertProducer, partitioned.failed ::: partitioned.stopped) >>
+              handleSuccessfulRows(metrics, partitioned.successful)
+          }
       }
 
-    go(toLoad, Nil, Nil)
+    go(toLoad)
   }
 
   def logRetry[F[_]: Sync](e: Throwable, details: RetryDetails): F[Unit] = {
@@ -92,11 +115,19 @@ object Bigquery {
     good: Output.BigQuery,
     bigQuery: BigQuery,
     retryPolicy: RetryPolicy[F]
-  ): List[LoaderRow] => F[InsertAllResponse] = { lrs =>
+  ): List[LoaderRow] => F[HandledResponse] = { lrs =>
     val request = buildRequest(good.datasetId, good.tableId, lrs)
     retryingOnAllErrors(retryPolicy, logRetry[F]) {
-      Sync[F].blocking(bigQuery.insertAll(request))
+      Sync[F].blocking(bigQuery.insertAll(request)).map[HandledResponse](HandledResponse.Success(_)).recover {
+        case bqe: BigQueryException if causedByInvalidRequest(bqe) =>
+          HandledResponse.RequestWasInvalid(bqe)
+      }
     }
+  }
+
+  private def causedByInvalidRequest(bqe: BigQueryException): Boolean = {
+    val reasons = bqe.getErrors.asScala.flatMap(e => Option(e.getReason))
+    reasons.exists(r => r === "invalid")
   }
 
   def getClient[F[_]: Sync](rs: BigQueryRetrySettings, projectId: String, gcpUserAgent: GcpUserAgent): F[BigQuery] = {

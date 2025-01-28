@@ -64,7 +64,8 @@ object MockEnvironment {
   def build(
     inputs: List[TokenedEvents],
     mocks: Mocks,
-    legacyColumns: List[SchemaCriterion]
+    legacyColumns: List[SchemaCriterion],
+    legacyColumnMode: Boolean
   ): Resource[IO, MockEnvironment] =
     for {
       state <- Resource.eval(Ref[IO].of(Vector.empty[Action]))
@@ -90,6 +91,7 @@ object MockEnvironment {
         badRowMaxSize           = 1000000,
         schemasToSkip           = List.empty,
         legacyColumns           = legacyColumns,
+        legacyColumnMode        = legacyColumnMode,
         exitOnMissingIgluSchema = false
       )
       MockEnvironment(state, env)

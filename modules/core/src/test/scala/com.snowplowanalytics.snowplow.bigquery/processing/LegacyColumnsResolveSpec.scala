@@ -75,7 +75,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("myvendor", "myschema", "jsonschema", 7))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must haveSize(1)) and
         (fields must contain(expected))
@@ -128,7 +128,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("myvendor", "myschema", "jsonschema", 7))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must haveSize(2)) and
         (fields must contain(expected100)) and
@@ -160,7 +160,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("com.snowplowanalytics.snowplow.media", "ad_break_end_event", "jsonschema", 1))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must haveSize(1)) and
         (fields must contain(expected))
@@ -190,7 +190,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("com.snowplowanalytics.iglu", "anything-a", "jsonschema", 1))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must haveSize(1)) and
         (fields must contain(expected))
@@ -209,7 +209,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     // non-matching schema criteria:
     val legacyCriteria = List(SchemaCriterion("myvendor", "different", "jsonschema", 7))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must beEmpty)
     }
@@ -245,7 +245,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("myvendor", "myschema", "jsonschema", 7))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must haveSize(1)) and
         (fields must contain(expected))
@@ -302,7 +302,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("myvendor", "myschema", "jsonschema", 7))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must haveSize(2)) and
         (fields must contain(expected100)) and
@@ -334,7 +334,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("com.snowplowanalytics.snowplow.media", "ad_break_end_event", "jsonschema", 1))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must haveSize(1)) and
         (fields must contain(expected))
@@ -368,7 +368,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("com.snowplowanalytics.iglu", "anything-a", "jsonschema", 1))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must haveSize(1)) and
         (fields must contain(expected))
@@ -387,7 +387,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     // non-matching schema criteria
     val legacyCriteria = List(SchemaCriterion("myvendor", "myschema", "jsonschema", 4))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must beEmpty)
     }
@@ -406,7 +406,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("myvendor", "myschema", "jsonschema", 7))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (failures must beEmpty) and
         (fields must haveSize(2)) and
         (fields.map(_.entityType) must contain(allOf[TabledEntity.EntityType](TabledEntity.UnstructEvent, TabledEntity.Context)))
@@ -426,7 +426,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("myvendor", "myschema", "jsonschema", 7))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (fields must beEmpty) and
         (failures must haveSize(1)) and
         (failures.head must beLike { case failure: LegacyColumns.ColumnFailure =>
@@ -449,7 +449,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
 
     val legacyCriteria = List(SchemaCriterion("myvendor", "invalid_syntax", "jsonschema", 1))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (fields must beEmpty) and
         (failures must haveSize(1)) and
         (failures.head must beLike { case failure: LegacyColumns.ColumnFailure =>
@@ -471,7 +471,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     // non-matching crieria
     val legacyCriteria = List(SchemaCriterion("other.vendor", "myschema", "jsonschema", 7))
 
-    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria).map { case LegacyColumns.Result(fields, failures) =>
+    LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, false).map { case LegacyColumns.Result(fields, failures) =>
       (fields must beEmpty) and
         (failures must beEmpty)
     }

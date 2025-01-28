@@ -105,7 +105,8 @@ object LegacyColumns {
   def resolveTypes[F[_]: Sync: RegistryLookup](
     resolver: Resolver[F],
     entities: Map[TabledEntity, Set[SchemaSubVersion]],
-    matchCriteria: List[SchemaCriterion]
+    matchCriteria: List[SchemaCriterion],
+    legacyColumnMode: Boolean
   ): F[Result] =
     entities.toVector
       .flatMap { case (tabledEntity, subVersions) =>
@@ -114,7 +115,8 @@ object LegacyColumns {
             (tabledEntity.entityType, TabledEntity.toSchemaKey(tabledEntity, subVersion))
           }
           .filter { case (_, schemaKey) =>
-            matchCriteria.exists(_.matches(schemaKey))
+            if (legacyColumnMode) true
+            else matchCriteria.exists(_.matches(schemaKey))
           }
       }
       .traverse { case (entityType, schemaKey) =>

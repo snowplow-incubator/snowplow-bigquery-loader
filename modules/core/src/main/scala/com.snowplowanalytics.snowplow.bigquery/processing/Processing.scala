@@ -36,6 +36,7 @@ import com.snowplowanalytics.snowplow.runtime.processing.BatchUp
 import com.snowplowanalytics.snowplow.runtime.Retrying.showRetryDetails
 import com.snowplowanalytics.snowplow.loaders.transform.{BadRowsSerializer, NonAtomicFields, SchemaSubVersion, TabledEntity, Transform}
 import com.snowplowanalytics.snowplow.bigquery.{Environment, RuntimeService}
+import com.snowplowanalytics.snowplow.loaders.transform.NonAtomicFields.Result
 
 import java.time.Instant
 
@@ -156,10 +157,12 @@ object Processing {
         now <- Sync[F].realTimeInstant
         loadTstamp = BigQueryCaster.timestampValue(now)
         _ <- Logger[F].debug(s"Processing batch of size ${events.size}")
-        v2NonAtomicFields <- NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip ::: env.legacyColumns)
-        legacyFields <- LegacyColumns.resolveTypes[F](env.resolver, entities, env.legacyColumns)
+        v2NonAtomicFields <-
+          if (env.legacyColumnMode) Sync[F].delay(Result(Vector.empty, Nil))
+          else NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip ::: env.legacyColumns)
+        legacyFields <- LegacyColumns.resolveTypes[F](env.resolver, entities, env.legacyColumns, env.legacyColumnMode)
         _ <- possiblyExitOnMissingIgluSchema(env, v2NonAtomicFields, legacyFields)
-        (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, v2NonAtomicFields, legacyFields)
+        (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, v2NonAtomicFields, legacyFields, env.legacyColumnMode)
         fields = v2NonAtomicFields.fields.flatMap { tte =>
                    tte.mergedField :: tte.recoveries.map(_._2)
                  } ++ legacyFields.fields.map(f => LegacyColumns.dropJsonTypes(f.field))
@@ -179,28 +182,32 @@ object Processing {
     loadTstamp: java.lang.Long,
     events: ListOfList[Event],
     v2Entities: NonAtomicFields.Result,
-    legacyEntities: LegacyColumns.Result
+    legacyEntities: LegacyColumns.Result,
+    legacyColumnMode: Boolean
   ): F[(List[BadRow], List[EventWithTransform])] =
     Foldable[ListOfList]
       .traverseSeparateUnordered(events) { event =>
         Sync[F].delay {
-          val v2Transform = Transform
-            .transformEvent[AnyRef](badProcessor, BigQueryCaster, event, v2Entities)
-            .map { namedValues =>
-              namedValues
-                .map { case Caster.NamedValue(k, v) =>
-                  k -> v
-                }
-                .toMap
-                .updated("load_tstamp", loadTstamp)
-            }
-          val legacyTransform = LegacyColumns
-            .transformEvent(badProcessor, event, legacyEntities)
+          if (legacyColumnMode) LegacyColumns.transformEvent(badProcessor, event, legacyEntities).map(event -> _)
+          else {
+            val v2Transform = Transform
+              .transformEvent[AnyRef](badProcessor, BigQueryCaster, event, v2Entities)
+              .map { namedValues =>
+                namedValues
+                  .map { case Caster.NamedValue(k, v) =>
+                    k -> v
+                  }
+                  .toMap
+                  .updated("load_tstamp", loadTstamp)
+              }
+            val legacyTransform = LegacyColumns
+              .transformEvent(badProcessor, event, legacyEntities)
 
-          for {
-            map1 <- v2Transform
-            map2 <- legacyTransform
-          } yield event -> (map1 ++ map2)
+            for {
+              map1 <- v2Transform
+              map2 <- legacyTransform
+            } yield event -> (map1 ++ map2)
+          }
         }
       }
 

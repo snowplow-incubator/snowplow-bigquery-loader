@@ -39,8 +39,10 @@ class ProcessingSpec extends Specification with CatsEffect {
     Write good batches and bad events when input contains both $e3
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct $alter1
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct with legacy columns $alter1_legacy
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct in legacy mode $alter1_full_legacy
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts $alter2
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts $alter2_legacy
+    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts in legacy mode $alter2_full_legacy
     Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - unstruct $alter3
     Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - contexts $alter4
     Skip altering the table when the writer's protobuf Descriptor has relevant self-describing entitiy columns $e5
@@ -125,7 +127,11 @@ class ProcessingSpec extends Specification with CatsEffect {
     TestControl.executeEmbed(io)
   }
 
-  def alter1_base(legacyColumns: Boolean, timeout: Boolean) = {
+  def alter1_base(
+    legacyColumns: Boolean,
+    timeout: Boolean,
+    legacyColumnMode: Boolean
+  ) = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime     = Instant.parse("2023-10-24T10:00:01.123Z")
 
@@ -141,7 +147,8 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
     """.as[UnstructEvent].fold(throw _, identity)
     val expectedColumnName =
-      if (legacyColumns) "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
+      if (legacyColumnMode) "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1"
+      else if (legacyColumns) "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
       else "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1"
     val mocks = Mocks.default.copy(
       addColumnsResponse = MockEnvironment.Response.Success(
@@ -189,10 +196,15 @@ class ProcessingSpec extends Specification with CatsEffect {
     else TestControl.executeEmbed(io)
   }
 
-  def alter1        = alter1_base(legacyColumns = false, timeout = false)
-  def alter1_legacy = alter1_base(legacyColumns = true, timeout = true)
+  def alter1             = alter1_base(legacyColumns = false, timeout = false, legacyColumnMode = false)
+  def alter1_legacy      = alter1_base(legacyColumns = true, timeout = true, legacyColumnMode = false)
+  def alter1_full_legacy = alter1_base(legacyColumns = true, timeout = true, legacyColumnMode = true)
 
-  def alter2_base(legacyColumns: Boolean, timeout: Boolean) = {
+  def alter2_base(
+    legacyColumns: Boolean,
+    timeout: Boolean,
+    legacyColumnMode: Boolean
+  ) = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
 
@@ -206,7 +218,8 @@ class ProcessingSpec extends Specification with CatsEffect {
       )
     )
     val expectedColumnName =
-      if (legacyColumns) "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
+      if (legacyColumnMode) "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1"
+      else if (legacyColumns) "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
       else "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1"
 
     val mocks = Mocks.default.copy(
@@ -259,8 +272,9 @@ class ProcessingSpec extends Specification with CatsEffect {
     else TestControl.executeEmbed(io)
   }
 
-  def alter2        = alter2_base(legacyColumns = false, timeout = false)
-  def alter2_legacy = alter2_base(legacyColumns = true, timeout = true)
+  def alter2             = alter2_base(legacyColumns = false, timeout = false, legacyColumnMode = false)
+  def alter2_legacy      = alter2_base(legacyColumns = true, timeout = true, legacyColumnMode = false)
+  def alter2_full_legacy = alter2_base(legacyColumns = true, timeout = true, legacyColumnMode = true)
 
   def alter3 = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
@@ -628,12 +642,13 @@ object ProcessingSpec {
   def runTest[A](
     toInputs: IO[List[TokenedEvents]],
     mocks: Mocks                          = Mocks.default,
-    legacyCriteria: List[SchemaCriterion] = Nil
+    legacyCriteria: List[SchemaCriterion] = Nil,
+    legacyColumnMode: Boolean             = false
   )(
     f: (List[TokenedEvents], MockEnvironment) => IO[A]
   ): IO[A] =
     toInputs.flatMap { inputs =>
-      MockEnvironment.build(inputs, mocks, legacyCriteria).use { control =>
+      MockEnvironment.build(inputs, mocks, legacyCriteria, legacyColumnMode).use { control =>
         f(inputs, control)
       }
     }

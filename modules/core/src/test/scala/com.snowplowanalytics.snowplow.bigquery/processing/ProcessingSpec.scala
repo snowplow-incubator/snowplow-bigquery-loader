@@ -28,6 +28,7 @@ import com.snowplowanalytics.snowplow.sources.TokenedEvents
 import scala.concurrent.duration.DurationLong
 
 import java.time.Instant
+import java.util.UUID
 
 class ProcessingSpec extends Specification with CatsEffect {
   import ProcessingSpec._
@@ -53,6 +54,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     Mark app as unhealthy when writing to the Writer fails with runtime exception $e10
     Emit BadRows for an unknown schema, if exitOnMissingIgluSchema is false $e11 $e11Legacy
     Crash and exit for an unknown schema, if exitOnMissingIgluSchema is true $e12 $e12Legacy
+    use legacy columns for all fields when legacyColumnMode is enabled $e13
   """
 
   def e1 = {
@@ -68,7 +70,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(4),
+          Action.WroteNRowsToBigQuery(4),
           Action.SetE2ELatencyMetric(42123.millis),
           Action.AddedGoodCountMetric(4),
           Action.AddedBadCountMetric(0),
@@ -115,7 +117,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(6),
+          Action.WroteNRowsToBigQuery(6),
           Action.SetE2ELatencyMetric(52123.millis),
           Action.SentToBad(6),
           Action.AddedGoodCountMetric(6),
@@ -147,7 +149,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
     """.as[UnstructEvent].fold(throw _, identity)
     val expectedColumnName =
-      if (legacyColumnMode) "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1"
+      if (legacyColumnMode) "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
       else if (legacyColumns) "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
       else "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1"
     val mocks = Mocks.default.copy(
@@ -184,7 +186,7 @@ class ProcessingSpec extends Specification with CatsEffect {
             Action.AlterTableAddedColumns(Vector(expectedColumnName)),
             Action.ClosedWriter,
             Action.OpenedWriter,
-            Action.WroteRowsToBigQuery(2),
+            Action.WroteNRowsToBigQuery(2),
             Action.SetE2ELatencyMetric(2123.millis),
             Action.AddedGoodCountMetric(2),
             Action.AddedBadCountMetric(0),
@@ -218,7 +220,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       )
     )
     val expectedColumnName =
-      if (legacyColumnMode) "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1"
+      if (legacyColumnMode) "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
       else if (legacyColumns) "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
       else "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1"
 
@@ -260,7 +262,7 @@ class ProcessingSpec extends Specification with CatsEffect {
               Action.AlterTableAddedColumns(Vector(expectedColumnName)),
               Action.ClosedWriter,
               Action.OpenedWriter,
-              Action.WroteRowsToBigQuery(2),
+              Action.WroteNRowsToBigQuery(2),
               Action.SetE2ELatencyMetric(43123.millis),
               Action.AddedGoodCountMetric(2),
               Action.AddedBadCountMetric(0),
@@ -317,7 +319,7 @@ class ProcessingSpec extends Specification with CatsEffect {
             Action.AlterTableAddedColumns(Vector("unstruct_event_test_vendor_test_name_1")),
             Action.ClosedWriter,
             Action.OpenedWriter,
-            Action.WroteRowsToBigQuery(2),
+            Action.WroteNRowsToBigQuery(2),
             Action.SetE2ELatencyMetric(43123.millis),
             Action.AddedGoodCountMetric(2),
             Action.AddedBadCountMetric(0),
@@ -370,7 +372,7 @@ class ProcessingSpec extends Specification with CatsEffect {
             Action.AlterTableAddedColumns(Vector("contexts_test_vendor_test_name_1")),
             Action.ClosedWriter,
             Action.OpenedWriter,
-            Action.WroteRowsToBigQuery(2),
+            Action.WroteNRowsToBigQuery(2),
             Action.SetE2ELatencyMetric(43123.millis),
             Action.AddedGoodCountMetric(2),
             Action.AddedBadCountMetric(0),
@@ -405,7 +407,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(2),
+          Action.WroteNRowsToBigQuery(2),
           Action.SetE2ELatencyMetric(52123.millis),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
@@ -435,7 +437,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(1),
+          Action.WroteNRowsToBigQuery(1),
           Action.SetE2ELatencyMetric(52123.millis),
           Action.SentToBad(1),
           Action.AddedGoodCountMetric(1),
@@ -470,7 +472,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.OpenedWriter,
           Action.ClosedWriter,
           Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(2),
+          Action.WroteNRowsToBigQuery(2),
           Action.SetE2ELatencyMetric(54123.millis),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
@@ -504,7 +506,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.OpenedWriter,
           Action.ClosedWriter,
           Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(2),
+          Action.WroteNRowsToBigQuery(2),
           Action.SetE2ELatencyMetric(42123.millis),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
@@ -584,7 +586,7 @@ class ProcessingSpec extends Specification with CatsEffect {
             Vector(
               Action.CreatedTable,
               Action.OpenedWriter,
-              Action.WroteRowsToBigQuery(1),
+              Action.WroteNRowsToBigQuery(1),
               Action.SetE2ELatencyMetric(42123.millis),
               Action.SentToBad(1),
               Action.AddedGoodCountMetric(1),
@@ -635,6 +637,33 @@ class ProcessingSpec extends Specification with CatsEffect {
   def e12       = e12Base(legacyColumns = false)
   def e12Legacy = e12Base(legacyColumns = true)
 
+  def e13 = {
+    val processTime = Instant.parse("2023-10-24T10:00:42.123Z")
+
+    val eventID    = UUID.randomUUID()
+    val vCollector = "1.0.0"
+    val vEtl       = "2.0.0"
+    val source = goodOne(
+      optEventId    = Option(IO(eventID)),
+      optVCollector = Option(vCollector),
+      optVEtl       = Option(vEtl)
+    )
+
+    val io = runTest(inputEvents(count = 1, source), legacyColumnMode = true, recordRows = true) { case (inputs, control) =>
+      for {
+        _ <- IO.sleep(processTime.toEpochMilli.millis)
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield {
+        val rows = state.collect { case act: Action.WroteRowsToBigQuery => act }.head.rows
+        (rows.size shouldEqual inputs.head.events.size) and
+          (rows.head.get("event_id") should beEqualTo(Option(eventID.toString))) and
+          (rows.head.get("v_collector") should beEqualTo(Option(vCollector))) and
+          (rows.head.get("v_etl") should beEqualTo(Option(vEtl)))
+      }
+    }
+    TestControl.executeEmbed(io)
+  }
 }
 
 object ProcessingSpec {
@@ -643,12 +672,13 @@ object ProcessingSpec {
     toInputs: IO[List[TokenedEvents]],
     mocks: Mocks                          = Mocks.default,
     legacyCriteria: List[SchemaCriterion] = Nil,
-    legacyColumnMode: Boolean             = false
+    legacyColumnMode: Boolean             = false,
+    recordRows: Boolean                   = false
   )(
     f: (List[TokenedEvents], MockEnvironment) => IO[A]
   ): IO[A] =
     toInputs.flatMap { inputs =>
-      MockEnvironment.build(inputs, mocks, legacyCriteria, legacyColumnMode).use { control =>
+      MockEnvironment.build(inputs, mocks, legacyCriteria, legacyColumnMode, recordRows).use { control =>
         f(inputs, control)
       }
     }
@@ -660,6 +690,25 @@ object ProcessingSpec {
       .take(count)
       .compile
       .toList
+
+  def goodOne(
+    ue: UnstructEvent                       = UnstructEvent(None),
+    contexts: Contexts                      = Contexts(List.empty),
+    optEventId: Option[IO[UUID]]            = None,
+    optCollectorTstamp: Option[IO[Instant]] = None,
+    optVCollector: Option[String]           = None,
+    optVEtl: Option[String]                 = None
+  ): IO[TokenedEvents] =
+    for {
+      ack <- IO.unique
+      eventId <- optEventId.fold(IO.randomUUID)(identity)
+      collectorTstamp <- optCollectorTstamp.fold(IO.realTimeInstant)(identity)
+      vCollector = optVCollector.fold("0.0.0")(identity)
+      vEtl       = optVEtl.fold("0.0.0")(identity)
+    } yield {
+      val e = Event.minimal(eventId, collectorTstamp, vCollector, vEtl).copy(unstruct_event = ue).copy(contexts = contexts)
+      TokenedEvents(Chunk(ByteBuffer.wrap(e.toTsv.getBytes(StandardCharsets.UTF_8))), ack)
+    }
 
   def good(
     ue: UnstructEvent                   = UnstructEvent(None),

@@ -39,7 +39,8 @@ object MockEnvironment {
     case class AlterTableAddedColumns(columns: Vector[String]) extends Action
     case object OpenedWriter extends Action
     case object ClosedWriter extends Action
-    case class WroteRowsToBigQuery(rowCount: Int) extends Action
+    case class WroteNRowsToBigQuery(n: Int) extends Action
+    case class WroteRowsToBigQuery(rows: Iterable[Map[String, AnyRef]]) extends Action
     case class AddedGoodCountMetric(count: Long) extends Action
     case class AddedBadCountMetric(count: Long) extends Action
     case class SetLatencyMetric(latency: FiniteDuration) extends Action
@@ -65,11 +66,12 @@ object MockEnvironment {
     inputs: List[TokenedEvents],
     mocks: Mocks,
     legacyColumns: List[SchemaCriterion],
-    legacyColumnMode: Boolean
+    legacyColumnMode: Boolean,
+    recordRows: Boolean
   ): Resource[IO, MockEnvironment] =
     for {
       state <- Resource.eval(Ref[IO].of(Vector.empty[Action]))
-      writerResource <- Resource.eval(testWriter(state, mocks.writerResponses, mocks.descriptors))
+      writerResource <- Resource.eval(testWriter(state, mocks.writerResponses, mocks.descriptors, recordRows))
       writerColdswap <- Coldswap.make(writerResource)
     } yield {
       val env = Environment(
@@ -185,7 +187,8 @@ object MockEnvironment {
   private def testWriter(
     actionRef: Ref[IO, Vector[Action]],
     responses: List[Response[Writer.WriteResult]],
-    descriptors: List[Descriptors.Descriptor]
+    descriptors: List[Descriptors.Descriptor],
+    recordRows: Boolean
   ): IO[Resource[IO, Writer[IO]]] =
     for {
       responseRef <- Ref[IO].of(responses)
@@ -207,7 +210,7 @@ object MockEnvironment {
                           }
               writeResult <- response match {
                                case success: Response.Success[Writer.WriteResult] =>
-                                 updateActions(actionRef, rows, success) *> IO(success.value)
+                                 updateActions(actionRef, rows, success, recordRows) *> IO(success.value)
                                case Response.ExceptionThrown(ex) =>
                                  IO.raiseError(ex)
                              }
@@ -216,11 +219,13 @@ object MockEnvironment {
           private def updateActions(
             state: Ref[IO, Vector[Action]],
             rows: Iterable[Map[String, AnyRef]],
-            success: Response.Success[Writer.WriteResult]
+            success: Response.Success[Writer.WriteResult],
+            recordRows: Boolean
           ): IO[Unit] =
             success.value match {
               case Writer.WriteResult.Success =>
-                state.update(_ :+ WroteRowsToBigQuery(rows.size))
+                if (recordRows) state.update(_ :+ WroteRowsToBigQuery(rows))
+                else state.update(_ :+ WroteNRowsToBigQuery(rows.size))
               case _ =>
                 IO.unit
             }

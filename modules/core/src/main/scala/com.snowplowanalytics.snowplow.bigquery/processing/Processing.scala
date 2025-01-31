@@ -162,7 +162,7 @@ object Processing {
           else NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip ::: env.legacyColumns)
         legacyFields <- LegacyColumns.resolveTypes[F](env.resolver, entities, env.legacyColumns, env.legacyColumnMode)
         _ <- possiblyExitOnMissingIgluSchema(env, v2NonAtomicFields, legacyFields)
-        (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, v2NonAtomicFields, legacyFields, env.legacyColumnMode)
+        (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, v2NonAtomicFields, legacyFields)
         fields = v2NonAtomicFields.fields.flatMap { tte =>
                    tte.mergedField :: tte.recoveries.map(_._2)
                  } ++ legacyFields.fields.map(f => LegacyColumns.dropJsonTypes(f.field))
@@ -182,32 +182,28 @@ object Processing {
     loadTstamp: java.lang.Long,
     events: ListOfList[Event],
     v2Entities: NonAtomicFields.Result,
-    legacyEntities: LegacyColumns.Result,
-    legacyColumnMode: Boolean
+    legacyEntities: LegacyColumns.Result
   ): F[(List[BadRow], List[EventWithTransform])] =
     Foldable[ListOfList]
       .traverseSeparateUnordered(events) { event =>
         Sync[F].delay {
-          if (legacyColumnMode) LegacyColumns.transformEvent(badProcessor, event, legacyEntities).map(event -> _)
-          else {
-            val v2Transform = Transform
-              .transformEvent[AnyRef](badProcessor, BigQueryCaster, event, v2Entities)
-              .map { namedValues =>
-                namedValues
-                  .map { case Caster.NamedValue(k, v) =>
-                    k -> v
-                  }
-                  .toMap
-                  .updated("load_tstamp", loadTstamp)
-              }
-            val legacyTransform = LegacyColumns
-              .transformEvent(badProcessor, event, legacyEntities)
+          val v2Transform = Transform
+            .transformEvent[AnyRef](badProcessor, BigQueryCaster, event, v2Entities)
+            .map { namedValues =>
+              namedValues
+                .map { case Caster.NamedValue(k, v) =>
+                  k -> v
+                }
+                .toMap
+                .updated("load_tstamp", loadTstamp)
+            }
+          val legacyTransform = LegacyColumns
+            .transformEvent(badProcessor, event, legacyEntities)
 
-            for {
-              map1 <- v2Transform
-              map2 <- legacyTransform
-            } yield event -> (map1 ++ map2)
-          }
+          for {
+            map1 <- v2Transform
+            map2 <- legacyTransform
+          } yield event -> (map1 ++ map2)
         }
       }
 

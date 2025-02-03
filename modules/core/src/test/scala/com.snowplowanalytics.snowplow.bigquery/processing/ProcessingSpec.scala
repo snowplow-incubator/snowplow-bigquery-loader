@@ -40,10 +40,8 @@ class ProcessingSpec extends Specification with CatsEffect {
     Write good batches and bad events when input contains both $e3
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct $alter1
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct with legacy columns $alter1_legacy
-    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - unstruct in legacy mode $alter1_full_legacy
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts $alter2
     Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts $alter2_legacy
-    Alter the Bigquery table when the writer's protobuf Descriptor has missing columns - contexts in legacy mode $alter2_full_legacy
     Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - unstruct $alter3
     Alter the Bigquery table when the writer's protobuf Descriptor has missing nested fields - contexts $alter4
     Skip altering the table when the writer's protobuf Descriptor has relevant self-describing entitiy columns $e5
@@ -54,7 +52,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     Mark app as unhealthy when writing to the Writer fails with runtime exception $e10
     Emit BadRows for an unknown schema, if exitOnMissingIgluSchema is false $e11 $e11Legacy
     Crash and exit for an unknown schema, if exitOnMissingIgluSchema is true $e12 $e12Legacy
-    use legacy columns for all fields when legacyColumnMode is enabled $e13
+    Use legacy columns for all fields when legacyColumnMode is enabled $e13
   """
 
   def e1 = {
@@ -66,11 +64,11 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.WroteNRowsToBigQuery(4),
+          Action.WroteRowsToBigQuery(4),
           Action.SetE2ELatencyMetric(42123.millis),
           Action.AddedGoodCountMetric(4),
           Action.AddedBadCountMetric(0),
@@ -86,7 +84,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       for {
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -113,11 +111,11 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.WroteNRowsToBigQuery(6),
+          Action.WroteRowsToBigQuery(6),
           Action.SetE2ELatencyMetric(52123.millis),
           Action.SentToBad(6),
           Action.AddedGoodCountMetric(6),
@@ -131,8 +129,7 @@ class ProcessingSpec extends Specification with CatsEffect {
 
   def alter1_base(
     legacyColumns: Boolean,
-    timeout: Boolean,
-    legacyColumnMode: Boolean
+    timeout: Boolean
   ) = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime     = Instant.parse("2023-10-24T10:00:01.123Z")
@@ -149,8 +146,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
     """.as[UnstructEvent].fold(throw _, identity)
     val expectedColumnName =
-      if (legacyColumnMode) "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
-      else if (legacyColumns) "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
+      if (legacyColumns) "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
       else "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1"
     val mocks = Mocks.default.copy(
       addColumnsResponse = MockEnvironment.Response.Success(
@@ -179,14 +175,14 @@ class ProcessingSpec extends Specification with CatsEffect {
           _ <- IO.sleep(processTime.toEpochMilli.millis)
           _ <- Processing.stream(control.environment).compile.drain
           state <- control.state.get
-        } yield state should beEqualTo(
+        } yield state.actions should beEqualTo(
           Vector(
             Action.CreatedTable,
             Action.OpenedWriter,
             Action.AlterTableAddedColumns(Vector(expectedColumnName)),
             Action.ClosedWriter,
             Action.OpenedWriter,
-            Action.WroteNRowsToBigQuery(2),
+            Action.WroteRowsToBigQuery(2),
             Action.SetE2ELatencyMetric(2123.millis),
             Action.AddedGoodCountMetric(2),
             Action.AddedBadCountMetric(0),
@@ -198,14 +194,12 @@ class ProcessingSpec extends Specification with CatsEffect {
     else TestControl.executeEmbed(io)
   }
 
-  def alter1             = alter1_base(legacyColumns = false, timeout = false, legacyColumnMode = false)
-  def alter1_legacy      = alter1_base(legacyColumns = true, timeout = true, legacyColumnMode = false)
-  def alter1_full_legacy = alter1_base(legacyColumns = true, timeout = true, legacyColumnMode = true)
+  def alter1        = alter1_base(legacyColumns = false, timeout = false)
+  def alter1_legacy = alter1_base(legacyColumns = true, timeout = true)
 
   def alter2_base(
     legacyColumns: Boolean,
-    timeout: Boolean,
-    legacyColumnMode: Boolean
+    timeout: Boolean
   ) = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
@@ -220,8 +214,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       )
     )
     val expectedColumnName =
-      if (legacyColumnMode) "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
-      else if (legacyColumns) "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
+      if (legacyColumns) "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
       else "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1"
 
     val mocks = Mocks.default.copy(
@@ -255,14 +248,14 @@ class ProcessingSpec extends Specification with CatsEffect {
             _ <- IO.sleep(processTime.toEpochMilli.millis)
             _ <- Processing.stream(control.environment).compile.drain
             state <- control.state.get
-          } yield state should beEqualTo(
+          } yield state.actions should beEqualTo(
             Vector(
               Action.CreatedTable,
               Action.OpenedWriter,
               Action.AlterTableAddedColumns(Vector(expectedColumnName)),
               Action.ClosedWriter,
               Action.OpenedWriter,
-              Action.WroteNRowsToBigQuery(2),
+              Action.WroteRowsToBigQuery(2),
               Action.SetE2ELatencyMetric(43123.millis),
               Action.AddedGoodCountMetric(2),
               Action.AddedBadCountMetric(0),
@@ -274,9 +267,8 @@ class ProcessingSpec extends Specification with CatsEffect {
     else TestControl.executeEmbed(io)
   }
 
-  def alter2             = alter2_base(legacyColumns = false, timeout = false, legacyColumnMode = false)
-  def alter2_legacy      = alter2_base(legacyColumns = true, timeout = true, legacyColumnMode = false)
-  def alter2_full_legacy = alter2_base(legacyColumns = true, timeout = true, legacyColumnMode = true)
+  def alter2        = alter2_base(legacyColumns = false, timeout = false)
+  def alter2_legacy = alter2_base(legacyColumns = true, timeout = true)
 
   def alter3 = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
@@ -312,14 +304,14 @@ class ProcessingSpec extends Specification with CatsEffect {
           _ <- IO.sleep(processTime.toEpochMilli.millis)
           _ <- Processing.stream(control.environment).compile.drain
           state <- control.state.get
-        } yield state should beEqualTo(
+        } yield state.actions should beEqualTo(
           Vector(
             Action.CreatedTable,
             Action.OpenedWriter,
             Action.AlterTableAddedColumns(Vector("unstruct_event_test_vendor_test_name_1")),
             Action.ClosedWriter,
             Action.OpenedWriter,
-            Action.WroteNRowsToBigQuery(2),
+            Action.WroteRowsToBigQuery(2),
             Action.SetE2ELatencyMetric(43123.millis),
             Action.AddedGoodCountMetric(2),
             Action.AddedBadCountMetric(0),
@@ -365,14 +357,14 @@ class ProcessingSpec extends Specification with CatsEffect {
           _ <- IO.sleep(processTime.toEpochMilli.millis)
           _ <- Processing.stream(control.environment).compile.drain
           state <- control.state.get
-        } yield state should beEqualTo(
+        } yield state.actions should beEqualTo(
           Vector(
             Action.CreatedTable,
             Action.OpenedWriter,
             Action.AlterTableAddedColumns(Vector("contexts_test_vendor_test_name_1")),
             Action.ClosedWriter,
             Action.OpenedWriter,
-            Action.WroteNRowsToBigQuery(2),
+            Action.WroteRowsToBigQuery(2),
             Action.SetE2ELatencyMetric(43123.millis),
             Action.AddedGoodCountMetric(2),
             Action.AddedBadCountMetric(0),
@@ -403,11 +395,11 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.WroteNRowsToBigQuery(2),
+          Action.WroteRowsToBigQuery(2),
           Action.SetE2ELatencyMetric(52123.millis),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
@@ -433,11 +425,11 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
-          Action.WroteNRowsToBigQuery(1),
+          Action.WroteRowsToBigQuery(1),
           Action.SetE2ELatencyMetric(52123.millis),
           Action.SentToBad(1),
           Action.AddedGoodCountMetric(1),
@@ -464,7 +456,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -472,7 +464,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.OpenedWriter,
           Action.ClosedWriter,
           Action.OpenedWriter,
-          Action.WroteNRowsToBigQuery(2),
+          Action.WroteRowsToBigQuery(2),
           Action.SetE2ELatencyMetric(54123.millis),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
@@ -498,7 +490,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -506,7 +498,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.OpenedWriter,
           Action.ClosedWriter,
           Action.OpenedWriter,
-          Action.WroteNRowsToBigQuery(2),
+          Action.WroteRowsToBigQuery(2),
           Action.SetE2ELatencyMetric(42123.millis),
           Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
@@ -526,7 +518,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       for {
         _ <- Processing.stream(control.environment).compile.drain.voidError
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -544,7 +536,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       for {
         _ <- Processing.stream(control.environment).compile.drain.voidError
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -582,11 +574,11 @@ class ProcessingSpec extends Specification with CatsEffect {
             _ <- IO.sleep(processTime.toEpochMilli.millis)
             _ <- Processing.stream(control.environment).compile.drain
             state <- control.state.get
-          } yield state should beEqualTo(
+          } yield state.actions should beEqualTo(
             Vector(
               Action.CreatedTable,
               Action.OpenedWriter,
-              Action.WroteNRowsToBigQuery(1),
+              Action.WroteRowsToBigQuery(1),
               Action.SetE2ELatencyMetric(42123.millis),
               Action.SentToBad(1),
               Action.AddedGoodCountMetric(1),
@@ -624,7 +616,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       for {
         _ <- Processing.stream(environment).compile.drain.voidError
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -649,13 +641,13 @@ class ProcessingSpec extends Specification with CatsEffect {
       optVEtl       = Option(vEtl)
     )
 
-    val io = runTest(inputEvents(count = 1, source), legacyColumnMode = true, recordRows = true) { case (inputs, control) =>
+    val io = runTest(inputEvents(count = 1, source), legacyColumnMode = true) { case (inputs, control) =>
       for {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
       } yield {
-        val rows = state.collect { case act: Action.WroteRowsToBigQuery => act }.head.rows
+        val rows = state.writtenToBQ
         (rows.size shouldEqual inputs.head.events.size) and
           (rows.head.get("event_id") should beEqualTo(Option(eventID.toString))) and
           (rows.head.get("v_collector") should beEqualTo(Option(vCollector))) and
@@ -672,13 +664,12 @@ object ProcessingSpec {
     toInputs: IO[List[TokenedEvents]],
     mocks: Mocks                          = Mocks.default,
     legacyCriteria: List[SchemaCriterion] = Nil,
-    legacyColumnMode: Boolean             = false,
-    recordRows: Boolean                   = false
+    legacyColumnMode: Boolean             = false
   )(
     f: (List[TokenedEvents], MockEnvironment) => IO[A]
   ): IO[A] =
     toInputs.flatMap { inputs =>
-      MockEnvironment.build(inputs, mocks, legacyCriteria, legacyColumnMode, recordRows).use { control =>
+      MockEnvironment.build(inputs, mocks, legacyCriteria, legacyColumnMode).use { control =>
         f(inputs, control)
       }
     }

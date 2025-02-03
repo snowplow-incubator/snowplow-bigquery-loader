@@ -13,6 +13,7 @@ import fs2.{Chunk, Stream}
 import org.specs2.Specification
 import cats.effect.testing.specs2.CatsEffect
 import cats.effect.testkit.TestControl
+import cats.Foldable
 import io.circe.literal._
 import com.google.cloud.bigquery.{Field => BQField, FieldList, StandardSQLTypeName}
 import com.snowplowanalytics.iglu.core.{SchemaCriterion, SchemaKey, SelfDescribingData}
@@ -23,7 +24,10 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent, unstructEventDecoder}
 import com.snowplowanalytics.snowplow.bigquery.{AtomicDescriptor, MockEnvironment, RuntimeService}
 import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.{Action, Mocks}
+import com.snowplowanalytics.snowplow.loaders.transform.TabledEntity
 import com.snowplowanalytics.snowplow.sources.TokenedEvents
+import com.snowplowanalytics.iglu.client.resolver.registries.JavaNetRegistryLookup._
+import com.snowplowanalytics.snowplow.loaders.transform.NonAtomicFields.Result
 
 import scala.concurrent.duration.DurationLong
 
@@ -53,6 +57,8 @@ class ProcessingSpec extends Specification with CatsEffect {
     Emit BadRows for an unknown schema, if exitOnMissingIgluSchema is false $e11 $e11Legacy
     Crash and exit for an unknown schema, if exitOnMissingIgluSchema is true $e12 $e12Legacy
     Use legacy columns for all fields when legacyColumnMode is enabled $e13
+    Not resolve a v2 non atomic field when legacyColumnMode is enabled $e14
+    Resolve a v2 non atomic field when legacyColumnMode is disabled $e15
   """
 
   def e1 = {
@@ -656,6 +662,51 @@ class ProcessingSpec extends Specification with CatsEffect {
     }
     TestControl.executeEmbed(io)
   }
+
+  def e14_base(legacyColumnMode: Boolean) = {
+    val eventID    = UUID.randomUUID()
+    val vCollector = "1.0.0"
+    val vEtl       = "2.0.0"
+
+    val data = json"""{ "myInteger": 100 }"""
+    val ue = UnstructEvent(
+      Some(SelfDescribingData(SchemaKey.fromUri("iglu:test_vendor/test_name/jsonschema/1-0-1").toOption.get, data))
+    )
+
+    val mocks = Mocks.default.copy(
+      addColumnsResponse = MockEnvironment.Response.Success(
+        FieldList.of(
+          BQField.of(
+            "unstruct_event_test_vendor_test_name_1",
+            StandardSQLTypeName.STRUCT,
+            FieldList.of(
+              BQField.of("my_string", StandardSQLTypeName.STRING),
+              BQField.of("my_integer", StandardSQLTypeName.INT64)
+            )
+          )
+        )
+      ),
+      descriptors = List(
+        AtomicDescriptor.withTestUnstruct100,
+        AtomicDescriptor.withTestUnstruct100,
+        AtomicDescriptor.withTestUnstruct101
+      )
+    )
+
+    val event    = Event.minimal(eventID, Instant.now(), vCollector, vEtl).copy(unstruct_event = ue)
+    val entities = Foldable[List].foldMap(List(event))(TabledEntity.forEvent)
+    val source   = IO.unique.map(TokenedEvents(Chunk(ByteBuffer.wrap(event.toTsv.getBytes(StandardCharsets.UTF_8))), _))
+    val io = runTest(inputEvents(count = 1, source), mocks = mocks, legacyColumnMode = legacyColumnMode) { case (_, control) =>
+      Processing.resolveV2NonAtomicFields(control.environment, entities).map { result =>
+        if (legacyColumnMode) result should beEqualTo(Result(Vector.empty, Nil))
+        else result.fields.head.mergedField.name should beEqualTo("unstruct_event_test_vendor_test_name_1")
+      }
+    }
+    TestControl.executeEmbed(io)
+  }
+
+  def e14 = e14_base(legacyColumnMode = true)
+  def e15 = e14_base(legacyColumnMode = false)
 }
 
 object ProcessingSpec {

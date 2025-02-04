@@ -24,11 +24,10 @@ import com.snowplowanalytics.snowplow.runtime.processing.Coldswap
 import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, SourceAndAck, TokenedEvents}
 import com.snowplowanalytics.snowplow.sinks.Sink
 import com.snowplowanalytics.snowplow.bigquery.processing.{BigQueryRetrying, TableManager, Writer}
-import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.Action
+import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.State
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-case class State(actions: Vector[Action], writtenToBQ: Iterable[Map[String, AnyRef]])
 case class MockEnvironment(state: Ref[IO, State], environment: Environment[IO])
 
 object MockEnvironment {
@@ -50,6 +49,8 @@ object MockEnvironment {
     case class BecameHealthy(service: RuntimeService) extends Action
   }
   import Action._
+
+  case class State(actions: Vector[Action], writtenToBQ: Iterable[Map[String, AnyRef]])
 
   /**
    * Build a mock environment for testing

@@ -13,7 +13,6 @@ import fs2.{Chunk, Stream}
 import org.specs2.Specification
 import cats.effect.testing.specs2.CatsEffect
 import cats.effect.testkit.TestControl
-import cats.Foldable
 import io.circe.literal._
 import com.google.cloud.bigquery.{Field => BQField, FieldList, StandardSQLTypeName}
 import com.snowplowanalytics.iglu.core.{SchemaCriterion, SchemaKey, SelfDescribingData}
@@ -24,10 +23,8 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.Event
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts, UnstructEvent, unstructEventDecoder}
 import com.snowplowanalytics.snowplow.bigquery.{AtomicDescriptor, MockEnvironment, RuntimeService}
 import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.{Action, Mocks}
-import com.snowplowanalytics.snowplow.loaders.transform.TabledEntity
 import com.snowplowanalytics.snowplow.sources.TokenedEvents
-import com.snowplowanalytics.iglu.client.resolver.registries.JavaNetRegistryLookup._
-import com.snowplowanalytics.snowplow.loaders.transform.NonAtomicFields.Result
+import org.specs2.matcher.MatchResult
 
 import scala.concurrent.duration.DurationLong
 
@@ -655,22 +652,32 @@ class ProcessingSpec extends Specification with CatsEffect {
       } yield {
         val rows = state.writtenToBQ
         (rows.size shouldEqual inputs.head.events.size) and
-          (rows.head.get("event_id") should beEqualTo(Option(eventID.toString))) and
-          (rows.head.get("v_collector") should beEqualTo(Option(vCollector))) and
-          (rows.head.get("v_etl") should beEqualTo(Option(vEtl)))
+          (rows.head should havePair("event_id" -> eventID.toString)) and
+          (rows.head should havePair("v_collector" -> vCollector)) and
+          (rows.head should havePair("v_etl" -> vEtl))
       }
     }
     TestControl.executeEmbed(io)
   }
 
-  def e14_base(legacyColumnMode: Boolean) = {
-    val eventID    = UUID.randomUUID()
-    val vCollector = "1.0.0"
-    val vEtl       = "2.0.0"
+  def e14_base(legacyColumnMode: Boolean): IO[MatchResult[Vector[Action]]] = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
+    val eventID         = UUID.randomUUID()
+    val vCollector      = "1.0.0"
+    val vEtl            = "2.0.0"
 
     val data = json"""{ "myInteger": 100 }"""
     val ue = UnstructEvent(
       Some(SelfDescribingData(SchemaKey.fromUri("iglu:test_vendor/test_name/jsonschema/1-0-1").toOption.get, data))
+    )
+
+    val source = goodOne(
+      ue                 = ue,
+      optEventId         = Option(IO(eventID)),
+      optCollectorTstamp = Option(IO(collectorTstamp)),
+      optVCollector      = Option(vCollector),
+      optVEtl            = Option(vEtl)
     )
 
     val mocks = Mocks.default.copy(
@@ -693,14 +700,29 @@ class ProcessingSpec extends Specification with CatsEffect {
       )
     )
 
-    val event    = Event.minimal(eventID, Instant.now(), vCollector, vEtl).copy(unstruct_event = ue)
-    val entities = Foldable[List].foldMap(List(event))(TabledEntity.forEvent)
-    val source   = IO.unique.map(TokenedEvents(Chunk(ByteBuffer.wrap(event.toTsv.getBytes(StandardCharsets.UTF_8))), _))
-    val io = runTest(inputEvents(count = 1, source), mocks = mocks, legacyColumnMode = legacyColumnMode) { case (_, control) =>
-      Processing.resolveV2NonAtomicFields(control.environment, entities).map { result =>
-        if (legacyColumnMode) result should beEqualTo(Result(Vector.empty, Nil))
-        else result.fields.head.mergedField.name should beEqualTo("unstruct_event_test_vendor_test_name_1")
-      }
+    val expectedColumnName =
+      if (legacyColumnMode) "unstruct_event_test_vendor_test_name_1_0_1"
+      else "unstruct_event_test_vendor_test_name_1"
+
+    val io = runTest(inputEvents(count = 1, source), mocks = mocks, legacyColumnMode = legacyColumnMode) { case (inputs, control) =>
+      for {
+        _ <- IO.sleep(processTime.toEpochMilli.millis)
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield state.actions should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.AlterTableAddedColumns(Vector(expectedColumnName)),
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(1),
+          Action.SetE2ELatencyMetric(43123.millis),
+          Action.AddedGoodCountMetric(1),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs.head.ack))
+        )
+      )
     }
     TestControl.executeEmbed(io)
   }

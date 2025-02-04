@@ -255,6 +255,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, legacyColumnMode = true).map {
       case LegacyColumns.Result(fields, failures) =>
         (failures must beEmpty) and
+          (fields must haveSize(1)) and
           (fields must contain(expected))
     }
 
@@ -476,6 +477,7 @@ class LegacyColumnsResolveSpec extends Specification with CatsEffect {
     LegacyColumns.resolveTypes(embeddedResolver, input, legacyCriteria, legacyColumnMode = true).map {
       case LegacyColumns.Result(fields, failures) =>
         (failures must beEmpty) and
+          (fields must haveSize(1)) and
           (fields must contain(expected))
     }
 

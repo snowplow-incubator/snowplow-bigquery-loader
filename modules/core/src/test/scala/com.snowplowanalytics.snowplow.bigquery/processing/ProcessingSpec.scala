@@ -674,12 +674,25 @@ class ProcessingSpec extends Specification with CatsEffect {
       if (legacyColumnMode) "unstruct_event_test_vendor_test_name_1_0_1"
       else "unstruct_event_test_vendor_test_name_1"
 
-    val io = runTest(inputEvents(count = 1, source), mocks = mocks, legacyColumnMode = legacyColumnMode) { case (_, control) =>
+    val io = runTest(inputEvents(count = 1, source), mocks = mocks, legacyColumnMode = legacyColumnMode) { case (inputs, control) =>
       for {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield (state.actions should contain(Action.AlterTableAddedColumns(Vector(expectedColumnName)))) and
+      } yield (state.actions should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.AlterTableAddedColumns(Vector(expectedColumnName)),
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(1),
+          Action.SetE2ELatencyMetric(43123.millis),
+          Action.AddedGoodCountMetric(1),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs.head.ack))
+        )
+      )) and
         (state.writtenToBQ.head should haveKey(expectedColumnName))
     }
     TestControl.executeEmbed(io)

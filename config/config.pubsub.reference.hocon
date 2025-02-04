@@ -117,6 +117,10 @@
     "iglu:com.acme/legacy/jsonschema/2-*-*"
   ]
 
+  # -- Whether the loader should load to legacy columns irrespective of `legacyColumns` configuration.
+  # -- Change to `true` so events go to the legacy columns.
+  "legacyColumnMode": false
+
   # -- Whether the loader should crash and exit if it fails to resolve an Iglu Schema.
   # -- We recommend `true` because Snowplow enriched events have already passed validation, so a missing schema normally
   # -- indicates an error that needs addressing.

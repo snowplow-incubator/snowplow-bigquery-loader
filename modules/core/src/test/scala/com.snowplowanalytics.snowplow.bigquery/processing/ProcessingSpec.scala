@@ -28,6 +28,7 @@ import com.snowplowanalytics.snowplow.sources.TokenedEvents
 import scala.concurrent.duration.DurationLong
 
 import java.time.Instant
+import java.util.UUID
 
 class ProcessingSpec extends Specification with CatsEffect {
   import ProcessingSpec._
@@ -51,6 +52,8 @@ class ProcessingSpec extends Specification with CatsEffect {
     Mark app as unhealthy when writing to the Writer fails with runtime exception $e10
     Emit BadRows for an unknown schema, if exitOnMissingIgluSchema is false $e11 $e11Legacy
     Crash and exit for an unknown schema, if exitOnMissingIgluSchema is true $e12 $e12Legacy
+    Not resolve a v2 non atomic field when legacyColumnMode is enabled $e13
+    Resolve a v2 non atomic field when legacyColumnMode is disabled $e13_full_legacy
   """
 
   def e1 = {
@@ -62,7 +65,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -82,7 +85,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       for {
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -109,7 +112,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -125,7 +128,10 @@ class ProcessingSpec extends Specification with CatsEffect {
     TestControl.executeEmbed(io)
   }
 
-  def alter1_base(legacyColumns: Boolean, timeout: Boolean) = {
+  def alter1_base(
+    legacyColumns: Boolean,
+    timeout: Boolean
+  ) = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime     = Instant.parse("2023-10-24T10:00:01.123Z")
 
@@ -170,7 +176,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           _ <- IO.sleep(processTime.toEpochMilli.millis)
           _ <- Processing.stream(control.environment).compile.drain
           state <- control.state.get
-        } yield state should beEqualTo(
+        } yield state.actions should beEqualTo(
           Vector(
             Action.CreatedTable,
             Action.OpenedWriter,
@@ -192,7 +198,10 @@ class ProcessingSpec extends Specification with CatsEffect {
   def alter1        = alter1_base(legacyColumns = false, timeout = false)
   def alter1_legacy = alter1_base(legacyColumns = true, timeout = true)
 
-  def alter2_base(legacyColumns: Boolean, timeout: Boolean) = {
+  def alter2_base(
+    legacyColumns: Boolean,
+    timeout: Boolean
+  ) = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
 
@@ -240,7 +249,7 @@ class ProcessingSpec extends Specification with CatsEffect {
             _ <- IO.sleep(processTime.toEpochMilli.millis)
             _ <- Processing.stream(control.environment).compile.drain
             state <- control.state.get
-          } yield state should beEqualTo(
+          } yield state.actions should beEqualTo(
             Vector(
               Action.CreatedTable,
               Action.OpenedWriter,
@@ -296,7 +305,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           _ <- IO.sleep(processTime.toEpochMilli.millis)
           _ <- Processing.stream(control.environment).compile.drain
           state <- control.state.get
-        } yield state should beEqualTo(
+        } yield state.actions should beEqualTo(
           Vector(
             Action.CreatedTable,
             Action.OpenedWriter,
@@ -349,7 +358,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           _ <- IO.sleep(processTime.toEpochMilli.millis)
           _ <- Processing.stream(control.environment).compile.drain
           state <- control.state.get
-        } yield state should beEqualTo(
+        } yield state.actions should beEqualTo(
           Vector(
             Action.CreatedTable,
             Action.OpenedWriter,
@@ -387,7 +396,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -417,7 +426,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -448,7 +457,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -482,7 +491,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -510,7 +519,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       for {
         _ <- Processing.stream(control.environment).compile.drain.voidError
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -528,7 +537,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       for {
         _ <- Processing.stream(control.environment).compile.drain.voidError
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -566,7 +575,7 @@ class ProcessingSpec extends Specification with CatsEffect {
             _ <- IO.sleep(processTime.toEpochMilli.millis)
             _ <- Processing.stream(control.environment).compile.drain
             state <- control.state.get
-          } yield state should beEqualTo(
+          } yield state.actions should beEqualTo(
             Vector(
               Action.CreatedTable,
               Action.OpenedWriter,
@@ -608,7 +617,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       for {
         _ <- Processing.stream(environment).compile.drain.voidError
         state <- control.state.get
-      } yield state should beEqualTo(
+      } yield state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -621,6 +630,76 @@ class ProcessingSpec extends Specification with CatsEffect {
   def e12       = e12Base(legacyColumns = false)
   def e12Legacy = e12Base(legacyColumns = true)
 
+  def e13_base(legacyColumnMode: Boolean) = {
+    val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
+    val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
+    val eventID         = UUID.randomUUID()
+    val vCollector      = "1.0.0"
+    val vEtl            = "2.0.0"
+
+    val data = json"""{ "myInteger": 100 }"""
+    val ue = UnstructEvent(
+      Some(SelfDescribingData(SchemaKey.fromUri("iglu:test_vendor/test_name/jsonschema/1-0-1").toOption.get, data))
+    )
+
+    val source = goodOne(
+      ue                 = ue,
+      optEventId         = Option(IO(eventID)),
+      optCollectorTstamp = Option(IO(collectorTstamp)),
+      optVCollector      = Option(vCollector),
+      optVEtl            = Option(vEtl)
+    )
+
+    val mocks = Mocks.default.copy(
+      addColumnsResponse = MockEnvironment.Response.Success(
+        FieldList.of(
+          BQField.of(
+            "unstruct_event_test_vendor_test_name_1",
+            StandardSQLTypeName.STRUCT,
+            FieldList.of(
+              BQField.of("my_string", StandardSQLTypeName.STRING),
+              BQField.of("my_integer", StandardSQLTypeName.INT64)
+            )
+          )
+        )
+      ),
+      descriptors = List(
+        AtomicDescriptor.withTestUnstruct100,
+        AtomicDescriptor.withTestUnstruct100,
+        AtomicDescriptor.withTestUnstruct101
+      )
+    )
+
+    val expectedColumnName =
+      if (legacyColumnMode) "unstruct_event_test_vendor_test_name_1_0_1"
+      else "unstruct_event_test_vendor_test_name_1"
+
+    val io = runTest(inputEvents(count = 1, source), mocks = mocks, legacyColumnMode = legacyColumnMode) { case (inputs, control) =>
+      for {
+        _ <- IO.sleep(processTime.toEpochMilli.millis)
+        _ <- Processing.stream(control.environment).compile.drain
+        state <- control.state.get
+      } yield (state.actions should beEqualTo(
+        Vector(
+          Action.CreatedTable,
+          Action.OpenedWriter,
+          Action.AlterTableAddedColumns(Vector(expectedColumnName)),
+          Action.ClosedWriter,
+          Action.OpenedWriter,
+          Action.WroteRowsToBigQuery(1),
+          Action.SetE2ELatencyMetric(43123.millis),
+          Action.AddedGoodCountMetric(1),
+          Action.AddedBadCountMetric(0),
+          Action.Checkpointed(List(inputs.head.ack))
+        )
+      )) and
+        (state.writtenToBQ.head should haveKey(expectedColumnName))
+    }
+    TestControl.executeEmbed(io)
+  }
+
+  def e13             = e13_base(legacyColumnMode = true)
+  def e13_full_legacy = e13_base(legacyColumnMode = false)
 }
 
 object ProcessingSpec {
@@ -628,12 +707,13 @@ object ProcessingSpec {
   def runTest[A](
     toInputs: IO[List[TokenedEvents]],
     mocks: Mocks                          = Mocks.default,
-    legacyCriteria: List[SchemaCriterion] = Nil
+    legacyCriteria: List[SchemaCriterion] = Nil,
+    legacyColumnMode: Boolean             = false
   )(
     f: (List[TokenedEvents], MockEnvironment) => IO[A]
   ): IO[A] =
     toInputs.flatMap { inputs =>
-      MockEnvironment.build(inputs, mocks, legacyCriteria).use { control =>
+      MockEnvironment.build(inputs, mocks, legacyCriteria, legacyColumnMode).use { control =>
         f(inputs, control)
       }
     }
@@ -645,6 +725,25 @@ object ProcessingSpec {
       .take(count)
       .compile
       .toList
+
+  def goodOne(
+    ue: UnstructEvent                       = UnstructEvent(None),
+    contexts: Contexts                      = Contexts(List.empty),
+    optEventId: Option[IO[UUID]]            = None,
+    optCollectorTstamp: Option[IO[Instant]] = None,
+    optVCollector: Option[String]           = None,
+    optVEtl: Option[String]                 = None
+  ): IO[TokenedEvents] =
+    for {
+      ack <- IO.unique
+      eventId <- optEventId.fold(IO.randomUUID)(identity)
+      collectorTstamp <- optCollectorTstamp.fold(IO.realTimeInstant)(identity)
+      vCollector = optVCollector.fold("0.0.0")(identity)
+      vEtl       = optVEtl.fold("0.0.0")(identity)
+    } yield {
+      val e = Event.minimal(eventId, collectorTstamp, vCollector, vEtl).copy(unstruct_event = ue).copy(contexts = contexts)
+      TokenedEvents(Chunk(ByteBuffer.wrap(e.toTsv.getBytes(StandardCharsets.UTF_8))), ack)
+    }
 
   def good(
     ue: UnstructEvent                   = UnstructEvent(None),

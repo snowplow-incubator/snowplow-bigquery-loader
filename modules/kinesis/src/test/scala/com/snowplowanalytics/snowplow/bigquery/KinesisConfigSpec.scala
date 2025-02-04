@@ -124,6 +124,7 @@ object KinesisConfigSpec {
     license                 = AcceptedLicense(),
     skipSchemas             = List.empty,
     legacyColumns           = List.empty,
+    legacyColumnMode        = false,
     exitOnMissingIgluSchema = true,
     http                    = Config.Http(HttpClient.Config(4))
   )
@@ -216,6 +217,7 @@ object KinesisConfigSpec {
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/1-*-*").get,
       SchemaCriterion.parse("iglu:com.acme/legacy/jsonschema/2-*-*").get
     ),
+    legacyColumnMode        = false,
     exitOnMissingIgluSchema = true,
     http                    = Config.Http(HttpClient.Config(4))
   )

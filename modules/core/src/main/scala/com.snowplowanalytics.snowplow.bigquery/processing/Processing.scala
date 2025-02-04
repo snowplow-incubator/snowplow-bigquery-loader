@@ -36,6 +36,7 @@ import com.snowplowanalytics.snowplow.runtime.processing.BatchUp
 import com.snowplowanalytics.snowplow.runtime.Retrying.showRetryDetails
 import com.snowplowanalytics.snowplow.loaders.transform.{BadRowsSerializer, NonAtomicFields, SchemaSubVersion, TabledEntity, Transform}
 import com.snowplowanalytics.snowplow.bigquery.{Environment, RuntimeService}
+import com.snowplowanalytics.snowplow.loaders.transform.NonAtomicFields.Result
 
 import java.time.Instant
 
@@ -156,8 +157,8 @@ object Processing {
         now <- Sync[F].realTimeInstant
         loadTstamp = BigQueryCaster.timestampValue(now)
         _ <- Logger[F].debug(s"Processing batch of size ${events.size}")
-        v2NonAtomicFields <- NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip ::: env.legacyColumns)
-        legacyFields <- LegacyColumns.resolveTypes[F](env.resolver, entities, env.legacyColumns)
+        v2NonAtomicFields <- resolveV2NonAtomicFields(env, entities)
+        legacyFields <- LegacyColumns.resolveTypes[F](env.resolver, entities, env.legacyColumns, env.legacyColumnMode)
         _ <- possiblyExitOnMissingIgluSchema(env, v2NonAtomicFields, legacyFields)
         (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, v2NonAtomicFields, legacyFields)
         fields = v2NonAtomicFields.fields.flatMap { tte =>
@@ -173,6 +174,13 @@ object Processing {
         earliestCollectorTstamp
       )
     }
+
+  private def resolveV2NonAtomicFields[F[_]: Async: RegistryLookup](
+    env: Environment[F],
+    entities: Map[TabledEntity, Set[SchemaSubVersion]]
+  ): F[Result] =
+    if (env.legacyColumnMode) Sync[F].delay(Result(Vector.empty, Nil))
+    else NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip ::: env.legacyColumns)
 
   private def transformBatch[F[_]: Sync](
     badProcessor: BadRowProcessor,

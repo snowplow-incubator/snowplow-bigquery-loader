@@ -36,6 +36,7 @@ case class Environment[F[_]](
   badRowMaxSize: Int,
   schemasToSkip: List[SchemaCriterion],
   legacyColumns: List[SchemaCriterion],
+  legacyColumnMode: Boolean,
   exitOnMissingIgluSchema: Boolean
 )
 
@@ -79,6 +80,7 @@ object Environment {
       badRowMaxSize           = config.main.output.bad.maxRecordSize,
       schemasToSkip           = config.main.skipSchemas,
       legacyColumns           = config.main.legacyColumns,
+      legacyColumnMode        = config.main.legacyColumnMode,
       exitOnMissingIgluSchema = config.main.exitOnMissingIgluSchema
     )
 

@@ -32,6 +32,7 @@ case class Config[+Source, +Sink](
   license: AcceptedLicense,
   skipSchemas: List[SchemaCriterion],
   legacyColumns: List[SchemaCriterion],
+  legacyColumnMode: Boolean,
   exitOnMissingIgluSchema: Boolean,
   http: Config.Http
 )

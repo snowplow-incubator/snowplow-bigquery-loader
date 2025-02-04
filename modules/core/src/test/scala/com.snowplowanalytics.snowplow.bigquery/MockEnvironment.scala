@@ -24,10 +24,11 @@ import com.snowplowanalytics.snowplow.runtime.processing.Coldswap
 import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, SourceAndAck, TokenedEvents}
 import com.snowplowanalytics.snowplow.sinks.Sink
 import com.snowplowanalytics.snowplow.bigquery.processing.{BigQueryRetrying, TableManager, Writer}
+import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.State
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-case class MockEnvironment(state: Ref[IO, Vector[MockEnvironment.Action]], environment: Environment[IO])
+case class MockEnvironment(state: Ref[IO, State], environment: Environment[IO])
 
 object MockEnvironment {
 
@@ -49,6 +50,8 @@ object MockEnvironment {
   }
   import Action._
 
+  case class State(actions: Vector[Action], writtenToBQ: Iterable[Map[String, AnyRef]])
+
   /**
    * Build a mock environment for testing
    *
@@ -64,10 +67,11 @@ object MockEnvironment {
   def build(
     inputs: List[TokenedEvents],
     mocks: Mocks,
-    legacyColumns: List[SchemaCriterion]
+    legacyColumns: List[SchemaCriterion],
+    legacyColumnMode: Boolean
   ): Resource[IO, MockEnvironment] =
     for {
-      state <- Resource.eval(Ref[IO].of(Vector.empty[Action]))
+      state <- Resource.eval(Ref[IO].of(State(Vector.empty[Action], Nil)))
       writerResource <- Resource.eval(testWriter(state, mocks.writerResponses, mocks.descriptors))
       writerColdswap <- Coldswap.make(writerResource)
     } yield {
@@ -90,6 +94,7 @@ object MockEnvironment {
         badRowMaxSize           = 1000000,
         schemasToSkip           = List.empty,
         legacyColumns           = legacyColumns,
+        legacyColumnMode        = legacyColumnMode,
         exitOnMissingIgluSchema = false
       )
       MockEnvironment(state, env)
@@ -124,21 +129,21 @@ object MockEnvironment {
     def cloud       = "OnPrem"
   }
 
-  private def testTableManager(mockedResponse: Response[FieldList], state: Ref[IO, Vector[Action]]): TableManager.WithHandledErrors[IO] =
+  private def testTableManager(mockedResponse: Response[FieldList], state: Ref[IO, State]): TableManager.WithHandledErrors[IO] =
     new TableManager.WithHandledErrors[IO] {
       def addColumns(columns: Vector[Field]): IO[FieldList] =
         mockedResponse match {
           case Response.Success(fieldList) =>
-            state.update(_ :+ AlterTableAddedColumns(columns.map(_.name))).as(fieldList)
+            state.update(s => s.copy(actions = s.actions :+ AlterTableAddedColumns(columns.map(_.name)))).as(fieldList)
           case Response.ExceptionThrown(value) =>
             IO.raiseError(value)
         }
 
       def createTableIfNotExists: IO[Unit] =
-        state.update(_ :+ CreatedTable)
+        state.update(s => s.copy(actions = s.actions :+ CreatedTable))
     }
 
-  private def testSourceAndAck(inputs: List[TokenedEvents], state: Ref[IO, Vector[Action]]): SourceAndAck[IO] =
+  private def testSourceAndAck(inputs: List[TokenedEvents], state: Ref[IO, State]): SourceAndAck[IO] =
     new SourceAndAck[IO] {
       def stream(config: EventProcessingConfig[IO], processor: EventProcessor[IO]): Stream[IO, Nothing] =
         Stream
@@ -146,7 +151,7 @@ object MockEnvironment {
           .through(processor)
           .chunks
           .evalMap { chunk =>
-            state.update(_ :+ Checkpointed(chunk.toList))
+            state.update(s => s.copy(actions = s.actions :+ Checkpointed(chunk.toList)))
           }
           .drain
 
@@ -157,11 +162,11 @@ object MockEnvironment {
         IO.pure(None)
     }
 
-  private def testBadSink(mockedResponse: Response[Unit], state: Ref[IO, Vector[Action]]): Sink[IO] =
+  private def testBadSink(mockedResponse: Response[Unit], state: Ref[IO, State]): Sink[IO] =
     Sink[IO] { batch =>
       mockedResponse match {
         case Response.Success(_) =>
-          state.update(_ :+ SentToBad(batch.size))
+          state.update(s => s.copy(actions = s.actions :+ SentToBad(batch.size)))
         case Response.ExceptionThrown(value) =>
           IO.raiseError(value)
       }
@@ -181,7 +186,7 @@ object MockEnvironment {
    *   responses given, then it will return with a successful response.
    */
   private def testWriter(
-    actionRef: Ref[IO, Vector[Action]],
+    stateRef: Ref[IO, State],
     responses: List[Response[Writer.WriteResult]],
     descriptors: List[Descriptors.Descriptor]
   ): IO[Resource[IO, Writer[IO]]] =
@@ -189,7 +194,7 @@ object MockEnvironment {
       responseRef <- Ref[IO].of(responses)
       descriptorRef <- Ref[IO].of(descriptors)
     } yield {
-      val make = actionRef.update(_ :+ OpenedWriter).as {
+      val make = stateRef.update(s => s.copy(actions = s.actions :+ OpenedWriter)).as {
         new Writer[IO] {
           def descriptor: IO[Descriptors.Descriptor] =
             descriptorRef.modify {
@@ -205,55 +210,54 @@ object MockEnvironment {
                           }
               writeResult <- response match {
                                case success: Response.Success[Writer.WriteResult] =>
-                                 updateActions(actionRef, rows, success) *> IO(success.value)
+                                 updateActions(stateRef, rows, success) *> IO(success.value)
                                case Response.ExceptionThrown(ex) =>
                                  IO.raiseError(ex)
                              }
             } yield writeResult
 
           private def updateActions(
-            state: Ref[IO, Vector[Action]],
+            state: Ref[IO, State],
             rows: Iterable[Map[String, AnyRef]],
             success: Response.Success[Writer.WriteResult]
           ): IO[Unit] =
             success.value match {
               case Writer.WriteResult.Success =>
-                state.update(_ :+ WroteRowsToBigQuery(rows.size))
+                state.update(s => s.copy(actions = s.actions :+ WroteRowsToBigQuery(rows.size), writtenToBQ = s.writtenToBQ ++ rows))
               case _ =>
                 IO.unit
             }
         }
       }
-
-      Resource.make(make)(_ => actionRef.update(_ :+ ClosedWriter))
+      Resource.make(make)(_ => stateRef.update(s => s.copy(actions = s.actions :+ ClosedWriter)))
     }
 
-  private def testMetrics(ref: Ref[IO, Vector[Action]]): Metrics[IO] = new Metrics[IO] {
+  private def testMetrics(ref: Ref[IO, State]): Metrics[IO] = new Metrics[IO] {
     def addBad(count: Long): IO[Unit] =
-      ref.update(_ :+ AddedBadCountMetric(count))
+      ref.update(s => s.copy(actions = s.actions :+ AddedBadCountMetric(count)))
 
     def addGood(count: Long): IO[Unit] =
-      ref.update(_ :+ AddedGoodCountMetric(count))
+      ref.update(s => s.copy(actions = s.actions :+ AddedGoodCountMetric(count)))
 
     def setLatency(latency: FiniteDuration): IO[Unit] =
-      ref.update(_ :+ SetLatencyMetric(latency))
+      ref.update(s => s.copy(actions = s.actions :+ SetLatencyMetric(latency)))
 
     def setE2ELatency(e2eLatency: FiniteDuration): IO[Unit] =
-      ref.update(_ :+ SetE2ELatencyMetric(e2eLatency))
+      ref.update(s => s.copy(actions = s.actions :+ SetE2ELatencyMetric(e2eLatency)))
 
     def report: Stream[IO, Nothing] = Stream.never[IO]
   }
 
-  private def testAppHealth(ref: Ref[IO, Vector[Action]]): AppHealth.Interface[IO, Alert, RuntimeService] =
+  private def testAppHealth(ref: Ref[IO, State]): AppHealth.Interface[IO, Alert, RuntimeService] =
     new AppHealth.Interface[IO, Alert, RuntimeService] {
       def beHealthyForSetup: IO[Unit] =
         IO.unit
       def beUnhealthyForSetup(alert: Alert): IO[Unit] =
         IO.unit
       def beHealthyForRuntimeService(service: RuntimeService): IO[Unit] =
-        ref.update(_ :+ BecameHealthy(service))
+        ref.update(s => s.copy(actions = s.actions :+ BecameHealthy(service)))
       def beUnhealthyForRuntimeService(service: RuntimeService): IO[Unit] =
-        ref.update(_ :+ BecameUnhealthy(service))
+        ref.update(s => s.copy(actions = s.actions :+ BecameUnhealthy(service)))
     }
 
   private def retriesConfig = Config.Retries(

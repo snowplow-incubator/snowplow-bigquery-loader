@@ -175,7 +175,7 @@ object Processing {
       )
     }
 
-  private[processing] def resolveV2NonAtomicFields[F[_]: Async: RegistryLookup](
+  private def resolveV2NonAtomicFields[F[_]: Async: RegistryLookup](
     env: Environment[F],
     entities: Map[TabledEntity, Set[SchemaSubVersion]]
   ): F[Result] =

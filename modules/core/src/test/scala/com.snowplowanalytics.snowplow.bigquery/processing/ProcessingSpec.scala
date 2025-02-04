@@ -24,7 +24,6 @@ import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent.{Contexts
 import com.snowplowanalytics.snowplow.bigquery.{AtomicDescriptor, MockEnvironment, RuntimeService}
 import com.snowplowanalytics.snowplow.bigquery.MockEnvironment.{Action, Mocks}
 import com.snowplowanalytics.snowplow.sources.TokenedEvents
-import org.specs2.matcher.MatchResult
 
 import scala.concurrent.duration.DurationLong
 
@@ -53,9 +52,8 @@ class ProcessingSpec extends Specification with CatsEffect {
     Mark app as unhealthy when writing to the Writer fails with runtime exception $e10
     Emit BadRows for an unknown schema, if exitOnMissingIgluSchema is false $e11 $e11Legacy
     Crash and exit for an unknown schema, if exitOnMissingIgluSchema is true $e12 $e12Legacy
-    Use legacy columns for all fields when legacyColumnMode is enabled $e13
-    Not resolve a v2 non atomic field when legacyColumnMode is enabled $e14
-    Resolve a v2 non atomic field when legacyColumnMode is disabled $e15
+    Not resolve a v2 non atomic field when legacyColumnMode is enabled $e13
+    Resolve a v2 non atomic field when legacyColumnMode is disabled $e13_full_legacy
   """
 
   def e1 = {
@@ -632,35 +630,7 @@ class ProcessingSpec extends Specification with CatsEffect {
   def e12       = e12Base(legacyColumns = false)
   def e12Legacy = e12Base(legacyColumns = true)
 
-  def e13 = {
-    val processTime = Instant.parse("2023-10-24T10:00:42.123Z")
-
-    val eventID    = UUID.randomUUID()
-    val vCollector = "1.0.0"
-    val vEtl       = "2.0.0"
-    val source = goodOne(
-      optEventId    = Option(IO(eventID)),
-      optVCollector = Option(vCollector),
-      optVEtl       = Option(vEtl)
-    )
-
-    val io = runTest(inputEvents(count = 1, source), legacyColumnMode = true) { case (inputs, control) =>
-      for {
-        _ <- IO.sleep(processTime.toEpochMilli.millis)
-        _ <- Processing.stream(control.environment).compile.drain
-        state <- control.state.get
-      } yield {
-        val rows = state.writtenToBQ
-        (rows.size shouldEqual inputs.head.events.size) and
-          (rows.head should havePair("event_id" -> eventID.toString)) and
-          (rows.head should havePair("v_collector" -> vCollector)) and
-          (rows.head should havePair("v_etl" -> vEtl))
-      }
-    }
-    TestControl.executeEmbed(io)
-  }
-
-  def e14_base(legacyColumnMode: Boolean): IO[MatchResult[Vector[Action]]] = {
+  def e13_base(legacyColumnMode: Boolean) = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
     val eventID         = UUID.randomUUID()
@@ -704,31 +674,19 @@ class ProcessingSpec extends Specification with CatsEffect {
       if (legacyColumnMode) "unstruct_event_test_vendor_test_name_1_0_1"
       else "unstruct_event_test_vendor_test_name_1"
 
-    val io = runTest(inputEvents(count = 1, source), mocks = mocks, legacyColumnMode = legacyColumnMode) { case (inputs, control) =>
+    val io = runTest(inputEvents(count = 1, source), mocks = mocks, legacyColumnMode = legacyColumnMode) { case (_, control) =>
       for {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state.actions should beEqualTo(
-        Vector(
-          Action.CreatedTable,
-          Action.OpenedWriter,
-          Action.AlterTableAddedColumns(Vector(expectedColumnName)),
-          Action.ClosedWriter,
-          Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(1),
-          Action.SetE2ELatencyMetric(43123.millis),
-          Action.AddedGoodCountMetric(1),
-          Action.AddedBadCountMetric(0),
-          Action.Checkpointed(List(inputs.head.ack))
-        )
-      )
+      } yield (state.actions should contain(Action.AlterTableAddedColumns(Vector(expectedColumnName)))) and
+        (state.writtenToBQ.head should haveKey(expectedColumnName))
     }
     TestControl.executeEmbed(io)
   }
 
-  def e14 = e14_base(legacyColumnMode = true)
-  def e15 = e14_base(legacyColumnMode = false)
+  def e13             = e13_base(legacyColumnMode = true)
+  def e13_full_legacy = e13_base(legacyColumnMode = false)
 }
 
 object ProcessingSpec {

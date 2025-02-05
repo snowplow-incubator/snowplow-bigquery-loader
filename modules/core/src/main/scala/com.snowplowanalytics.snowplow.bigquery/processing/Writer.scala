@@ -26,6 +26,7 @@ import com.google.cloud.bigquery.storage.v1.{
 }
 import com.google.cloud.bigquery.storage.v1.stub.BigQueryWriteStubSettings
 import com.google.api.gax.core.CredentialsProvider
+import com.google.api.gax.grpc.ChannelPoolSettings
 import com.google.auth.Credentials
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.api.gax.rpc.FixedHeaderProvider
@@ -219,6 +220,17 @@ object Writer {
       val settingsBuilder = BigQueryWriteSettings.newBuilder
         .setHeaderProvider(FixedHeaderProvider.create("user-agent", s"${config.gcpUserAgent.productName}/bigquery-loader (GPN:Snowplow;)"))
       settingsBuilder.getStubSettingsBuilder.setCredentialsProvider(credentialsProvider(credentials))
+      settingsBuilder
+        .getStubSettingsBuilder()
+        .setTransportChannelProvider(
+          BigQueryWriteSettings
+            .defaultGrpcTransportProviderBuilder()
+            .setKeepAliveTime(org.threeten.bp.Duration.ofMinutes(1))
+            .setKeepAliveTimeout(org.threeten.bp.Duration.ofMinutes(1))
+            .setKeepAliveWithoutCalls(true)
+            .setChannelPoolSettings(ChannelPoolSettings.staticallySized(4))
+            .build()
+        )
       BigQueryWriteClient.create(settingsBuilder.build)
     }
     Resource.make(make)(c => Sync[F].blocking(c.close()))

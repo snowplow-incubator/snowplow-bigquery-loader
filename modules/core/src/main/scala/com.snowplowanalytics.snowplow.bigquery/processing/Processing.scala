@@ -130,8 +130,8 @@ object Processing {
     }
 
   /** Parse raw bytes into Event using analytics sdk */
-  private def parseBytes[F[_]: Sync](badProcessor: BadRowProcessor): Pipe[F, TokenedEvents, ParseResult] =
-    _.evalMap { case TokenedEvents(chunk, token) =>
+  private def parseBytes[F[_]: Async](badProcessor: BadRowProcessor): Pipe[F, TokenedEvents, ParseResult] =
+    _.parEvalMap(Runtime.getRuntime.availableProcessors) { case TokenedEvents(chunk, token) =>
       for {
         numBytes <- Sync[F].delay(Foldable[Chunk].sumBytes(chunk))
         (badRows, events) <- Foldable[Chunk].traverseSeparateUnordered(chunk) { byteBuffer =>
@@ -151,27 +151,28 @@ object Processing {
     env: Environment[F],
     badProcessor: BadRowProcessor
   ): Pipe[F, Batched, BatchAfterTransform] =
-    _.evalMap { case Batched(events, parseFailures, countBytes, entities, tokens, earliestCollectorTstamp) =>
-      for {
-        now <- Sync[F].realTimeInstant
-        loadTstamp = BigQueryCaster.timestampValue(now)
-        _ <- Logger[F].debug(s"Processing batch of size ${events.size}")
-        v2NonAtomicFields <- NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip ::: env.legacyColumns)
-        legacyFields <- LegacyColumns.resolveTypes[F](env.resolver, entities, env.legacyColumns)
-        _ <- possiblyExitOnMissingIgluSchema(env, v2NonAtomicFields, legacyFields)
-        (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, v2NonAtomicFields, legacyFields)
-        fields = v2NonAtomicFields.fields.flatMap { tte =>
-                   tte.mergedField :: tte.recoveries.map(_._2)
-                 } ++ legacyFields.fields.map(f => LegacyColumns.dropJsonTypes(f.field))
-      } yield BatchAfterTransform(
-        rows,
-        fields,
-        countBytes,
-        events.size + parseFailures.size,
-        parseFailures.prepend(moreBad),
-        tokens,
-        earliestCollectorTstamp
-      )
+    _.parEvalMap(Runtime.getRuntime.availableProcessors) {
+      case Batched(events, parseFailures, countBytes, entities, tokens, earliestCollectorTstamp) =>
+        for {
+          now <- Sync[F].realTimeInstant
+          loadTstamp = BigQueryCaster.timestampValue(now)
+          _ <- Logger[F].debug(s"Processing batch of size ${events.size}")
+          v2NonAtomicFields <- NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip ::: env.legacyColumns)
+          legacyFields <- LegacyColumns.resolveTypes[F](env.resolver, entities, env.legacyColumns)
+          _ <- possiblyExitOnMissingIgluSchema(env, v2NonAtomicFields, legacyFields)
+          (moreBad, rows) <- transformBatch[F](badProcessor, loadTstamp, events, v2NonAtomicFields, legacyFields)
+          fields = v2NonAtomicFields.fields.flatMap { tte =>
+                     tte.mergedField :: tte.recoveries.map(_._2)
+                   } ++ legacyFields.fields.map(f => LegacyColumns.dropJsonTypes(f.field))
+        } yield BatchAfterTransform(
+          rows,
+          fields,
+          countBytes,
+          events.size + parseFailures.size,
+          parseFailures.prepend(moreBad),
+          tokens,
+          earliestCollectorTstamp
+        )
     }
 
   private def transformBatch[F[_]: Sync](

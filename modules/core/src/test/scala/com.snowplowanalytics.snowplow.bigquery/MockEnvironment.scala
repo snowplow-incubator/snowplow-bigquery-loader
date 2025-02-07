@@ -82,7 +82,7 @@ object MockEnvironment {
         resolver             = Resolver[IO](Nil, None),
         httpClient           = testHttpClient,
         tableManager         = testTableManager(mocks.addColumnsResponse, state),
-        writer               = writerColdswap,
+        writers              = Vector(writerColdswap),
         metrics              = testMetrics(state),
         appHealth            = testAppHealth(state),
         alterTableWaitPolicy = BigQueryRetrying.policyForAlterTableWait[IO](retriesConfig),

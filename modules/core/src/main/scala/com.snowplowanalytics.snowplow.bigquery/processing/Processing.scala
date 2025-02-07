@@ -48,7 +48,7 @@ object Processing {
     implicit val lookup: RegistryLookup[F] = Http4sRegistryLookup(env.httpClient)
     val eventProcessingConfig              = EventProcessingConfig(EventProcessingConfig.NoWindowing, env.metrics.setLatency)
     Stream.eval(env.tableManager.createTableIfNotExists) *>
-      Stream.eval(env.writer.opened.use_) *>
+      Stream.eval(env.writers.head.opened.use_) *>
       env.source.stream(eventProcessingConfig, eventProcessor(env))
   }
 
@@ -109,7 +109,6 @@ object Processing {
     in.through(parseBytes(badProcessor))
       .through(BatchUp.withTimeout(env.batching.maxBytes, env.batching.maxDelay))
       .through(transform(env, badProcessor))
-      .through(handleSchemaEvolution(env))
       .through(writeToBigQuery(env, badProcessor))
       .through(setE2ELatencyMetric(env))
       .through(sendFailedEvents(env, badProcessor))
@@ -216,12 +215,16 @@ object Processing {
     env: Environment[F],
     badProcessor: BadRowProcessor
   ): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
-    _.parEvalMap(env.batching.writeBatchConcurrency) { batch =>
-      writeUntilSuccessful(env, badProcessor, batch)
-        .onError { _ =>
-          env.appHealth.beUnhealthyForRuntimeService(RuntimeService.BigQueryClient)
-        }
-    }
+    _.zip(Stream.emits(env.writers).repeat)
+      .parEvalMap(env.writers.length) { case (batch, writerProvider) =>
+        for {
+          _ <- handleSchemaEvolution(env, writerProvider, batch)
+          result <- writeUntilSuccessful(writerProvider, env.alterTableWaitPolicy, badProcessor, batch)
+                      .onError { _ =>
+                        env.appHealth.beUnhealthyForRuntimeService(RuntimeService.BigQueryClient)
+                      }
+        } yield result
+      }
 
   implicit private class WriteResultOps[F[_]: Async](val attempt: F[Writer.WriteResult]) {
 
@@ -234,7 +237,10 @@ object Processing {
      */
     private def errorsAllowedWithShortLogging = 4
 
-    def handlingServerSideSchemaMismatches(env: Environment[F]): F[Writer.WriteResult] = {
+    def handlingServerSideSchemaMismatches(
+      writerProvider: Writer.Provider[F],
+      alterTableWaitPolicy: RetryPolicy[F]
+    ): F[Writer.WriteResult] = {
       def onFailure(wr: Writer.WriteResult, details: RetryDetails): F[Unit] = {
         val msg = show"Newly added columns have not yet propagated to the BigQuery Writer server-side. $details"
         val log = wr match {
@@ -243,11 +249,11 @@ object Processing {
           case _ =>
             Logger[F].warn(msg)
         }
-        log *> env.writer.closed.use_
+        log *> writerProvider.closed.use_
       }
       attempt
         .retryingOnFailures(
-          policy = env.alterTableWaitPolicy,
+          policy = alterTableWaitPolicy,
           wasSuccessful = {
             case Writer.WriteResult.ServerSideSchemaMismatch(_) => false.pure[F]
             case _                                              => true.pure[F]
@@ -256,7 +262,7 @@ object Processing {
         )
     }
 
-    def handlingWriterWasClosedByEarlierErrors(env: Environment[F]): F[Writer.WriteResult] = {
+    def handlingWriterWasClosedByEarlierErrors(writerProvider: Writer.Provider[F]): F[Writer.WriteResult] = {
       def onFailure(wr: Writer.WriteResult, details: RetryDetails): F[Unit] = {
         val msg =
           "BigQuery Writer was already closed by an earlier exception in a different Fiber.  Will reset the Writer and try again immediately"
@@ -266,7 +272,7 @@ object Processing {
           case _ =>
             Logger[F].warn(msg)
         }
-        log *> env.writer.closed.use_
+        log *> writerProvider.closed.use_
       }
       val retryImmediately = PolicyDecision.DelayAndRetry(Duration.Zero)
       attempt
@@ -282,17 +288,18 @@ object Processing {
   }
 
   private def writeUntilSuccessful[F[_]: Async](
-    env: Environment[F],
+    writerProvider: Writer.Provider[F],
+    alterTableWaitPolicy: RetryPolicy[F],
     badProcessor: BadRowProcessor,
     batch: BatchAfterTransform
   ): F[BatchAfterTransform] =
     if (batch.toBeInserted.isEmpty)
       batch.pure[F]
     else
-      env.writer.opened
+      writerProvider.opened
         .use(_.write(batch.toBeInserted.map(_._2)))
-        .handlingWriterWasClosedByEarlierErrors(env)
-        .handlingServerSideSchemaMismatches(env)
+        .handlingWriterWasClosedByEarlierErrors(writerProvider)
+        .handlingServerSideSchemaMismatches(writerProvider, alterTableWaitPolicy)
         .flatMap {
           case Writer.WriteResult.SerializationFailures(failures) =>
             val (badRows, tryAgains) = batch.toBeInserted.zipWithIndex.foldLeft((List.empty[BadRow], List.empty[EventWithTransform])) {
@@ -306,7 +313,8 @@ object Processing {
                 }
             }
             writeUntilSuccessful(
-              env,
+              writerProvider,
+              alterTableWaitPolicy,
               badProcessor,
               batch.copy(toBeInserted = tryAgains, badAccumulated = batch.badAccumulated.prepend(badRows))
             )
@@ -319,37 +327,41 @@ object Processing {
    * table
    */
   private def handleSchemaEvolution[F[_]: Async](
-    env: Environment[F]
-  ): Pipe[F, BatchAfterTransform, BatchAfterTransform] =
-    _.evalTap { batch =>
-      env.writer.opened
-        .use(_.descriptor)
-        .flatMap { descriptor =>
-          val fieldsToAdd = BigQuerySchemaUtils.alterTableRequired(descriptor, batch.entities)
-          if (fieldsToAdd.nonEmpty) {
-            env.tableManager.addColumns(fieldsToAdd.toVector).flatMap { fieldsToExist =>
-              openWriterUntilFieldsExist(env, fieldsToExist)
-            }
-          } else {
-            Sync[F].unit
+    env: Environment[F],
+    writerProvider: Writer.Provider[F],
+    batch: BatchAfterTransform
+  ): F[Unit] =
+    writerProvider.opened
+      .use(_.descriptor)
+      .flatMap { descriptor =>
+        val fieldsToAdd = BigQuerySchemaUtils.alterTableRequired(descriptor, batch.entities)
+        if (fieldsToAdd.nonEmpty) {
+          env.tableManager.addColumns(fieldsToAdd.toVector).flatMap { fieldsToExist =>
+            openWriterUntilFieldsExist(writerProvider, env.alterTableWaitPolicy, fieldsToExist)
           }
+        } else {
+          Sync[F].unit
         }
-        .onError { _ =>
-          env.appHealth.beUnhealthyForRuntimeService(RuntimeService.BigQueryClient)
-        }
-    }
+      }
+      .onError { _ =>
+        env.appHealth.beUnhealthyForRuntimeService(RuntimeService.BigQueryClient)
+      }
 
-  private def openWriterUntilFieldsExist[F[_]: Async](env: Environment[F], fieldsToExist: FieldList): F[Unit] =
-    env.writer.opened
+  private def openWriterUntilFieldsExist[F[_]: Async](
+    writerProvider: Writer.Provider[F],
+    alterTableWaitPolicy: RetryPolicy[F],
+    fieldsToExist: FieldList
+  ): F[Unit] =
+    writerProvider.opened
       .use(_.descriptor)
       .retryingOnFailures(
-        policy = env.alterTableWaitPolicy,
+        policy = alterTableWaitPolicy,
         wasSuccessful = { descriptor =>
           (!BigQuerySchemaUtils.fieldsMissingFromDescriptor(descriptor, fieldsToExist)).pure[F]
         },
         onFailure = { case (_, details) =>
           val msg = show"Newly added columns have not yet propagated to the BigQuery Writer client-side. $details"
-          Logger[F].warn(msg) *> env.writer.closed.use_
+          Logger[F].warn(msg) *> writerProvider.closed.use_
         }
       )
       .void

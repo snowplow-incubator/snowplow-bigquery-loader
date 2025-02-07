@@ -24,60 +24,70 @@ object AtomicDescriptor {
   }
 
   /** A table which has been altered to add the web_page unstruct event column */
-  def withWebPage: Descriptors.Descriptor = {
+  def withWebPage(legacyColumns: Boolean): Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, eventId.setNumber(1))
-      .addField(1, webPage.setNumber(2))
+      .addField(1, webPage(legacyColumns).setNumber(2))
       .addNestedType(webPageNestedType)
     fromDescriptorProtoBuilder(descriptorProto)
   }
 
-  def withTestUnstruct100: Descriptors.Descriptor = {
+  def withTestUnstruct100(legacyColumns: Boolean): Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, eventId.setNumber(1))
-      .addField(1, testUnstruct.setNumber(2))
+      .addField(1, testUnstruct(legacyColumns, 0).setNumber(2))
       .addNestedType(testNestedType100)
     fromDescriptorProtoBuilder(descriptorProto)
   }
 
-  def withTestUnstruct101: Descriptors.Descriptor = {
+  def withTestUnstruct101(legacyColumns: Boolean): Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, eventId.setNumber(1))
-      .addField(1, testUnstruct.setNumber(2))
+      .addField(1, testUnstruct(legacyColumns, 1).setNumber(2))
       .addNestedType(testNestedType101)
     fromDescriptorProtoBuilder(descriptorProto)
   }
 
-  def withTestContext100: Descriptors.Descriptor = {
+  def withTestUnstruct100And101: Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, eventId.setNumber(1))
-      .addField(1, testContext.setNumber(2))
+      .addField(1, testUnstruct(legacyColumns = true, 0).setNumber(2))
+      .addField(2, testUnstruct(legacyColumns = true, 1).setNumber(3))
+      .addNestedType(testNestedType100)
+      .addNestedType(testNestedType101)
+    fromDescriptorProtoBuilder(descriptorProto)
+  }
+
+  def withTestContext100(legacyColumns: Boolean): Descriptors.Descriptor = {
+    val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
+      .addField(0, eventId.setNumber(1))
+      .addField(1, testContext(legacyColumns, 0).setNumber(2))
       .addNestedType(testNestedType100)
     fromDescriptorProtoBuilder(descriptorProto)
   }
 
-  def withTestContext101: Descriptors.Descriptor = {
+  def withTestContext101(legacyColumns: Boolean): Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, eventId.setNumber(1))
-      .addField(1, testContext.setNumber(2))
+      .addField(1, testContext(legacyColumns, 1).setNumber(2))
       .addNestedType(testNestedType101)
     fromDescriptorProtoBuilder(descriptorProto)
   }
 
-  def withAdClickContext: Descriptors.Descriptor = {
+  def withAdClickContext(legacyColumns: Boolean): Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, eventId.setNumber(1))
-      .addField(1, adClickContext.setNumber(2))
+      .addField(1, adClickContext(legacyColumns).setNumber(2))
       .addNestedType(adClickEventNestedType)
     fromDescriptorProtoBuilder(descriptorProto)
   }
 
   /** A table which has been altered to add the ad_click_event unstruct event column */
-  def withWebPageAndAdClick: Descriptors.Descriptor = {
+  def withWebPageAndAdClick(legacyColumns: Boolean): Descriptors.Descriptor = {
     val descriptorProto = DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, eventId.setNumber(1))
-      .addField(1, webPage.setNumber(2))
-      .addField(2, adClickEvent.setNumber(3))
+      .addField(1, webPage(legacyColumns).setNumber(2))
+      .addField(2, adClickEvent(legacyColumns).setNumber(3))
       .addNestedType(webPageNestedType)
       .addNestedType(adClickEventNestedType)
     fromDescriptorProtoBuilder(descriptorProto)
@@ -100,20 +110,38 @@ object AtomicDescriptor {
       .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING)
       .setName("event_id")
 
-  private def webPage: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
-    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
-    .setTypeName("web_page_1")
-    .setName("unstruct_event_com_snowplowanalytics_snowplow_web_page_1")
+  private def webPage(legacyColumns: Boolean): DescriptorProtos.FieldDescriptorProto.Builder =
+    DescriptorProtos.FieldDescriptorProto.newBuilder
+      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+      .setTypeName("web_page_1")
+      .setName {
+        if (legacyColumns)
+          "unstruct_event_com_snowplowanalytics_snowplow_web_page_1_0_0"
+        else
+          "unstruct_event_com_snowplowanalytics_snowplow_web_page_1"
+      }
 
-  private def testContext: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
-    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED)
-    .setTypeName("test_1")
-    .setName("contexts_test_vendor_test_name_1")
+  private def testContext(legacyColumns: Boolean, minorVersion: Int): DescriptorProtos.FieldDescriptorProto.Builder =
+    DescriptorProtos.FieldDescriptorProto.newBuilder
+      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED)
+      .setTypeName(s"test_10$minorVersion")
+      .setName {
+        if (legacyColumns)
+          s"contexts_test_vendor_test_name_1_0_$minorVersion"
+        else
+          "contexts_test_vendor_test_name_1"
+      }
 
-  private def testUnstruct: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
-    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
-    .setTypeName("test_1")
-    .setName("unstruct_event_test_vendor_test_name_1")
+  private def testUnstruct(legacyColumns: Boolean, minorVersion: Int): DescriptorProtos.FieldDescriptorProto.Builder =
+    DescriptorProtos.FieldDescriptorProto.newBuilder
+      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+      .setTypeName(s"test_10$minorVersion")
+      .setName {
+        if (legacyColumns)
+          s"unstruct_event_test_vendor_test_name_1_0_$minorVersion"
+        else
+          "unstruct_event_test_vendor_test_name_1"
+      }
 
   private def webPageId: DescriptorProtos.FieldDescriptorProto.Builder =
     DescriptorProtos.FieldDescriptorProto.newBuilder
@@ -141,23 +169,35 @@ object AtomicDescriptor {
   private def testNestedType100: DescriptorProtos.DescriptorProto.Builder =
     DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, myString.setNumber(1))
-      .setName("test_1")
+      .setName("test_100")
 
   private def testNestedType101: DescriptorProtos.DescriptorProto.Builder =
     DescriptorProtos.DescriptorProto.newBuilder
       .addField(0, myString.setNumber(1))
       .addField(1, myInteger.setNumber(2))
-      .setName("test_1")
+      .setName("test_101")
 
-  private def adClickEvent: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
-    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
-    .setTypeName("ad_click_event_1")
-    .setName("unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1")
+  private def adClickEvent(legacyColumns: Boolean): DescriptorProtos.FieldDescriptorProto.Builder =
+    DescriptorProtos.FieldDescriptorProto.newBuilder
+      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+      .setTypeName("ad_click_event_1")
+      .setName {
+        if (legacyColumns)
+          "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
+        else
+          "unstruct_event_com_snowplowanalytics_snowplow_media_ad_click_event_1"
+      }
 
-  private def adClickContext: DescriptorProtos.FieldDescriptorProto.Builder = DescriptorProtos.FieldDescriptorProto.newBuilder
-    .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED)
-    .setTypeName("ad_click_event_1")
-    .setName("contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1")
+  private def adClickContext(legacyColumns: Boolean): DescriptorProtos.FieldDescriptorProto.Builder =
+    DescriptorProtos.FieldDescriptorProto.newBuilder
+      .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED)
+      .setTypeName("ad_click_event_1")
+      .setName {
+        if (legacyColumns)
+          "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1_0_0"
+        else
+          "contexts_com_snowplowanalytics_snowplow_media_ad_click_event_1"
+      }
 
   private def adClickEventPercentProgress: DescriptorProtos.FieldDescriptorProto.Builder =
     DescriptorProtos.FieldDescriptorProto.newBuilder

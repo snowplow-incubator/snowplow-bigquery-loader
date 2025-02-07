@@ -199,7 +199,7 @@ object MockEnvironment {
           def descriptor: IO[Descriptors.Descriptor] =
             descriptorRef.modify {
               case head :: tail => (tail, head)
-              case Nil          => (Nil, AtomicDescriptor.withWebPage)
+              case Nil          => (Nil, AtomicDescriptor.withWebPage(false))
             }
 
           def write(rows: List[Map[String, AnyRef]]): IO[Writer.WriteResult] =

@@ -28,7 +28,6 @@ import com.snowplowanalytics.snowplow.sources.TokenedEvents
 import scala.concurrent.duration.DurationLong
 
 import java.time.Instant
-import java.util.UUID
 
 class ProcessingSpec extends Specification with CatsEffect {
   import ProcessingSpec._
@@ -65,7 +64,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
         state <- control.state.get
-      } yield state.actions should beEqualTo(
+      } yield (state.actions should beEqualTo(
         Vector(
           Action.CreatedTable,
           Action.OpenedWriter,
@@ -75,7 +74,8 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.AddedBadCountMetric(0),
           Action.Checkpointed(List(inputs(0).ack, inputs(1).ack))
         )
-      )
+      )) and
+        (state.writtenToBQ must (contain(haveKeys("event_id", "page_url", "br_features_flash", "doc_height")).forall))
     }
     TestControl.executeEmbed(io)
   }
@@ -128,10 +128,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     TestControl.executeEmbed(io)
   }
 
-  def alter1_base(
-    legacyColumns: Boolean,
-    timeout: Boolean
-  ) = {
+  def alter1_base(legacyColumns: Boolean) = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime     = Instant.parse("2023-10-24T10:00:01.123Z")
 
@@ -160,9 +157,9 @@ class ProcessingSpec extends Specification with CatsEffect {
         )
       ),
       descriptors = List(
-        AtomicDescriptor.withWebPage,
-        AtomicDescriptor.withWebPage,
-        AtomicDescriptor.withWebPageAndAdClick
+        AtomicDescriptor.withWebPage(legacyColumns),
+        AtomicDescriptor.withWebPage(legacyColumns),
+        AtomicDescriptor.withWebPageAndAdClick(legacyColumns)
       )
     )
 
@@ -176,7 +173,7 @@ class ProcessingSpec extends Specification with CatsEffect {
           _ <- IO.sleep(processTime.toEpochMilli.millis)
           _ <- Processing.stream(control.environment).compile.drain
           state <- control.state.get
-        } yield state.actions should beEqualTo(
+        } yield (state.actions should beEqualTo(
           Vector(
             Action.CreatedTable,
             Action.OpenedWriter,
@@ -189,19 +186,16 @@ class ProcessingSpec extends Specification with CatsEffect {
             Action.AddedBadCountMetric(0),
             Action.Checkpointed(List(inputs(0).ack))
           )
-        )
+        )) and
+          (state.writtenToBQ must (contain(haveKey(expectedColumnName)).forall))
     }
-    if (timeout) TestControl.executeEmbed(io.timeout(10.seconds))
-    else TestControl.executeEmbed(io)
+    TestControl.executeEmbed(io)
   }
 
-  def alter1        = alter1_base(legacyColumns = false, timeout = false)
-  def alter1_legacy = alter1_base(legacyColumns = true, timeout = true)
+  def alter1        = alter1_base(legacyColumns = false)
+  def alter1_legacy = alter1_base(legacyColumns = true)
 
-  def alter2_base(
-    legacyColumns: Boolean,
-    timeout: Boolean
-  ) = {
+  def alter2_base(legacyColumns: Boolean) = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
 
@@ -234,7 +228,7 @@ class ProcessingSpec extends Specification with CatsEffect {
       descriptors = List(
         AtomicDescriptor.initial,
         AtomicDescriptor.initial,
-        AtomicDescriptor.withAdClickContext
+        AtomicDescriptor.withAdClickContext(legacyColumns)
       )
     )
 
@@ -249,7 +243,7 @@ class ProcessingSpec extends Specification with CatsEffect {
             _ <- IO.sleep(processTime.toEpochMilli.millis)
             _ <- Processing.stream(control.environment).compile.drain
             state <- control.state.get
-          } yield state.actions should beEqualTo(
+          } yield (state.actions should beEqualTo(
             Vector(
               Action.CreatedTable,
               Action.OpenedWriter,
@@ -262,14 +256,14 @@ class ProcessingSpec extends Specification with CatsEffect {
               Action.AddedBadCountMetric(0),
               Action.Checkpointed(List(inputs(0).ack))
             )
-          )
+          )) and
+            (state.writtenToBQ must (contain(haveKey(expectedColumnName)).forall))
       }
-    if (timeout) TestControl.executeEmbed(io.timeout(10.seconds))
-    else TestControl.executeEmbed(io)
+    TestControl.executeEmbed(io)
   }
 
-  def alter2        = alter2_base(legacyColumns = false, timeout = false)
-  def alter2_legacy = alter2_base(legacyColumns = true, timeout = true)
+  def alter2        = alter2_base(legacyColumns = false)
+  def alter2_legacy = alter2_base(legacyColumns = true)
 
   def alter3 = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
@@ -294,9 +288,9 @@ class ProcessingSpec extends Specification with CatsEffect {
         )
       ),
       descriptors = List(
-        AtomicDescriptor.withTestUnstruct100,
-        AtomicDescriptor.withTestUnstruct100,
-        AtomicDescriptor.withTestUnstruct101
+        AtomicDescriptor.withTestUnstruct100(legacyColumns = false),
+        AtomicDescriptor.withTestUnstruct100(legacyColumns = false),
+        AtomicDescriptor.withTestUnstruct101(legacyColumns = false)
       )
     )
     val io = runTest(inputEvents(count = 1, good(ue = unstruct, optCollectorTstamp = Option(collectorTstamp))), mocks) {
@@ -347,9 +341,9 @@ class ProcessingSpec extends Specification with CatsEffect {
         )
       ),
       descriptors = List(
-        AtomicDescriptor.withTestContext100,
-        AtomicDescriptor.withTestContext100,
-        AtomicDescriptor.withTestContext101
+        AtomicDescriptor.withTestContext100(legacyColumns = false),
+        AtomicDescriptor.withTestContext100(legacyColumns = false),
+        AtomicDescriptor.withTestContext101(legacyColumns = false)
       )
     )
     val io = runTest(inputEvents(count = 1, good(contexts = contexts, optCollectorTstamp = Option(collectorTstamp))), mocks) {
@@ -633,28 +627,34 @@ class ProcessingSpec extends Specification with CatsEffect {
   def e13_base(legacyColumnMode: Boolean) = {
     val collectorTstamp = Instant.parse("2023-10-24T10:00:00.000Z")
     val processTime     = Instant.parse("2023-10-24T10:00:42.123Z")
-    val eventID         = UUID.randomUUID()
-    val vCollector      = "1.0.0"
-    val vEtl            = "2.0.0"
 
     val data = json"""{ "myInteger": 100 }"""
-    val ue = UnstructEvent(
+    val unstruct = UnstructEvent(
       Some(SelfDescribingData(SchemaKey.fromUri("iglu:test_vendor/test_name/jsonschema/1-0-1").toOption.get, data))
     )
+    val expectedColumnName =
+      if (legacyColumnMode) "unstruct_event_test_vendor_test_name_1_0_1"
+      else "unstruct_event_test_vendor_test_name_1"
 
-    val source = goodOne(
-      ue                 = ue,
-      optEventId         = Option(IO(eventID)),
-      optCollectorTstamp = Option(IO(collectorTstamp)),
-      optVCollector      = Option(vCollector),
-      optVEtl            = Option(vEtl)
-    )
+    val mockedDescriptors =
+      if (legacyColumnMode)
+        List(
+          AtomicDescriptor.withTestUnstruct100(legacyColumnMode),
+          AtomicDescriptor.withTestUnstruct100(legacyColumnMode),
+          AtomicDescriptor.withTestUnstruct100And101
+        )
+      else
+        List(
+          AtomicDescriptor.withTestUnstruct100(legacyColumnMode),
+          AtomicDescriptor.withTestUnstruct100(legacyColumnMode),
+          AtomicDescriptor.withTestUnstruct101(legacyColumnMode)
+        )
 
     val mocks = Mocks.default.copy(
       addColumnsResponse = MockEnvironment.Response.Success(
         FieldList.of(
           BQField.of(
-            "unstruct_event_test_vendor_test_name_1",
+            expectedColumnName,
             StandardSQLTypeName.STRUCT,
             FieldList.of(
               BQField.of("my_string", StandardSQLTypeName.STRING),
@@ -663,18 +663,14 @@ class ProcessingSpec extends Specification with CatsEffect {
           )
         )
       ),
-      descriptors = List(
-        AtomicDescriptor.withTestUnstruct100,
-        AtomicDescriptor.withTestUnstruct100,
-        AtomicDescriptor.withTestUnstruct101
-      )
+      descriptors = mockedDescriptors
     )
 
-    val expectedColumnName =
-      if (legacyColumnMode) "unstruct_event_test_vendor_test_name_1_0_1"
-      else "unstruct_event_test_vendor_test_name_1"
-
-    val io = runTest(inputEvents(count = 1, source), mocks = mocks, legacyColumnMode = legacyColumnMode) { case (inputs, control) =>
+    val io = runTest(
+      inputEvents(count = 1, good(ue = unstruct, optCollectorTstamp = Option(collectorTstamp))),
+      mocks            = mocks,
+      legacyColumnMode = legacyColumnMode
+    ) { case (inputs, control) =>
       for {
         _ <- IO.sleep(processTime.toEpochMilli.millis)
         _ <- Processing.stream(control.environment).compile.drain
@@ -686,14 +682,14 @@ class ProcessingSpec extends Specification with CatsEffect {
           Action.AlterTableAddedColumns(Vector(expectedColumnName)),
           Action.ClosedWriter,
           Action.OpenedWriter,
-          Action.WroteRowsToBigQuery(1),
+          Action.WroteRowsToBigQuery(2),
           Action.SetE2ELatencyMetric(43123.millis),
-          Action.AddedGoodCountMetric(1),
+          Action.AddedGoodCountMetric(2),
           Action.AddedBadCountMetric(0),
           Action.Checkpointed(List(inputs.head.ack))
         )
       )) and
-        (state.writtenToBQ.head should haveKey(expectedColumnName))
+        (state.writtenToBQ must (contain(haveKey(expectedColumnName)).forall))
     }
     TestControl.executeEmbed(io)
   }
@@ -725,25 +721,6 @@ object ProcessingSpec {
       .take(count)
       .compile
       .toList
-
-  def goodOne(
-    ue: UnstructEvent                       = UnstructEvent(None),
-    contexts: Contexts                      = Contexts(List.empty),
-    optEventId: Option[IO[UUID]]            = None,
-    optCollectorTstamp: Option[IO[Instant]] = None,
-    optVCollector: Option[String]           = None,
-    optVEtl: Option[String]                 = None
-  ): IO[TokenedEvents] =
-    for {
-      ack <- IO.unique
-      eventId <- optEventId.fold(IO.randomUUID)(identity)
-      collectorTstamp <- optCollectorTstamp.fold(IO.realTimeInstant)(identity)
-      vCollector = optVCollector.fold("0.0.0")(identity)
-      vEtl       = optVEtl.fold("0.0.0")(identity)
-    } yield {
-      val e = Event.minimal(eventId, collectorTstamp, vCollector, vEtl).copy(unstruct_event = ue).copy(contexts = contexts)
-      TokenedEvents(Chunk(ByteBuffer.wrap(e.toTsv.getBytes(StandardCharsets.UTF_8))), ack)
-    }
 
   def good(
     ue: UnstructEvent                   = UnstructEvent(None),

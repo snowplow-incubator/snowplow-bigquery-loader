@@ -87,7 +87,7 @@ object PubsubConfigSpec {
       )
     ),
     batching = Config.Batching(
-      maxBytes              = 16000000,
+      maxBytes              = 10000000,
       maxDelay              = 1.second,
       writeBatchConcurrency = 3
     ),
@@ -152,7 +152,7 @@ object PubsubConfigSpec {
       )
     ),
     batching = Config.Batching(
-      maxBytes              = 16000000,
+      maxBytes              = 10000000,
       maxDelay              = 1.second,
       writeBatchConcurrency = 1
     ),

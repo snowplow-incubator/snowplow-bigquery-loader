@@ -26,6 +26,7 @@ case class Config[+Source, +Sink](
   input: Source,
   output: Config.Output[Sink],
   batching: Config.Batching,
+  cpuParallelism: Config.CpuParallelism,
   retries: Config.Retries,
   telemetry: Telemetry.Config,
   monitoring: Config.Monitoring,
@@ -62,6 +63,8 @@ object Config {
     maxDelay: FiniteDuration,
     writeBatchConcurrency: Int
   )
+
+  case class CpuParallelism(parseBytesFactor: BigDecimal, transformFactor: BigDecimal)
 
   case class Metrics(
     statsd: Option[CommonMetrics.StatsdConfig]
@@ -101,10 +104,11 @@ object Config {
       sink <- Decoder[Sink]
       maxSize <- deriveConfiguredDecoder[MaxRecordSize]
     } yield SinkWithMaxSize(sink, maxSize.maxRecordSize)
-    implicit val userAgent = deriveConfiguredDecoder[GcpUserAgent]
-    implicit val bigquery  = deriveConfiguredDecoder[BigQuery]
-    implicit val output    = deriveConfiguredDecoder[Output[Sink]]
-    implicit val batching  = deriveConfiguredDecoder[Batching]
+    implicit val userAgent   = deriveConfiguredDecoder[GcpUserAgent]
+    implicit val bigquery    = deriveConfiguredDecoder[BigQuery]
+    implicit val output      = deriveConfiguredDecoder[Output[Sink]]
+    implicit val batching    = deriveConfiguredDecoder[Batching]
+    implicit val parallelism = deriveConfiguredDecoder[CpuParallelism]
     implicit val sentryDecoder = deriveConfiguredDecoder[SentryM[Option]]
       .map[Option[Sentry]] {
         case SentryM(Some(dsn), tags) =>

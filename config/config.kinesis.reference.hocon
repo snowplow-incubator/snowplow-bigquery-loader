@@ -95,7 +95,20 @@
     "maxDelay": "1 second"
 
     # -- How many batches can we send simultaneously over the network to BigQuery.
-    "writeBatchConcurrency":  1
+    "writeBatchConcurrency":  2
+  }
+
+  "cpuParallelism" {
+
+    # - Controls how many batches of bytes we can parse into enriched events simultaneously.
+    # -- E.g. If there are 2 cores, and parseBytesFactor = 0.1, then only one batch gets processed at a time.
+    # -- Adjusting this value can cause the app to use more or less of the available CPU.
+    "parseBytesFactor": 0.1
+
+    # - Controls how many batches of enriched events we can transform into BigQuery format simultaneously.
+    # -- E.g. If there are 4 cores, and parseBytesFactor = 0.75, then 3 batches gets processed in parallel.
+    # -- Adjusting this value can cause the app to use more or less of the available CPU.
+    "transformFactor": 0.75
   }
 
   # Retry configuration for BigQuery operation failures

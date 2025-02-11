@@ -89,7 +89,7 @@
   "batching": {
 
     # -- Events are emitted to BigQuery when the batch reaches this size in bytes
-    "maxBytes": 16000000
+    "maxBytes": 10000000
 
     # -- Events are emitted to BigQuery for a maximum of this duration, even if the `maxBytes` size has not been reached
     "maxDelay": "1 second"

@@ -87,7 +87,7 @@ object MockEnvironment {
         appHealth            = testAppHealth(state),
         alterTableWaitPolicy = BigQueryRetrying.policyForAlterTableWait[IO](retriesConfig),
         batching = Config.Batching(
-          maxBytes              = 16000000,
+          maxBytes              = 10000000,
           maxDelay              = 10.seconds,
           writeBatchConcurrency = 1
         ),

@@ -91,6 +91,10 @@ object MockEnvironment {
           maxDelay              = 10.seconds,
           writeBatchConcurrency = 1
         ),
+        cpuParallelism = CpuParallelism(
+          parseBytes = 1,
+          transform  = 1
+        ),
         badRowMaxSize           = 1000000,
         schemasToSkip           = List.empty,
         legacyColumns           = legacyColumns,

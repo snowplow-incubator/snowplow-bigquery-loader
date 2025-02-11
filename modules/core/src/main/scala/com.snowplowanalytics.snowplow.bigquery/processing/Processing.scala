@@ -106,9 +106,9 @@ object Processing {
   ): EventProcessor[F] = { in =>
     val badProcessor = BadRowProcessor(env.appInfo.name, env.appInfo.version)
 
-    in.through(parseBytes(badProcessor))
+    in.through(parseBytes(badProcessor, env.cpuParallelism.parseBytes))
       .through(BatchUp.withTimeout(env.batching.maxBytes, env.batching.maxDelay))
-      .through(transform(env, badProcessor))
+      .through(transform(env, badProcessor, env.cpuParallelism.transform))
       .through(handleSchemaEvolution(env))
       .through(writeToBigQuery(env, badProcessor))
       .through(setE2ELatencyMetric(env))
@@ -131,8 +131,8 @@ object Processing {
     }
 
   /** Parse raw bytes into Event using analytics sdk */
-  private def parseBytes[F[_]: Sync](badProcessor: BadRowProcessor): Pipe[F, TokenedEvents, ParseResult] =
-    _.evalMap { case TokenedEvents(chunk, token) =>
+  private def parseBytes[F[_]: Async](badProcessor: BadRowProcessor, parallelism: Int): Pipe[F, TokenedEvents, ParseResult] =
+    _.parEvalMapUnordered(parallelism) { case TokenedEvents(chunk, token) =>
       for {
         numBytes <- Sync[F].delay(Foldable[Chunk].sumBytes(chunk))
         (badRows, events) <- Foldable[Chunk].traverseSeparateUnordered(chunk) { byteBuffer =>
@@ -150,9 +150,10 @@ object Processing {
   /** Transform the Event into values compatible with the BigQuery sdk */
   private def transform[F[_]: Async: RegistryLookup](
     env: Environment[F],
-    badProcessor: BadRowProcessor
+    badProcessor: BadRowProcessor,
+    parallelism: Int
   ): Pipe[F, Batched, BatchAfterTransform] =
-    _.evalMap { case Batched(events, parseFailures, countBytes, entities, tokens, earliestCollectorTstamp) =>
+    _.parEvalMapUnordered(parallelism) { case Batched(events, parseFailures, countBytes, entities, tokens, earliestCollectorTstamp) =>
       for {
         now <- Sync[F].realTimeInstant
         loadTstamp = BigQueryCaster.timestampValue(now)

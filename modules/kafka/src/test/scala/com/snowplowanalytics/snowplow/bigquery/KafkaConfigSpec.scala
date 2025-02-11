@@ -97,6 +97,10 @@ object KafkaConfigSpec {
       maxDelay              = 1.second,
       writeBatchConcurrency = 3
     ),
+    cpuParallelism = Config.CpuParallelism(
+      parseBytesFactor = 0.5,
+      transformFactor  = 0.5
+    ),
     retries = Config.Retries(
       setupErrors     = Retrying.Config.ForSetup(delay = 30.seconds),
       transientErrors = Retrying.Config.ForTransient(delay = 1.second, attempts = 5),
@@ -169,6 +173,10 @@ object KafkaConfigSpec {
       maxBytes              = 16000000,
       maxDelay              = 1.second,
       writeBatchConcurrency = 1
+    ),
+    cpuParallelism = Config.CpuParallelism(
+      parseBytesFactor = 0.5,
+      transformFactor  = 0.5
     ),
     retries = Config.Retries(
       setupErrors     = Retrying.Config.ForSetup(delay = 30.seconds),

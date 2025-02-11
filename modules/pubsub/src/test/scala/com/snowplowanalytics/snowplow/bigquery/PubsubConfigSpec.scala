@@ -89,7 +89,11 @@ object PubsubConfigSpec {
     batching = Config.Batching(
       maxBytes              = 10000000,
       maxDelay              = 1.second,
-      writeBatchConcurrency = 3
+      writeBatchConcurrency = 2
+    ),
+    cpuParallelism = Config.CpuParallelism(
+      parseBytesFactor = 0.1,
+      transformFactor  = 0.75
     ),
     retries = Config.Retries(
       setupErrors     = Retrying.Config.ForSetup(delay = 30.seconds),
@@ -154,7 +158,11 @@ object PubsubConfigSpec {
     batching = Config.Batching(
       maxBytes              = 10000000,
       maxDelay              = 1.second,
-      writeBatchConcurrency = 1
+      writeBatchConcurrency = 2
+    ),
+    cpuParallelism = Config.CpuParallelism(
+      parseBytesFactor = 0.1,
+      transformFactor  = 0.75
     ),
     retries = Config.Retries(
       setupErrors     = Retrying.Config.ForSetup(delay = 30.seconds),

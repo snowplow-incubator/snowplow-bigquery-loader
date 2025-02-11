@@ -33,12 +33,15 @@ case class Environment[F[_]](
   appHealth: AppHealth.Interface[F, Alert, RuntimeService],
   alterTableWaitPolicy: RetryPolicy[F],
   batching: Config.Batching,
+  cpuParallelism: CpuParallelism,
   badRowMaxSize: Int,
   schemasToSkip: List[SchemaCriterion],
   legacyColumns: List[SchemaCriterion],
   legacyColumnMode: Boolean,
   exitOnMissingIgluSchema: Boolean
 )
+
+case class CpuParallelism(parseBytes: Int, transform: Int)
 
 object Environment {
 
@@ -65,6 +68,10 @@ object Environment {
       tableManagerWrapped <- Resource.eval(TableManager.withHandledErrors(tableManager, config.main.retries, appHealth))
       writerBuilder <- Writer.builder(config.main.output.good, creds)
       writerProvider <- Writer.provider(writerBuilder, config.main.retries, appHealth)
+      cpuParallelism = CpuParallelism(
+                         parseBytes = chooseCpuParallelism(config.main.cpuParallelism.parseBytesFactor),
+                         transform  = chooseCpuParallelism(config.main.cpuParallelism.transformFactor)
+                       )
     } yield Environment(
       appInfo                 = appInfo,
       source                  = sourceAndAck,
@@ -77,6 +84,7 @@ object Environment {
       appHealth               = appHealth,
       alterTableWaitPolicy    = BigQueryRetrying.policyForAlterTableWait[F](config.main.retries),
       batching                = config.main.batching,
+      cpuParallelism          = cpuParallelism,
       badRowMaxSize           = config.main.output.bad.maxRecordSize,
       schemasToSkip           = config.main.skipSchemas,
       legacyColumns           = config.main.legacyColumns,
@@ -114,4 +122,12 @@ object Environment {
         .rethrow
     }
 
+  /**
+   * For bigger instances (more cores) we want more parallelism, so that cpu-intensive steps can
+   * take advantage of all the cores.
+   */
+  private def chooseCpuParallelism(factor: BigDecimal): Int =
+    (Runtime.getRuntime.availableProcessors * factor)
+      .setScale(0, BigDecimal.RoundingMode.UP)
+      .toInt
 }

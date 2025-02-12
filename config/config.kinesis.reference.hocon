@@ -48,6 +48,10 @@
       "minBackoff": "100 millis"
       "maxBackoff": "1 second"
     }
+
+    ## -- How frequently to checkpoint our progress to the DynamoDB table. By increasing this value,
+    ## -- we can decrease the write-throughput requirements of the DynamoDB table
+    debounceCheckpoints: "10 seconds"
   }
 
   "output": {

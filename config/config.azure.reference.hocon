@@ -11,6 +11,10 @@
     # -- kafka bootstrap servers
     "bootstrapServers": "localhost:9092"
 
+    # -- How frequently to commit our progress back to kafka. By increasing this value,
+    # -- we decrease the number of requests made to the kafka broker
+    debounceCommitOffsets: "10 seconds"
+
     # -- Any valid Kafka consumer config options
     consumerConf: {
       "group.id": "snowplow-bigquery-loader"

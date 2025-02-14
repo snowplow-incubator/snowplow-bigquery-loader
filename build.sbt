@@ -1,73 +1,73 @@
-/*
- * Copyright (c) 2018-2023 Snowplow Analytics Ltd. All rights reserved.
+/**
+ * Copyright (c) 2013-present Snowplow Analytics Ltd. All rights reserved.
  *
- * This program is licensed to you under the Apache License Version 2.0,
- * and you may not use this file except in compliance with the Apache License Version 2.0.
- * You may obtain a copy of the Apache License Version 2.0 at http://www.apache.org/licenses/LICENSE-2.0.
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the Apache License Version 2.0 is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
+ * This software is made available by Snowplow Analytics, Ltd., under the terms of the Snowplow
+ * Limited Use License Agreement, Version 1.0 located at
+ * https://docs.snowplow.io/limited-use-license-1.0 BY INSTALLING, DOWNLOADING, ACCESSING, USING OR
+ * DISTRIBUTING ANY PORTION OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
 
-// format: off
 lazy val root = project
   .in(file("."))
-  .settings(name := "bigquery-loader")
-  .aggregate(common, streamloader, mutator, repeater)
-  .aggregate(streamloaderDistroless, mutatorDistroless, repeaterDistroless)
-  .settings(assembly / aggregate := false)
-// format: on
+  .aggregate(
+    core,
+    kafka,
+    kafkaDistroless,
+    pubsub,
+    pubsubDistroless,
+    kinesis,
+    kinesisDistroless
+  )
 
-lazy val common = project
-  .in(file("modules/common"))
-  .enablePlugins(BuildInfoPlugin)
-  .settings(BuildSettings.commonBuildSettings)
+lazy val core: Project = project
+  .in(file("modules/core"))
+  .settings(BuildSettings.coreSettings)
+  .settings(libraryDependencies ++= Dependencies.coreDependencies)
+  .enablePlugins(IgluSchemaPlugin)
 
-lazy val streamloader = project
-  .in(file("modules/streamloader"))
+lazy val kafka: Project = project
+  .in(file("modules/kafka"))
+  .settings(BuildSettings.kafkaSettings)
+  .settings(libraryDependencies ++= Dependencies.kafkaDependencies)
+  .dependsOn(core)
   .enablePlugins(BuildInfoPlugin, JavaAppPackaging, SnowplowDockerPlugin)
-  .settings(BuildSettings.streamloaderBuildSettings)
-  .dependsOn(common % "compile->compile;test->test")
 
-lazy val streamloaderDistroless = project
-  .in(file("modules/distroless/streamloader"))
-  .enablePlugins(BuildInfoPlugin, SnowplowDistrolessDockerPlugin)
-  .settings(sourceDirectory := (streamloader / sourceDirectory).value)
-  .settings(BuildSettings.streamloaderBuildSettings)
-  .dependsOn(common % "compile->compile;test->test")
+lazy val kafkaDistroless: Project = project
+  .in(file("modules/distroless/kafka"))
+  .settings(BuildSettings.kafkaSettings)
+  .settings(libraryDependencies ++= Dependencies.kafkaDependencies)
+  .settings(sourceDirectory := (kafka / sourceDirectory).value)
+  .dependsOn(core)
+  .enablePlugins(BuildInfoPlugin, JavaAppPackaging, SnowplowDistrolessDockerPlugin)
 
-lazy val mutator = project
-  .in(file("modules/mutator"))
+lazy val pubsub: Project = project
+  .in(file("modules/pubsub"))
+  .settings(BuildSettings.pubsubSettings)
+  .settings(libraryDependencies ++= Dependencies.pubsubDependencies)
+  .dependsOn(core)
   .enablePlugins(BuildInfoPlugin, JavaAppPackaging, SnowplowDockerPlugin)
-  .settings(BuildSettings.mutatorBuildSettings)
-  .dependsOn(common % "compile->compile;test->test")
 
-lazy val mutatorDistroless = project
-  .in(file("modules/distroless/mutator"))
-  .enablePlugins(BuildInfoPlugin, SnowplowDistrolessDockerPlugin)
-  .settings(sourceDirectory := (mutator / sourceDirectory).value)
-  .settings(BuildSettings.mutatorBuildSettings)
-  .dependsOn(common % "compile->compile;test->test")
+lazy val pubsubDistroless: Project = project
+  .in(file("modules/distroless/pubsub"))
+  .settings(BuildSettings.pubsubSettings)
+  .settings(libraryDependencies ++= Dependencies.pubsubDependencies)
+  .settings(sourceDirectory := (pubsub / sourceDirectory).value)
+  .dependsOn(core)
+  .enablePlugins(BuildInfoPlugin, JavaAppPackaging, SnowplowDistrolessDockerPlugin)
 
-lazy val repeater = project
-  .in(file("modules/repeater"))
-  .enablePlugins(BuildInfoPlugin)
-  .enablePlugins(JavaAppPackaging, SnowplowDockerPlugin)
-  .settings(BuildSettings.repeaterBuildSettings)
-  .dependsOn(common % "compile->compile;test->test")
+lazy val kinesis: Project = project
+  .in(file("modules/kinesis"))
+  .settings(BuildSettings.kinesisSettings)
+  .settings(libraryDependencies ++= Dependencies.kinesisDependencies)
+  .dependsOn(core)
+  .enablePlugins(BuildInfoPlugin, JavaAppPackaging, SnowplowDockerPlugin)
 
-lazy val repeaterDistroless = project
-  .in(file("modules/distroless/repeater"))
-  .enablePlugins(BuildInfoPlugin, SnowplowDistrolessDockerPlugin)
-  .settings(sourceDirectory := (repeater / sourceDirectory).value)
-  .settings(BuildSettings.repeaterBuildSettings)
-  .dependsOn(common % "compile->compile;test->test")
+lazy val kinesisDistroless: Project = project
+  .in(file("modules/distroless/kinesis"))
+  .settings(BuildSettings.kinesisSettings)
+  .settings(libraryDependencies ++= Dependencies.kinesisDependencies)
+  .settings(sourceDirectory := (kinesis / sourceDirectory).value)
+  .dependsOn(core)
+  .enablePlugins(BuildInfoPlugin, JavaAppPackaging, SnowplowDistrolessDockerPlugin)
 
-// format: off
-lazy val benchmark = project
-  .in(file("modules/benchmark"))
-  .enablePlugins(JmhPlugin)
-  .dependsOn(common % "test->test")
-// format: on
+ThisBuild / fork := true

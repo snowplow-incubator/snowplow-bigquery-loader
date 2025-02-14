@@ -1,0 +1,23 @@
+{
+  "license" {
+    "accept": true
+  }
+
+  "input": {
+    "topicName": "sp-dev-enriched"
+    "bootstrapServers": "localhost:9092"
+  }
+
+  "output": {
+
+    "good": {
+      "project": "my-project"
+      "dataset": "my-dataset"
+    }
+
+    "bad": {
+      "topicName": "sp-dev-bad"
+      "bootstrapServers": "localhost:9092"
+    }
+  }
+}

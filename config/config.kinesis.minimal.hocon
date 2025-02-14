@@ -1,0 +1,21 @@
+{
+  "license" {
+    "accept": true
+  }
+
+  "input": {
+    "streamName": "snowplow-enriched-events"
+  }
+
+  "output": {
+
+    "good": {
+      "project": "my-project"
+      "dataset": "my-dataset"
+    }
+
+    "bad": {
+      "streamName": "bad"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "license" {
+    "accept": true
+  }
+
+  "input": {
+    "subscription": "projects/my-project/subscriptions/snowplow-enriched"
+  }
+
+  "output": {
+
+    "good": {
+      "project": "my-project"
+      "dataset": "my-dataset"
+    }
+
+    "bad": {
+      "topic": "projects/my-project/topics/snowplow-bad"
+    }
+
+  }
+}

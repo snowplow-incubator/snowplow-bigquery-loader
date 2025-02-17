@@ -1,3 +1,8 @@
+Version 2.0.0 (2025-02-18)
+--------------------------
+Upgrade dependencies
+Refactor BigQuery loader using common-streams
+
 Version 1.7.2 (2025-01-27)
 --------------------------
 Loader should handle BigQuery exceptions for an invalid request (#392)

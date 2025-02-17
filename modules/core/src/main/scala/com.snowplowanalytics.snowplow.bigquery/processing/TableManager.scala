@@ -17,6 +17,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 import com.google.cloud.bigquery.{
   BigQuery,
   BigQueryOptions,
+  Clustering,
   FieldList,
   Schema,
   StandardTableDefinition,
@@ -199,6 +200,12 @@ object TableManager {
         TimePartitioning
           .newBuilder(TimePartitioning.Type.DAY)
           .setField("load_tstamp")
+          .build()
+      }
+      .setClustering {
+        Clustering
+          .newBuilder()
+          .setFields(List("event_name").asJava)
           .build()
       }
       .build()

@@ -27,6 +27,8 @@ object Dependencies {
     val awsSdk2         = "2.30.17"
     val bigqueryStorage = "3.11.2"
     val bigquery        = "2.47.0"
+    val netty           = "4.1.118.Final"
+    val jsonSmart       = "2.5.2"
 
     // Snowplow
     val streams    = "0.11.0"
@@ -53,6 +55,8 @@ object Dependencies {
   val stsSdk2         = "software.amazon.awssdk" % "sts"                          % V.awsSdk2
   val bigqueryStorage = "com.google.cloud"       % "google-cloud-bigquerystorage" % V.bigqueryStorage
   val bigquery        = "com.google.cloud"       % "google-cloud-bigquery"        % V.bigquery
+  val nettyHandler    = "io.netty"               % "netty-handler"                % V.netty
+  val jsonSmart       = "net.minidev"            % "json-smart"                   % V.jsonSmart
 
   val streamsCore      = "com.snowplowanalytics" %% "streams-core"             % V.streams
   val kinesis          = "com.snowplowanalytics" %% "kinesis"                  % V.streams
@@ -92,6 +96,8 @@ object Dependencies {
     slf4j      % Runtime,
     julToSlf4j % Runtime,
     azureIdentity,
+    nettyHandler, // for security vulnerabilities
+    jsonSmart, // for security vulnerabilities
     specs2,
     catsEffectSpecs2
   )
